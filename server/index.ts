@@ -33,6 +33,7 @@ const GAME_CATEGORY = {
 } as const;
 
 const app = express();
+app.set('trust proxy', 1); // Trust Vercel proxy for express-rate-limit
 console.log('[DEBUG] server/index.ts is executing...');
 
 const IS_PROD = process.env.NODE_ENV === 'production';
