@@ -12,6 +12,21 @@ dist
 dist-ssr
 *.local
 
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database
+*.db
+*.sqlite
+
+# Generated Reports
+NXC_Royal_Edict_*.pdf
+NXC_Royal_Edict_Preview.pdf
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

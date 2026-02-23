@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 
 export const getTeamAnalysis = async (stats: any): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
-  
+
   const prompt = `
     As an expert Esports Strategic Coach, analyze the following team performance metrics:
     ${JSON.stringify(stats)}
@@ -18,7 +18,7 @@ export const getTeamAnalysis = async (stats: any): Promise<string> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: prompt,
     });
     return response.text || "Analysis currently unavailable.";

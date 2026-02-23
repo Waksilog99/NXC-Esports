@@ -1,55 +1,394 @@
+import React, { useEffect, useState, useMemo } from 'react';
+import { GAME_TITLES } from './constants';
+import Modal from './Modal';
 
-import React from 'react';
+interface Player {
+  id: number;
+  name: string;
+  role: string;
+  kda: string;
+  winRate: string;
+  acs: string;
+  image: string;
+  level?: number;
+  xp?: number;
+}
 
-const players = [
-  { name: 'Xenon', role: 'Duelist', kda: '2.4', win: '78%', img: 'https://picsum.photos/seed/xenon/300/400' },
-  { name: 'Aura', role: 'Initiator', kda: '1.9', win: '82%', img: 'https://picsum.photos/seed/aura/300/400' },
-  { name: 'Cipher', role: 'Sentinel', kda: '3.1', win: '65%', img: 'https://picsum.photos/seed/cipher/300/400' },
-  { name: 'Ghost', role: 'Controller', kda: '1.5', win: '72%', img: 'https://picsum.photos/seed/ghost/300/400' }
-];
+interface Team {
+  id: number;
+  name: string;
+  game: string;
+  description: string;
+  players: Player[];
+}
 
-const Roster: React.FC = () => {
+
+// Animated Title Component
+const AnimatedTitle = ({ text1, text2, className }: { text1: string, text2: string, className: string }) => {
   return (
-    <div className="space-y-12">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <h2 className="text-4xl font-bold">The Roster</h2>
-          <p className="text-slate-400">Our world-class Valorant squad. Hard-coded for precision.</p>
-        </div>
-        <button className="px-6 py-2 border border-white/10 rounded-full text-sm font-bold hover:bg-white/5 transition-colors">
-          View All Stats
-        </button>
-      </div>
+    <h2 className={className}>
+      <span className="text-white inline-block">
+        {text1.split('').map((char, i) => (char === ' ' ? <span key={i}>&nbsp;</span> : <span key={i} className="animate-letter" style={{ animationDelay: `${i * 0.05}s` }}>{char}</span>))}
+      </span>
+      <span className="inline-block">&nbsp;</span>
+      <span className="text-amber-500 inline-block">
+        {text2.split('').map((char, i) => (char === ' ' ? <span key={i}>&nbsp;</span> : <span key={i} className="animate-letter" style={{ animationDelay: `${(text1.length + i) * 0.05}s` }}>{char}</span>))}
+      </span>
+    </h2>
+  );
+};
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {players.map((player, idx) => (
-          <div key={idx} className="group relative rounded-3xl overflow-hidden bg-[#161621] border border-white/5 transition-transform hover:-translate-y-2">
-            <div className="aspect-[3/4] overflow-hidden grayscale group-hover:grayscale-0 transition-all duration-500">
-              <img src={player.img} alt={player.name} className="w-full h-full object-cover scale-110 group-hover:scale-100 transition-transform duration-700" />
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d14] via-transparent to-transparent opacity-60 group-hover:opacity-90 transition-opacity" />
-            <div className="absolute bottom-0 left-0 right-0 p-6 space-y-4">
-              <div>
-                <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">{player.role}</p>
-                <h3 className="text-2xl font-black italic">{player.name}</h3>
+// Player Stats Modal Component
+const PlayerStatsModal = ({ player, isOpen, onClose }: { player: Player | null; isOpen: boolean; onClose: () => void }) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} zIndex={1000} backdropClassName="bg-black/60 backdrop-blur-sm" className="w-full max-w-2xl">
+      {player && <div className="relative w-full max-w-2xl bg-[#0f172a] dark:bg-[#020617] rounded-[40px] border border-amber-500/20 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent" />
+
+        {/* Header / Image Background */}
+        <div className="relative h-[540px] overflow-hidden border-b border-white/5 bg-[#020617]">
+          {/* Elite Backdrop */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
+            <span className="text-[180px] md:text-[220px] font-black text-white italic tracking-tighter uppercase leading-none">HISTORY</span>
+          </div>
+
+          <img src={player.image} alt={player.name} className="w-full h-full object-cover opacity-20 blur-md scale-110" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#020617]/50 to-[#020617]" />
+
+          <div className="absolute inset-0 flex flex-col items-center justify-center space-y-6 pt-10">
+            <div className="space-y-4 text-center pointer-events-none">
+              <AnimatedTitle
+                text1="Hall of"
+                text2="Excellence"
+                className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-[0.8]"
+              />
+              <div className="flex items-center justify-center w-full">
+                <div className="h-[1px] w-24 bg-amber-500/30"></div>
+                <p className="px-6 text-[9px] text-slate-500 font-black uppercase tracking-[0.5em] whitespace-nowrap">The Apex of Performance</p>
+                <div className="h-[1px] w-24 bg-amber-500/30"></div>
               </div>
-              <div className="flex justify-between items-center pt-4 border-t border-white/10">
-                <div className="text-center">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase">KDA</p>
-                  <p className="text-sm font-bold">{player.kda}</p>
+            </div>
+
+            <div className="pt-2">
+              <span className="px-8 py-2 bg-amber-500 text-black text-[10px] font-black uppercase tracking-[0.3em] rounded-full shadow-[0_10px_20px_rgba(245,158,11,0.2)]">
+                Operative Profile
+              </span>
+            </div>
+
+            <div className="flex flex-col items-center space-y-6 pt-4 relative z-20">
+              <div className="relative group">
+                <div className="absolute -inset-2 bg-amber-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                <img
+                  src={player.image}
+                  alt={player.name}
+                  className="w-24 h-24 rounded-3xl border-2 border-amber-500/20 shadow-2xl object-cover bg-slate-800 relative z-10"
+                />
+              </div>
+              <div className="mb-2 text-center space-y-2">
+                <div className="flex items-center justify-center space-x-3 text-amber-500">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_15px_#fbbf24]" />
+                  <span className="text-[11px] font-black uppercase tracking-[0.4em]">{player.role}</span>
+                  <span className="text-[11px] text-slate-500 font-bold px-3 border-l border-white/10 uppercase">Rank {player.level || 1}</span>
                 </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase">Win Rate</p>
-                  <p className="text-sm font-bold">{player.win}</p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                <h3 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter italic leading-none">{player.name}</h3>
+
+                {/* Tactical EXP Bar */}
+                <div className="pt-2">
+                  <div className="w-56 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-600 via-amber-400 to-amber-500 shadow-[0_0_15px_#fbbf24]"
+                      style={{ width: `${((player.xp || 0) % 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center w-56 mt-2">
+                    <span className="text-[7px] text-slate-600 font-black uppercase tracking-widest leading-none">Mission Progression</span>
+                    <span className="text-[7px] text-amber-500/80 font-black tracking-widest leading-none">{(player.xp || 0) % 100} / 100 XP</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        ))}
+
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 md:top-6 md:right-6 w-8 h-8 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 transition-all border border-white/10 z-50"
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* content */}
+        <div className="p-6 md:p-8 space-y-6 md:space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+            <div className="bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5 text-center group hover:border-amber-500/30 transition-all">
+              <p className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2">K/D Ratio</p>
+              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter group-hover:text-amber-400 transition-colors">{player.kda}</p>
+              <p className="text-[7px] md:text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">Lethality Index</p>
+            </div>
+            <div className="bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5 text-center group hover:border-purple-500/30 transition-all">
+              <p className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2">ACS</p>
+              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter group-hover:text-purple-400 transition-colors">{player.acs}</p>
+              <p className="text-[7px] md:text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">Combat Score</p>
+            </div>
+            <div className="bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5 text-center group hover:border-emerald-500/30 transition-all">
+              <p className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2">Win Rate</p>
+              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter group-hover:text-emerald-400 transition-colors">{player.winRate}</p>
+              <p className="text-[7px] md:text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">Victory Vector</p>
+            </div>
+          </div>
+
+          <div className="p-5 md:p-6 bg-amber-500/5 rounded-2xl md:rounded-3xl border border-amber-500/10">
+            <div className="flex items-start space-x-4">
+              <div className="p-2.5 md:p-3 bg-amber-500/10 rounded-xl text-amber-500">
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              </div>
+              <div>
+                <h4 className="text-[10px] md:text-sm font-black text-amber-500 uppercase tracking-widest mb-1">Performance Analysis</h4>
+                <p className="text-[10px] md:text-xs text-slate-400 font-medium leading-relaxed">
+                  Operative <span className="text-white font-bold">{player.name}</span> is performing at optimal efficiency.
+                  Combat metrics indicate strong <span className="text-white">{player.role}</span> capabilities with a {player.winRate} mission success rate.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>}
+    </Modal>
+  );
+};
+
+const Roster: React.FC = () => {
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [gameFilter, setGameFilter] = useState('All Games');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    fetch(`${API_BASE_URL}/api/teams`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        return res.json();
+      })
+      .then(result => {
+        if (result.success) {
+          setTeams(result.data || []);
+        } else {
+          throw new Error(result.error || "Link failed");
+        }
+      })
+      .catch(err => {
+        console.error("Roster fetch failed:", err);
+        setError("Failed to initialize roster data. Tactical link offline.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const games = useMemo(() => ['All Games', ...GAME_TITLES], []);
+
+  const filteredTeams = useMemo(() => {
+    let result = teams;
+    if (gameFilter !== 'All Games') {
+      result = result.filter(t => t.game === gameFilter);
+    }
+    if (searchQuery) {
+      result = result.map(team => ({
+        ...team,
+        players: team.players.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      })).filter(team => team.players.length > 0);
+    }
+    return result;
+  }, [teams, gameFilter, searchQuery]);
+
+  return (
+    <div className="space-y-16 animate-in fade-in zoom-in duration-700 max-w-[1600px] mx-auto">
+      {/* Modal */}
+      <PlayerStatsModal player={selectedPlayer} isOpen={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+
+      {/* Header & Filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-12 border-b border-gray-200 dark:border-white/5 pb-16 px-6 md:px-0">
+        <div className="space-y-4 text-center lg:text-left">
+          <div className="flex items-center justify-center lg:justify-start space-x-3">
+            <span className="w-2 h-2 bg-amber-500 rounded-full shadow-[0_0_10px_#fbbf24] animate-pulse" />
+            <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.4em]">Active Operatives // Tactical Roster</p>
+          </div>
+          <AnimatedTitle
+            text1="The Nexus"
+            text2="Roster"
+            className="text-4xl md:text-6xl font-black text-[var(--text-color)] tracking-tight italic uppercase"
+          />
+          <p className="text-slate-600 dark:text-slate-500 font-bold max-w-xl leading-relaxed text-xs md:text-sm uppercase tracking-wide mx-auto lg:mx-0">
+            Elite competitors synchronized through our Command Deck. Real-time performance metrics pulled from scrimmage analytics.
+          </p>
+        </div>
+
+        <div
+          className="flex flex-col sm:flex-row gap-4 md:gap-6 p-6 md:p-8 rounded-[30px] md:rounded-[40px] border shadow-soft backdrop-blur-xl mx-6 md:mx-0"
+          style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}
+        >
+          <div className="relative group w-full sm:w-80">
+            <input
+              type="text"
+              placeholder="SEARCH OPERATIVE..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl px-12 py-4 text-[var(--text-color)] dark:text-white font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700 w-full uppercase text-[10px]"
+            />
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-700 group-hover:text-amber-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </div>
+
+          <div className="relative group w-full sm:w-64">
+            <select
+              value={gameFilter}
+              onChange={(e) => setGameFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl px-8 py-4 text-[var(--text-color)] dark:text-white font-black tracking-widest focus:outline-none focus:border-amber-500/50 transition-all appearance-none cursor-pointer w-full uppercase text-[10px]"
+            >
+              {games.map(g => <option key={g} value={g} className="bg-white dark:bg-[#020617]">{g.toUpperCase()}</option>)}
+            </select>
+            <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-700 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+          </div>
+        </div>
       </div>
+
+      {loading ? (
+        <div className="text-center text-slate-500 flex flex-col items-center space-y-8 py-48 backdrop-blur-3xl rounded-[60px] border border-slate-200 dark:border-white/5 shadow-soft" style={{ background: 'var(--glass-bg)' }}>
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin" />
+            <div className="absolute inset-0 w-20 h-20 border-4 border-purple-500/10 border-b-purple-500 rounded-full animate-spin-slow" />
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-amber-500 animate-pulse">Scanning Bio-Signatures...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center p-24 bg-red-500/5 rounded-[60px] border border-red-500/20 shadow-soft">
+          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
+            <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          </div>
+          <p className="text-red-400 font-black text-xl mb-10 uppercase tracking-tighter italic">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-12 py-5 bg-red-500 hover:bg-red-400 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-2xl shadow-red-500/20 active:scale-95"
+          >
+            Re-Establish Link
+          </button>
+        </div>
+      ) : filteredTeams.length === 0 ? (
+        <div className="relative group overflow-hidden rounded-[60px] border-2 border-dashed border-slate-300 dark:border-white/10 p-32 text-center bg-slate-50 dark:bg-black/40 backdrop-blur-3xl shadow-soft">
+          <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+
+          <div className="relative z-10 space-y-8">
+            <div className="w-32 h-32 bg-slate-100 dark:bg-white/5 rounded-[40px] flex items-center justify-center mx-auto border border-slate-200 dark:border-white/10 group-hover:scale-110 group-hover:rotate-12 transition-all duration-700 shadow-2xl relative">
+              <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              <svg className="w-16 h-16 text-slate-400 dark:text-slate-600 group-hover:text-amber-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">No Tactical Operatives Deployed</h3>
+              <p className="text-[10px] text-amber-600 dark:text-amber-500 font-black uppercase tracking-[0.4em]">Sector {gameFilter === 'All Games' ? 'Global' : gameFilter.toUpperCase()} // Status: Pending Assignment</p>
+            </div>
+
+            <div className="flex items-center justify-center space-x-4 opacity-50 group-hover:opacity-100 transition-opacity">
+              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">Scanning for active signal signatures...</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="max-h-[1200px] overflow-y-auto pr-6 space-y-24 scroll-smooth scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/5 hover:scrollbar-thumb-amber-500/20 transition-all roster-scroll-container">
+          {filteredTeams.map((team) => (
+            <div key={team.id} className="space-y-8 md:space-y-12 animate-in slide-in-from-bottom-8 duration-1000">
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-l-4 md:border-l-8 border-amber-500 pl-6 md:pl-10 h-auto md:h-16 gap-6 md:gap-0">
+                <div className="flex flex-col">
+                  <h3 className="text-2xl md:text-4xl font-black uppercase tracking-tighter text-[var(--text-color)] leading-none italic">{team.name}</h3>
+                  <p className="text-[8px] md:text-[10px] text-amber-600 dark:text-amber-500/60 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mt-2 italic">{team.description || "Active Combat Division"}</p>
+                </div>
+                <div className="flex items-center space-x-4 md:space-x-6">
+                  <span className="text-[8px] md:text-[9px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.2em] md:tracking-[0.3em]">Division Code: {team.id}</span>
+                  <span className="px-5 md:px-8 py-2 md:py-3 bg-white dark:bg-white/5 text-amber-600 dark:text-amber-500 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] border border-slate-200 dark:border-white/10 shadow-xl backdrop-blur-3xl">
+                    {team.game}
+                  </span>
+                </div>
+              </div>
+
+              {/* Horizontal Scrollable Row for Players */}
+              <div className="flex overflow-x-auto pb-10 space-x-4 md:space-x-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/5 hover:scrollbar-thumb-amber-500/20 transition-all snap-x px-4">
+                {team.players.map((player) => (
+                  <div
+                    key={player.id}
+                    onClick={() => setSelectedPlayer(player)}
+                    className="flex-shrink-0 w-[280px] md:w-[320px] group relative rounded-[30px] md:rounded-[40px] overflow-hidden bg-white dark:bg-[#020617]/60 backdrop-blur-3xl border border-slate-200 dark:border-white/5 shadow-soft transition-all duration-700 hover:border-amber-500/40 hover:shadow-amber-500/10 snap-center cursor-pointer"
+                  >
+                    <div className="aspect-[4/5] overflow-hidden grayscale group-hover:grayscale-0 transition-all duration-1000 relative">
+                      <img src={player.image} alt={player.name} className="w-full h-full object-cover scale-110 group-hover:scale-100 transition-transform duration-1000" />
+                      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-white via-white/80 dark:from-[#020617] dark:via-[#020617]/80 to-transparent opacity-95 group-hover:opacity-70 transition-opacity duration-700" />
+
+                      {/* Top Rank Badge */}
+                      <div className="absolute top-6 left-6">
+                        <span className="px-4 py-1.5 bg-white/60 dark:bg-black/60 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-lg text-[8px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.3em]">
+                          Lvl // {player.level || 1}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 space-y-4 md:space-y-6">
+                      <div className="space-y-1 transform translate-y-6 group-hover:translate-y-0 transition-transform duration-500">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-[2px] bg-amber-500 shadow-[0_0_10px_#fbbf24]" />
+                          <p className="text-[8px] md:text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.3em] md:tracking-[0.4em] leading-none">{player.role}</p>
+                        </div>
+                        <h3 className="text-2xl md:text-4xl font-black italic text-white tracking-tighter group-hover:text-amber-500 transition-colors uppercase leading-none">{player.name}</h3>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-200 dark:border-white/5 opacity-0 group-hover:opacity-100 transition-all duration-500 delay-100">
+                        <div className="text-center space-y-1">
+                          <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">K/D</p>
+                          <p className="text-sm font-black text-[var(--text-color)] italic tracking-tighter">{player.kda || '0.00'}</p>
+                          <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-500 shadow-[0_0_10px_#fbbf24] transition-all duration-1000"
+                              style={{ width: `${Math.min((parseFloat(player.kda || '0') / 4) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-center space-y-1">
+                          <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">ACS</p>
+                          <p className="text-sm font-black text-[var(--text-color)] italic tracking-tighter">{player.acs || '0'}</p>
+                          <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7] transition-all duration-1000"
+                              style={{ width: `${Math.min((parseInt(player.acs || '0') / 400) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-center space-y-1">
+                          <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">Win Rate</p>
+                          <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 italic tracking-tighter">{player.winRate || '0.0%'}</p>
+                          <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000"
+                              style={{ width: player.winRate || '0%' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500 text-black flex items-center justify-center shadow-2xl rotate-45 group-hover:rotate-0 transition-all duration-1000 scale-75 group-hover:scale-100 shadow-amber-500/20">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
