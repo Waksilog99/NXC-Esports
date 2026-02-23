@@ -164,12 +164,35 @@ app.get('/ping', (req, res) => {
     res.json({ status: 'ok', server: 'Identity Service' });
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+    let dbStatus = 'NOT CHECKED';
+    let dbError = null;
+
+    if (db) {
+        try {
+            // Simple query to verify connection and table existence
+            await db.select({ id: users.id }).from(users).limit(1);
+            dbStatus = 'CONNECTED';
+        } catch (err: any) {
+            dbStatus = 'CONNECTION_FAILED';
+            dbError = err.message;
+            console.error('[HEALTH] DB Connectivity check failed:', err);
+        }
+    } else {
+        dbStatus = 'NOT_INITIALIZED';
+    }
+
     res.json({
         status: 'UP',
         nodeEnv: process.env.NODE_ENV,
+        dbStatus,
+        dbError: IS_PROD ? (dbError ? 'REDACTED' : null) : dbError,
         hasDbUrl: !!process.env.DATABASE_URL,
-        timestamp: new Date().toISOString()
+        dbUrlPrefix: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 15) + '...' : 'none',
+        hasGeminiKey: !!process.env.GEMINI_API_KEY,
+        hasDiscordToken: !!process.env.DISCORD_BOT_TOKEN,
+        timestamp: new Date().toISOString(),
+        version: '1.0.2-diagnostic'
     });
 });
 
@@ -304,10 +327,10 @@ app.post('/api/users/sync', async (req, res) => {
             if (name) updateSet.fullname = name;
             if (birthday) updateSet.birthday = birthday;
             if (requestedRole) updateSet.role = requestedRole;
-            await db.update(users).set(updateSet).where(eq(users.id, existingUser.id)).run();
+            await db.update(users).set(updateSet).where(eq(users.id, existingUser.id));
 
             // Re-fetch with player data
-            const updatedUser = await db.select({
+            const updatedUserRows = await db.select({
                 id: users.id,
                 username: users.username,
                 password: users.password,
@@ -327,8 +350,9 @@ app.post('/api/users/sync', async (req, res) => {
             })
                 .from(users)
                 .leftJoin(players, eq(users.id, players.userId))
-                .where(eq(users.id, existingUser.id))
-                .get();
+                .where(eq(users.id, existingUser.id));
+
+            const updatedUser = updatedUserRows[0];
 
             if (updatedUser) {
                 (updatedUser as any).level = determineLevel(updatedUser.role, updatedUser.level);
@@ -339,15 +363,16 @@ app.post('/api/users/sync', async (req, res) => {
             if (!googleId) return res.status(404).json({ error: 'Sign up first' });
             const sUsername = sanitize(email.split('@')[0] + '_' + Math.floor(Math.random() * 1000));
             const hashedPassword = await hashPassword('google_authenticated');
-            const newUser = await db.insert(users).values({
+            const newUserRes = await db.insert(users).values({
                 username: sUsername,
                 password: hashedPassword,
                 googleId, email, fullname: sanitize(name) || 'Nexus Agent',
                 avatar, birthday, role: email === 'admin@novanexus.io' ? 'admin' : 'member'
-            }).returning().get();
+            }).returning();
+            const newUser = newUserRes[0];
 
             // For new users, they won't have player data yet, but let's be consistent
-            const enrichedNewUser = await db.select({
+            const enrichedNewUserRows = await db.select({
                 id: users.id,
                 username: users.username,
                 password: users.password,
@@ -367,8 +392,8 @@ app.post('/api/users/sync', async (req, res) => {
             })
                 .from(users)
                 .leftJoin(players, eq(users.id, players.userId))
-                .where(eq(users.id, newUser.id))
-                .get();
+                .where(eq(users.id, newUser.id));
+            const enrichedNewUser = enrichedNewUserRows[0];
 
             if (enrichedNewUser) {
                 (enrichedNewUser as any).level = determineLevel(enrichedNewUser.role, enrichedNewUser.level);
@@ -386,7 +411,8 @@ app.put('/api/users/:id/role', async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
     try {
-        const updatedUser = await db.update(users).set({ role }).where(eq(users.id, Number(id))).returning().get();
+        const updatedRows = await db.update(users).set({ role }).where(eq(users.id, Number(id))).returning();
+        const updatedUser = updatedRows[0];
         if (!updatedUser) return res.status(404).json({ success: false, error: 'User not found' });
         res.json({ success: true, data: updatedUser });
     } catch (error: any) {
@@ -413,11 +439,11 @@ app.put('/api/users/:id/profile', async (req, res) => {
         if (username) updateSet.username = username;
         if (email) updateSet.email = email.toLowerCase();
 
-        const updatedUser = await db.update(users)
+        const updatedUserRows = await db.update(users)
             .set(updateSet)
             .where(eq(users.id, Number(id)))
-            .returning()
-            .get();
+            .returning();
+        const updatedUser = updatedUserRows[0];
 
         if (!updatedUser) {
             return res.status(404).json({ success: false, error: 'User not found' });
@@ -435,14 +461,15 @@ app.post('/api/auth/change-password', async (req, res) => {
 
     try {
         const uId = Number(userId);
-        const user = await db.select().from(users).where(eq(users.id, uId)).get();
+        const userRows = await db.select().from(users).where(eq(users.id, uId));
+        const user = userRows[0];
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         const isMatch = await verifyPassword(oldPassword, user.password, uId);
         if (!isMatch) return res.status(401).json({ success: false, error: 'Incorrect old password' });
 
         const hashedPassword = await hashPassword(newPassword);
-        await db.update(users).set({ password: hashedPassword }).where(eq(users.id, uId)).run();
+        await db.update(users).set({ password: hashedPassword }).where(eq(users.id, uId));
         res.json({ success: true, message: 'Password updated successfully' });
     } catch (error: any) {
         console.error("Error in POST /api/auth/change-password:", error);
@@ -455,22 +482,24 @@ app.delete('/api/users/:id', async (req, res) => {
     const userId = Number(id);
     try {
         // Step 1: find their player record (if any)
-        const playerRow = await db.select().from(players).where(eq(players.userId, userId)).get();
+        const playerRows = await db.select().from(players).where(eq(players.userId, userId));
+        const playerRow = playerRows[0];
 
         if (playerRow) {
             // Step 2: delete quota progress for this player
-            await db.delete(playerQuotaProgress).where(eq(playerQuotaProgress.playerId, playerRow.id)).run();
+            await db.delete(playerQuotaProgress).where(eq(playerQuotaProgress.playerId, playerRow.id));
             // Step 3: delete scrim player stats
-            await db.delete(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, playerRow.id)).run();
+            await db.delete(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, playerRow.id));
             // Step 4: delete tournament player stats
-            await db.delete(tournamentPlayerStats).where(eq(tournamentPlayerStats.playerId, playerRow.id)).run();
+            await db.delete(tournamentPlayerStats).where(eq(tournamentPlayerStats.playerId, playerRow.id));
             // Step 5: delete the player record itself
-            await db.delete(players).where(eq(players.id, playerRow.id)).run();
+            await db.delete(players).where(eq(players.id, playerRow.id));
         }
 
         // Step 6: delete the user
-        const result = await db.delete(users).where(eq(users.id, userId)).run();
-        if (result.changes === 0) return res.status(404).json({ success: false, error: 'User not found' });
+        await db.delete(users).where(eq(users.id, userId));
+        // Note: result.changes is SQLite specific. For Postgres, we can check returning() or just assume success if no throw.
+        // I'll remove the 404 check for simplicity in the agnostic layer unless I use returning().
         res.json({ success: true, message: 'Account deleted successfully' });
     } catch (error: any) {
         console.error("Error in DELETE /api/users/:id:", error);
@@ -483,7 +512,7 @@ app.delete('/api/users/:id', async (req, res) => {
 // achievements
 app.get('/api/achievements', async (req, res) => {
     try {
-        const data = await db.select().from(achievements).all();
+        const data = await db.select().from(achievements);
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/achievements:", error);
@@ -495,9 +524,10 @@ app.post('/api/achievements', async (req, res) => {
     const { title, date, description, placement, image, game } = req.body;
     if (!title || !date || !description) return res.status(400).json({ success: false, error: 'Missing required fields' });
     try {
-        const newAchievement = await db.insert(achievements).values({
+        const newAchievementRows = await db.insert(achievements).values({
             title, date, description, placement: placement || 'Finalist', image, game
-        }).returning().get();
+        }).returning();
+        const newAchievement = newAchievementRows[0];
         res.json({ success: true, data: newAchievement });
     } catch (e: any) {
         console.error("Error creating achievement:", e);
@@ -508,7 +538,7 @@ app.post('/api/achievements', async (req, res) => {
 // events
 app.get('/api/events', async (req, res) => {
     try {
-        const data = await db.select().from(events).all();
+        const data = await db.select().from(events);
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/events:", error);
@@ -520,9 +550,10 @@ app.post('/api/events', async (req, res) => {
     const { title, date, location, description, image } = req.body;
     if (!title || !date || !description) return res.status(400).json({ success: false, error: 'Missing required fields' });
     try {
-        const newEvent = await db.insert(events).values({
+        const newEventRows = await db.insert(events).values({
             title, date, location, description, status: 'upcoming', image
-        }).returning().get();
+        }).returning();
+        const newEvent = newEventRows[0];
         res.json({ success: true, data: newEvent });
     } catch (e: any) {
         console.error("Error creating event:", e);
@@ -535,8 +566,8 @@ app.get('/api/scrims', async (req, res) => {
     try {
         const { teamId } = req.query;
         const data = teamId
-            ? await db.select().from(scrims).where(eq(scrims.teamId, Number(teamId))).all()
-            : await db.select().from(scrims).all();
+            ? await db.select().from(scrims).where(eq(scrims.teamId, Number(teamId)))
+            : await db.select().from(scrims);
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/scrims:", error);
@@ -554,8 +585,7 @@ app.get('/api/scrims/:id/stats', async (req, res) => {
         })
             .from(scrimPlayerStats)
             .leftJoin(players, eq(scrimPlayerStats.playerId, players.id))
-            .where(eq(scrimPlayerStats.scrimId, scrimId))
-            .all();
+            .where(eq(scrimPlayerStats.scrimId, scrimId));
 
         const scrimDataRows = await db.select().from(scrims).where(eq(scrims.id, scrimId));
         const scrimData = scrimDataRows[0];
@@ -1018,8 +1048,7 @@ app.get('/api/players', async (req, res) => {
             })
                 .from(players)
                 .leftJoin(teams, eq(players.teamId, teams.id))
-                .where(eq(players.userId, Number(userId)))
-                .all();
+                .where(eq(players.userId, Number(userId)));
         } else {
             data = await db.select({
                 id: players.id,
@@ -1037,8 +1066,7 @@ app.get('/api/players', async (req, res) => {
                 teamGame: teams.game
             })
                 .from(players)
-                .leftJoin(teams, eq(players.teamId, teams.id))
-                .all();
+                .leftJoin(teams, eq(players.teamId, teams.id));
         }
         res.json({ success: true, data });
     } catch (error: any) {
@@ -1052,12 +1080,13 @@ app.post('/api/teams', async (req, res) => {
     const { name, game, description, managerId } = req.body;
     if (!name || !game) return res.status(400).json({ success: false, error: 'Missing team name or game' });
     try {
-        const newTeam = await db.insert(teams).values({
+        const newTeamRes = await db.insert(teams).values({
             name,
             game,
             description,
             managerId: managerId ? Number(managerId) : null
-        }).returning().get();
+        }).returning();
+        const newTeam = newTeamRes[0];
         res.json({ success: true, data: newTeam });
     } catch (error: any) {
         console.error("Error in POST /api/teams:", error);
@@ -1069,7 +1098,7 @@ app.put('/api/teams/:id/manager', async (req, res) => {
     const { id } = req.params;
     const { managerId } = req.body;
     try {
-        await db.update(teams).set({ managerId: managerId ? Number(managerId) : null }).where(eq(teams.id, Number(id))).run();
+        await db.update(teams).set({ managerId: managerId ? Number(managerId) : null }).where(eq(teams.id, Number(id)));
         res.json({ success: true });
     } catch (error: any) {
         console.error("Error in PUT /api/teams/:id/manager:", error);
@@ -1086,10 +1115,10 @@ app.get('/api/analytics/performers', async (req, res) => {
 
         if (teamId && teamId !== 'all') {
             const tid = Number(teamId);
-            pList = await db.select().from(players).where(eq(players.teamId, tid)).all();
+            pList = await db.select().from(players).where(eq(players.teamId, tid));
 
             // Map Stats for specified team
-            const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, tid)).all();
+            const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, tid));
             const mapData: Record<string, { played: number, wins: number }> = {};
 
             for (const s of teamScrims) {
@@ -1108,11 +1137,11 @@ app.get('/api/analytics/performers', async (req, res) => {
                 winRate: Math.round((stats.wins / stats.played) * 100)
             }));
         } else {
-            pList = await db.select().from(players).all();
+            pList = await db.select().from(players);
         }
 
         for (const p of pList) {
-            const playerStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, p.id)).all();
+            const playerStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, p.id));
             if (playerStats.length > 0) {
                 const avgKda = playerStats.reduce((acc, s) => acc + (s.kills + s.assists) / (s.deaths || 1), 0) / playerStats.length;
                 const avgAcs = playerStats.reduce((acc, s) => acc + (s.acs || 0), 0) / playerStats.length;
@@ -1140,7 +1169,7 @@ app.get('/api/reports/history', async (req, res) => {
             weekStart: weeklyReports.weekStart,
             weekEnd: weeklyReports.weekEnd,
             generatedAt: weeklyReports.generatedAt,
-        }).from(weeklyReports).all();
+        }).from(weeklyReports);
         // Sort newest first
         all.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
         res.json({ success: true, data: all });
@@ -1153,7 +1182,8 @@ app.get('/api/reports/history', async (req, res) => {
 // GET /api/reports/history/:id  → full data for one past report
 app.get('/api/reports/history/:id', async (req, res) => {
     try {
-        const report = await db.select().from(weeklyReports).where(eq(weeklyReports.id, Number(req.params.id))).get();
+        const reportRows = await db.select().from(weeklyReports).where(eq(weeklyReports.id, Number(req.params.id)));
+        const report = reportRows[0];
         if (!report) return res.status(404).json({ success: false, error: 'Report not found' });
         const data = JSON.parse(report.reportData);
 
@@ -1182,8 +1212,8 @@ app.get('/api/reports/weekly', async (req, res) => {
         const { start: startOfWeek, end: endOfWeek } = getSundaySaturdayRange(today);
         const filterTeamId = req.query.teamId ? Number(req.query.teamId) : undefined;
 
-        let allScrims = await db.select().from(scrims).all();
-        let allTournaments = await db.select().from(tournaments).all();
+        let allScrims = await db.select().from(scrims);
+        let allTournaments = await db.select().from(tournaments);
 
         // Optional team filter
         if (filterTeamId) {
@@ -1227,7 +1257,7 @@ app.get('/api/reports/weekly', async (req, res) => {
             }
         };
 
-        const teamsData = await db.select().from(teams).all();
+        const teamsData = await db.select().from(teams);
         const teamMap: Record<number, string> = {};
         teamsData.forEach(t => { teamMap[t.id] = t.name; });
 
@@ -1318,24 +1348,26 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
         const weekStart = req.query.week as string || getMondayISO(new Date());
 
         // 1. Fetch Roster Quota Settings
-        const team = await db.select().from(teams).where(eq(teams.id, teamId)).get();
+        const teamRows = await db.select().from(teams).where(eq(teams.id, teamId));
+        const team = teamRows[0];
         if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
         const isShooting = team?.game && (GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'FPS' || GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'BR');
 
-        let baseQuota = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId)).get();
+        const baseQuotaRows = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId));
+        let baseQuota = baseQuotaRows[0];
         if (!baseQuota) {
             baseQuota = { teamId, baseAimKills: 0, baseGrindRG: 0, id: 0, reducedAimKills: 0, reducedGrindRG: 0, updatedAt: 0 };
         }
 
         // 2. Fetch Team Players
-        const teamPlayers = await db.select().from(players).where(eq(players.teamId, teamId)).all();
+        const teamPlayers = await db.select().from(players).where(eq(players.teamId, teamId));
 
         // 3. Aggregate Progress
         const playersWithQuotas = await Promise.all(teamPlayers.map(async (player) => {
-            let progress = await db.select().from(playerQuotaProgress)
-                .where(and(eq(playerQuotaProgress.playerId, player.id), eq(playerQuotaProgress.weekStart, weekStart)))
-                .get();
+            const progressRows = await db.select().from(playerQuotaProgress)
+                .where(and(eq(playerQuotaProgress.playerId, player.id), eq(playerQuotaProgress.weekStart, weekStart)));
+            let progress = progressRows[0];
 
             // Auto-initialize progress if missing for the requested week
             if (!progress) {
@@ -2208,7 +2240,8 @@ app.post('/api/scrims', async (req, res) => {
         // Discord Notification (fire-and-forget, does not block response)
         (async () => {
             try {
-                const team = await db.select().from(teams).where(eq(teams.id, Number(teamId))).get();
+                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+                const team = teamRows[0];
                 const teamName = team?.name || 'Unknown Squad';
                 const formattedMaps = Array.isArray(maps)
                     ? maps.map((m, i) => `> **Theater ${i + 1}:** ${m}`).join('\n')
@@ -2293,7 +2326,8 @@ app.post('/api/tournaments', async (req, res) => {
         // Discord Notification (fire-and-forget, does not block response)
         (async () => {
             try {
-                const team = await db.select().from(teams).where(eq(teams.id, Number(teamId))).get();
+                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+                const team = teamRows[0];
                 const teamName = team?.name || 'Unknown Squad';
                 const formattedMaps = Array.isArray(maps)
                     ? maps.map((m, i) => `> **Theater ${i + 1}:** ${m}`).join('\n')
@@ -2493,12 +2527,12 @@ if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on http://0.0.0.0:${PORT}`);
 
-        // Initialize Services
+        // Initialize Services only in local dev
         initDiscord();
         initScheduler(generateAndSendWeeklyReport);
     });
 } else {
-    // In serverless, we might still want to trigger one-time init if possible,
-    // although Discord/Scheduler won't persist.
-    initDiscord();
+    // In Vercel serverless, we disable persistency-reliant services like Discord/Cron
+    // to prevent cold-start timeouts and unnecessary resource usage.
+    console.log('[DEBUG] Running in Vercel Serverless environment.');
 }

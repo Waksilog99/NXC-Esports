@@ -14,10 +14,12 @@ if (!dbUrl) {
 } else {
     try {
         const queryClient = postgres(dbUrl, {
-            ssl: 'require'
+            ssl: { rejectUnauthorized: false },
+            connect_timeout: 10,
+            max: 1 // Keep connections low in serverless
         });
         db = drizzlePg(queryClient, { schema });
-        console.log(' [DB] Postgres connection initialized.');
+        console.log(' [DB] Postgres connection initialized with serverless-friendly SSL settings.');
     } catch (err) {
         console.error(' [CRITICAL ERROR] Failed to initialize Postgres connection:', err);
     }

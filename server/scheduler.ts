@@ -189,7 +189,8 @@ export const initScheduler = (onWeeklyReportTrigger?: () => Promise<any>) => {
 
 async function sendScrimReminder(scrim: any, timeText: string) {
     try {
-        const team = await db.select().from(teams).where(eq(teams.id, Number(scrim.teamId))).get();
+        const families = await db.select().from(teams).where(eq(teams.id, Number(scrim.teamId)));
+        const team = families[0];
         const teamName = team?.name || 'Unknown Squad';
 
         const discordMsg = `🚨 **SCRIM DEPLOYMENT IMMINENT** 🚨\n\n` +
@@ -208,7 +209,8 @@ async function sendScrimReminder(scrim: any, timeText: string) {
 
 async function sendTournamentReminder(tourney: any, timeText: string) {
     try {
-        const team = await db.select().from(teams).where(eq(teams.id, Number(tourney.teamId))).get();
+        const families = await db.select().from(teams).where(eq(teams.id, Number(tourney.teamId)));
+        const team = families[0];
         const teamName = team?.name || 'Unknown Squad';
 
         const discordMsg = `🏆 **TOURNAMENT OPERATION IMMINENT** 🏆\n\n` +
