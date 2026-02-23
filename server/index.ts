@@ -19,8 +19,6 @@ import { db } from './db';
 import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress } from './schema';
 import { eq, inArray, and } from 'drizzle-orm';
 import crypto from 'crypto';
-import { initDiscord } from './discord';
-import { initScheduler, sendAIEventNotification } from './scheduler';
 import fs from 'fs';
 import { finished } from 'stream/promises';
 
@@ -97,6 +95,7 @@ const PORT = 3001;
 app.post('/api/test/notification', async (req, res) => {
     console.log('[DEBUG] Hit /api/test/notification route (TOP)');
     try {
+        const { sendAIEventNotification } = await import('./scheduler');
         const dummyEvent = {
             title: "NOW RECRUITING: NXC Solana (VALORANT PC)",
             description: "NXC is officially expanding our VALORANT PC FEMALE DIVISION with the launch of NXC Solana. We are looking for high potential players ready to build a legacy suitable for elite community leagues.\n\nRequirements:\n- Gender: Female\n- Rank: Diamond - Immortal\n- Team Size: 5 Main + 2 Subs\n- Commitment: Available for scrims/VODs.",
@@ -2523,10 +2522,14 @@ export default app;
 
 // Startup
 if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, '0.0.0.0', async () => {
         console.log(`Server running on http://0.0.0.0:${PORT}`);
 
-        // Initialize Services only in local dev
+        // Lazy load services only in local dev to save cold-start time in serverless production
+        console.log('[DEBUG] Lazy loading services (Discord, Scheduler)...');
+        const { initDiscord } = await import('./discord');
+        const { initScheduler } = await import('./scheduler');
+
         initDiscord();
         initScheduler(generateAndSendWeeklyReport);
     });

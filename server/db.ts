@@ -1,9 +1,6 @@
 import postgres from 'postgres';
 import { drizzle as drizzlePg } from 'drizzle-orm/postgres-js';
 import * as schema from './schema';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 let db: any;
 
