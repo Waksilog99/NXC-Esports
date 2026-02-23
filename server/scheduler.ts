@@ -3,10 +3,7 @@ import { db } from './db';
 import { events, eventNotifications, scrims, teams, scrimNotifications, tournaments, tournamentNotifications } from './schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { sendToDiscord } from './discord';
-import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // NOTIFICATION_INTERVALS removed - we use custom logic in check loop
 
@@ -229,6 +226,14 @@ async function sendTournamentReminder(tourney: any, timeText: string) {
 
 export async function sendAIEventNotification(event: any, timeLabel: string) {
     try {
+        if (!process.env.GEMINI_API_KEY) {
+            console.warn('[SCHEDULER] Missing GEMINI_API_KEY. Skipping AI generation.');
+            throw new Error('Missing API Key');
+        }
+
+        const { GoogleGenAI } = await import('@google/genai');
+        const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
         let timeText = timeLabel;
         if (timeLabel === '3d') timeText = '3 Days';
         if (timeLabel === '1d') timeText = '1 Day';
@@ -253,19 +258,18 @@ export async function sendAIEventNotification(event: any, timeLabel: string) {
             - **Details/Requirements**: Use bullet points (• or -) if the event description implies a list (e.g., rules, requirements, lineup).
             - **Key Info**: distinct sections for Location/Time if relevant.
             - **Action**: A clear "Interested?" or "Join now" call to action.
-            - **Action**: A clear "Interested?" or "Join now" call to action.
             - **Footer**: Ends with relevant hashtags and @everyone.
             - Do NOT limit length to 2 sentences. Make it look professional and complete (like a recruitment or tournament post).
             - Output ONLY the message content.
         `;
 
-        console.log('[SCHEDULER] Generating content with Gemini...');
+        console.log('[SCHEDULER] Generating content with Gemini... (Lazy Loading)');
         const response = await genAI.models.generateContent({
-            model: 'gemini-2.0-flash', // or 'gemini-1.5-flash' depending on availability, using a standard one
+            model: 'gemini-2.0-flash',
             contents: prompt
         });
 
-        const message = response.text; // Aligning with geminiService.ts usage pattern
+        const message = response.text;
         console.log(`[SCHEDULER] Generated message (${message?.length} chars):\n${message}`);
 
         if (message) {

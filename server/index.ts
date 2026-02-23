@@ -19,11 +19,8 @@ import { db } from './db';
 import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress } from './schema';
 import { eq, inArray, and } from 'drizzle-orm';
 import crypto from 'crypto';
-import { GoogleGenAI } from '@google/genai';
 import { initDiscord } from './discord';
 import { initScheduler, sendAIEventNotification } from './scheduler';
-import PDFDocument from 'pdfkit';
-import nodemailer from 'nodemailer';
 import fs from 'fs';
 import { finished } from 'stream/promises';
 
@@ -1686,6 +1683,7 @@ export async function generateAndSendWeeklyReport() {
 
         const pdfFileName = `NXC_Royal_Edict_${Date.now()}.pdf`;
         const pdfPath = resolve(process.cwd(), pdfFileName);
+        const { default: PDFDocument } = await import('pdfkit');
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
         const writeStream = fs.createWriteStream(pdfPath);
         doc.pipe(writeStream);
@@ -2022,6 +2020,7 @@ export async function generateAndSendWeeklyReport() {
             };
         }
 
+        const { default: nodemailer } = await import('nodemailer');
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: { user: gmailUser, pass: gmailPass }
@@ -2408,16 +2407,16 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
 
 // AI & Results
 // AI & Results
-// Groq Service
-// Tesseract Service
-import { analyzeScoreboardWithOCR } from './services/ocr';
+// Services are lazy-loaded within routes
 
 app.post('/api/scrims/analyze', async (req, res) => {
     const { image, teamId } = req.body;
     if (!image || !teamId) return res.status(400).json({ success: false, error: 'Missing image or teamId' });
 
     try {
-        console.log(`[OCR] Request received for Team ${teamId}`);
+        console.log(`[OCR] Request received for Team ${teamId} (Lazy Loading)`);
+
+        const { analyzeScoreboardWithOCR } = await import('./services/ocr');
         // Fetch roster for context
         const roster = await db.select().from(players).where(eq(players.teamId, Number(teamId)));
 

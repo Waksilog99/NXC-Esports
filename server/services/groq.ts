@@ -1,7 +1,3 @@
-import Groq from 'groq-sdk';
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 interface AIResult {
     isVictory: boolean;
     results: Array<{
@@ -16,16 +12,17 @@ interface AIResult {
 
 export const analyzeScoreboardWithGroq = async (base64Image: string, roster: any[]): Promise<AIResult> => {
     try {
-        console.log("[Groq] Starting analysis...");
+        console.log("[Groq] Starting analysis... (Lazy Loading)");
 
         if (!process.env.GROQ_API_KEY) {
             throw new Error("GROQ_API_KEY is missing in .env");
         }
 
+        const { default: Groq } = await import('groq-sdk');
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
         const rosterNames = roster.map((p: any) => p.name).join(', ');
 
-        // Fix base64 header if present (Groq might need raw or data url, usually data url is fine for vision)
-        // Llama 3.2 Vision via Groq expects image_url with data URI.
         const imageUrl = base64Image.startsWith('data:') ? base64Image : `data:image/png;base64,${base64Image}`;
 
         const prompt = `

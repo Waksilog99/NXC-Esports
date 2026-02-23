@@ -1,5 +1,3 @@
-import Tesseract from 'tesseract.js';
-
 interface OCRResult {
     isVictory: boolean;
     results: Array<{
@@ -13,7 +11,9 @@ interface OCRResult {
 
 export const analyzeScoreboardWithOCR = async (base64Image: string, roster: any[]): Promise<OCRResult> => {
     try {
-        console.log("[OCR] Starting Tesseract analysis...");
+        console.log("[OCR] Starting Tesseract analysis... (Lazy Loading)");
+        const { default: Tesseract } = await import('tesseract.js');
+
         const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(cleanBase64, 'base64');
 
