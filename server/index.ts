@@ -1,9 +1,9 @@
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 
-// Force load .env from CWD (Root)
-dotenv.config({ path: resolve(process.cwd(), '.env') });
-console.log('[DEBUG] Loading .env from:', resolve(process.cwd(), '.env'));
+// Force load .env
+dotenv.config();
+console.log('[DEBUG] Environment loaded. NODE_ENV:', process.env.NODE_ENV);
 console.log('[DEBUG] GEMINI_API_KEY loaded:', !!process.env.GEMINI_API_KEY);
 
 import express from 'express';
@@ -160,6 +160,15 @@ app.get('/ping', (req, res) => {
     res.json({ status: 'ok', server: 'Identity Service' });
 });
 
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'UP',
+        nodeEnv: process.env.NODE_ENV,
+        hasDbUrl: !!process.env.DATABASE_URL,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Users
 app.get('/api/users', async (req, res) => {
     try {
@@ -228,6 +237,9 @@ app.post('/api/auth/signup', async (req, res) => {
 
 
 app.post('/api/auth/login', async (req, res) => {
+    if (!db) {
+        return res.status(503).json({ success: false, error: 'Database service is currently unavailable. Please check server logs.' });
+    }
     const { username, password } = req.body;
     const sUsername = sanitize(username);
     try {

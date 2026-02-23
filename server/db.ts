@@ -7,17 +7,20 @@ dotenv.config();
 
 let db: any;
 
-if (!process.env.DATABASE_URL) {
-    if (process.env.NODE_ENV === 'production') {
-        throw new Error('DATABASE_URL is required in production');
-    }
-    // No fallback to SQLite allowed anymore per "disable local" instruction
-    throw new Error('DATABASE_URL is not set. Local SQLite is disabled.');
-}
+const dbUrl = process.env.DATABASE_URL;
 
-const queryClient = postgres(process.env.DATABASE_URL, {
-    ssl: 'require'
-});
-db = drizzlePg(queryClient, { schema });
+if (!dbUrl) {
+    console.error(' [CRITICAL ERROR] DATABASE_URL is missing. Database operations will fail.');
+} else {
+    try {
+        const queryClient = postgres(dbUrl, {
+            ssl: 'require'
+        });
+        db = drizzlePg(queryClient, { schema });
+        console.log(' [DB] Postgres connection initialized.');
+    } catch (err) {
+        console.error(' [CRITICAL ERROR] Failed to initialize Postgres connection:', err);
+    }
+}
 
 export { db };
