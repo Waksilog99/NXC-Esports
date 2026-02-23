@@ -12,8 +12,10 @@ if (!dbUrl) {
     try {
         const queryClient = postgres(dbUrl, {
             ssl: { rejectUnauthorized: false },
-            connect_timeout: 10,
-            max: 1 // Keep connections low in serverless
+            connect_timeout: 20, // Increased for serverless cold-start resilience
+            max: 1,
+            idle_timeout: 20,
+            prepare: false // Required for transaction mode poolers
         });
         db = drizzlePg(queryClient, { schema });
         console.log(' [DB] Postgres connection initialized with serverless-friendly SSL settings.');
