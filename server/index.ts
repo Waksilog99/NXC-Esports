@@ -169,15 +169,14 @@ app.get('/ping', (req, res) => {
 
 app.get('/api/diag', async (req, res) => {
     try {
-        const queryClient = await db.queryClient; // Access underlying postgres client if possible
-        // Actually, drizzle with postgres-js has it. Let's just use raw queries via db.execute
-        const dbInfo = await db.execute(postgres.sql`SELECT current_database(), current_user, inet_server_addr(), version()`);
-        const userCount = await db.select({ count: postgres.sql`count(*)` }).from(users);
+        console.log('[AUTH TRACE] Running /api/diag...');
+        const dbInfo = await db.execute(sql`SELECT current_database(), current_user, inet_server_addr(), version()`);
+        const userCountRes = await db.select({ count: sql`count(*)` }).from(users);
 
         res.json({
             success: true,
             dbInfo: dbInfo[0],
-            userCount: userCount[0].count,
+            userCount: userCountRes[0].count,
             env: {
                 NODE_ENV: process.env.NODE_ENV,
                 DATABASE_URL_SET: !!process.env.DATABASE_URL,
