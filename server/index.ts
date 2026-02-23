@@ -188,7 +188,7 @@ app.get('/api/health', async (req, res) => {
         hasGeminiKey: !!process.env.GEMINI_API_KEY,
         hasDiscordToken: !!process.env.DISCORD_BOT_TOKEN,
         timestamp: new Date().toISOString(),
-        version: '1.0.2-diagnostic'
+        version: '1.0.3-final-resilience'
     });
 });
 
