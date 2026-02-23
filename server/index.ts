@@ -260,30 +260,30 @@ app.post('/api/auth/signup', async (req, res) => {
 
 
 app.post('/api/auth/login', async (req, res) => {
-    if (!db) {
-        return res.status(503).json({ success: false, error: 'Database service is currently unavailable. Please check server logs.' });
-    }
+    console.log('[AUTH TRACE] 1. Request received for /api/auth/login');
     const { username, password } = req.body;
     const sUsername = sanitize(username);
     try {
-        console.log(`[AUTH] Login attempt for username: ${sUsername}`);
+        console.log(`[AUTH TRACE] 2. Login attempt started for: ${sUsername}`);
         // Step 1: fetch user row including password for verification
+        console.log('[AUTH TRACE] 3. Initiating DB lookup...');
         const userRows = await db.select().from(users).where(eq(users.username, sUsername));
-        console.log(`[AUTH] DB Lookup complete. Rows found: ${userRows.length}`);
+        console.log(`[AUTH TRACE] 4. DB Lookup finished. Rows: ${userRows.length}`);
         const userRow = userRows[0];
 
         if (!userRow) {
-            console.log(`[AUTH] User not found: ${sUsername}`);
+            console.log(`[AUTH TRACE] 5a. User not found: ${sUsername}`);
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
-        console.log('[AUTH] Verifying password...');
+        console.log('[AUTH TRACE] 5b. Verifying password...');
         const isPasswordValid = await verifyPassword(password, userRow.password, userRow.id);
-        console.log(`[AUTH] Password verification result: ${isPasswordValid}`);
+        console.log(`[AUTH TRACE] 6. Password check result: ${isPasswordValid}`);
 
         if (!isPasswordValid) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
+        console.log('[AUTH TRACE] 7. Credentials valid. Fetching profile...');
 
         // Step 2: fetch full safe profile (with player data, no password)
         const safeUserRows = await db.select({
@@ -312,11 +312,22 @@ app.post('/api/auth/login', async (req, res) => {
             (safeUser as any).level = determineLevel(safeUser.role, safeUser.level);
         }
 
+        console.log('[AUTH TRACE] 8. Login success. Sending response.');
         res.json({ success: true, message: 'Login success', data: safeUser });
     } catch (error: any) {
-        console.error("Error in POST /api/auth/login:", error);
+        console.error("[AUTH TRACE] CRITICAL ERROR in /api/auth/login:", error);
         res.status(500).json({ success: false, error: 'Login failure', details: IS_PROD ? undefined : error.message });
     }
+});
+
+// --- GLOBAL ERROR HANDLER ---
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('[CRITICAL] UNHANDLED ERROR:', err);
+    res.status(500).json({
+        success: false,
+        error: 'An unexpected server error occurred.',
+        details: IS_PROD ? 'Check server logs' : err.message
+    });
 });
 
 app.post('/api/users/sync', async (req, res) => {

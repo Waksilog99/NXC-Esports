@@ -2,27 +2,40 @@ import postgres from 'postgres';
 import { drizzle as drizzlePg } from 'drizzle-orm/postgres-js';
 import * as schema from './schema';
 
-let db: any;
+let _db: any;
 
-const dbUrl = process.env.DATABASE_URL;
+export function getDb() {
+    if (_db) return _db;
 
-if (!dbUrl) {
-    console.error(' [CRITICAL ERROR] DATABASE_URL is missing. Database operations will fail.');
-} else {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+        console.error(' [DB DIAG] DATABASE_URL is missing!');
+        return null;
+    }
+
     try {
+        console.log(` [DB DIAG] Initializing connection to: ${dbUrl.split('@')[1]}`); // Log host safely
         const queryClient = postgres(dbUrl, {
             ssl: { rejectUnauthorized: false },
-            connect_timeout: 5, // Fail fast to handle error before Vercel 10s timeout
+            connect_timeout: 5,
             max: 1,
             idle_timeout: 20,
-            prepare: false, // Required for transaction mode poolers
-            onnotice: () => { } // Suppress noisy notices
+            prepare: false,
+            onnotice: () => { }
         });
-        db = drizzlePg(queryClient, { schema });
-        console.log(' [DB] Postgres connection initialized with serverless-friendly SSL settings.');
-    } catch (err) {
-        console.error(' [CRITICAL ERROR] Failed to initialize Postgres connection:', err);
+        _db = drizzlePg(queryClient, { schema });
+        return _db;
+    } catch (err: any) {
+        console.error(' [DB DIAG] Initialization failed:', err.message);
+        return null;
     }
 }
 
-export { db };
+// Keep the export for backward compatibility but mark it as lazy
+export const db = new Proxy({} as any, {
+    get(_, prop) {
+        const d = getDb();
+        if (!d) throw new Error("Database not initialized");
+        return d[prop];
+    }
+});
