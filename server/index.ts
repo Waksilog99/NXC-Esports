@@ -2740,15 +2740,24 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 
-// Startup
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+// Final Export for Vercel
+export default app;
 
-    // Initialize Services
-    if (!IS_PROD) {
-        runMigrations();
-        seedData();
-    }
+// Startup
+if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on http://0.0.0.0:${PORT}`);
+
+        // Initialize Services
+        if (!IS_PROD) {
+            runMigrations();
+            seedData();
+        }
+        initDiscord();
+        initScheduler(generateAndSendWeeklyReport);
+    });
+} else {
+    // In serverless, we might still want to trigger one-time init if possible,
+    // although Discord/Scheduler won't persist.
     initDiscord();
-    initScheduler(generateAndSendWeeklyReport);
-});
+}
