@@ -266,11 +266,22 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     const sUsername = sanitize(username);
     try {
+        console.log(`[AUTH] Login attempt for username: ${sUsername}`);
         // Step 1: fetch user row including password for verification
         const userRows = await db.select().from(users).where(eq(users.username, sUsername));
+        console.log(`[AUTH] DB Lookup complete. Rows found: ${userRows.length}`);
         const userRow = userRows[0];
 
-        if (!userRow || !(await verifyPassword(password, userRow.password, userRow.id))) {
+        if (!userRow) {
+            console.log(`[AUTH] User not found: ${sUsername}`);
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        console.log('[AUTH] Verifying password...');
+        const isPasswordValid = await verifyPassword(password, userRow.password, userRow.id);
+        console.log(`[AUTH] Password verification result: ${isPasswordValid}`);
+
+        if (!isPasswordValid) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
