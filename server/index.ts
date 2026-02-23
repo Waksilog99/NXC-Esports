@@ -15,8 +15,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
-import { db } from './db';
-import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress } from './schema';
+import { db } from './db.js';
+import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress } from './schema.js';
 import { eq, inArray, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -95,7 +95,7 @@ const PORT = 3001;
 app.post('/api/test/notification', async (req, res) => {
     console.log('[DEBUG] Hit /api/test/notification route (TOP)');
     try {
-        const { sendAIEventNotification } = await import('./scheduler');
+        const { sendAIEventNotification } = await import('./scheduler.js');
         const dummyEvent = {
             title: "NOW RECRUITING: NXC Solana (VALORANT PC)",
             description: "NXC is officially expanding our VALORANT PC FEMALE DIVISION with the launch of NXC Solana. We are looking for high potential players ready to build a legacy suitable for elite community leagues.\n\nRequirements:\n- Gender: Female\n- Rank: Diamond - Immortal\n- Team Size: 5 Main + 2 Subs\n- Commitment: Available for scrims/VODs.",
@@ -2549,8 +2549,8 @@ if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
 
         // Lazy load services only in local dev to save cold-start time in serverless production
         console.log('[DEBUG] Lazy loading services (Discord, Scheduler)...');
-        const { initDiscord } = await import('./discord');
-        const { initScheduler } = await import('./scheduler');
+        const { initDiscord } = await import('./discord.js');
+        const { initScheduler } = await import('./scheduler.js');
 
         initDiscord();
         initScheduler(generateAndSendWeeklyReport);

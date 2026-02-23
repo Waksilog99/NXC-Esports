@@ -1,8 +1,8 @@
 import cron from 'node-cron';
-import { db } from './db';
-import { events, eventNotifications, scrims, teams, scrimNotifications, tournaments, tournamentNotifications } from './schema';
+import { db } from './db.js';
+import { events, eventNotifications, scrims, teams, scrimNotifications, tournaments, tournamentNotifications } from './schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
-import { sendToDiscord } from './discord';
+import { sendToDiscord } from './discord.js';
 import fs from 'fs';
 
 // NOTIFICATION_INTERVALS removed - we use custom logic in check loop
