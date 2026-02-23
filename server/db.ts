@@ -14,7 +14,9 @@ export function getDb() {
     }
 
     try {
-        console.log(` [DB DIAG] Initializing connection to: ${dbUrl.split('@')[1]}`); // Log host safely
+        const host = dbUrl.split('@')[1]?.split(':')[0] || 'unknown';
+        const port = dbUrl.split(':')[3]?.split('/')[0] || 'unknown';
+        console.log(` [DB DIAG] Initializing connection to host: ${host}, port: ${port}`);
         const queryClient = postgres(dbUrl, {
             ssl: { rejectUnauthorized: false },
             connect_timeout: 5,

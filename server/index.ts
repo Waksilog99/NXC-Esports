@@ -52,7 +52,14 @@ const ALLOWED_ORIGINS = [
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (server-to-server, curl, mobile apps)
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        if (!origin) return callback(null, true);
+
+        // Check whitelist
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+
+        // Allow all Vercel subdomains
+        if (origin.endsWith('.vercel.app')) return callback(null, true);
+
         callback(new Error(`CORS: origin '${origin}' not allowed`));
     },
     credentials: true,
@@ -171,8 +178,10 @@ app.get('/api/health', async (req, res) => {
             dbStatus = 'CONNECTED';
         } catch (err: any) {
             dbStatus = 'CONNECTION_FAILED';
-            dbError = err.message;
+            dbError = err.message || 'Unknown database error';
             console.error('[HEALTH] DB Connectivity check failed:', err);
+            // Log full stack in internal diagnostic
+            if (!IS_PROD) console.error(err.stack);
         }
     } else {
         dbStatus = 'NOT_INITIALIZED';
@@ -221,8 +230,8 @@ app.get('/api/users', async (req, res) => {
         }));
         res.json(dataWithRoleLevels);
     } catch (error: any) {
-        console.error("Error in GET /api/users:", error);
-        res.status(500).json({ success: false, error: 'Failed to fetch users', details: IS_PROD ? undefined : error.message });
+        console.error("Error in GET /api/users:", error.stack || error);
+        res.status(500).json({ success: false, error: 'Failed to fetch users', details: IS_PROD ? 'Check server logs' : error.message });
     }
 });
 
@@ -1039,8 +1048,8 @@ app.get('/api/teams', async (req, res) => {
 
         res.json({ success: true, data: result });
     } catch (error: any) {
-        console.error("Error in GET /api/teams:", error);
-        res.status(500).json({ success: false, error: 'Failed to fetch teams', details: IS_PROD ? undefined : error.message });
+        console.error("Error in GET /api/teams:", error.stack || error);
+        res.status(500).json({ success: false, error: 'Failed to fetch teams', details: IS_PROD ? 'Check server logs' : error.message });
     }
 });
 
@@ -1339,8 +1348,8 @@ app.get('/api/reports/weekly', async (req, res) => {
             }
         });
     } catch (error: any) {
-        console.error("Error in GET /api/reports/weekly:", error);
-        res.status(500).json({ success: false, error: 'Failed to generate report', details: IS_PROD ? undefined : error.message });
+        console.error("Error in GET /api/reports/weekly:", error.stack || error);
+        res.status(500).json({ success: false, error: 'Failed to generate report', details: IS_PROD ? 'Check server logs' : error.message });
     }
 });
 
