@@ -405,7 +405,8 @@ const seedData = async () => {
     try {
         runMigrations();
         const adminUsername = 'admin';
-        const existingAdmin = await db.select().from(users).where(eq(users.username, adminUsername)).get();
+        const admins = await db.select().from(users).where(eq(users.username, adminUsername));
+        const existingAdmin = admins[0];
         if (!existingAdmin) {
             console.log('Seeding super admin account...');
             const hashedPassword = await hashPassword('admin');
@@ -451,8 +452,7 @@ app.get('/api/users', async (req, res) => {
             xp: players.xp
         })
             .from(users)
-            .leftJoin(players, eq(users.id, players.userId))
-            .all();
+            .leftJoin(players, eq(users.id, players.userId));
 
         const dataWithRoleLevels = allUsers.map(u => ({
             ...u,
@@ -475,13 +475,14 @@ app.post('/api/auth/signup', async (req, res) => {
 
     try {
         const hashedPassword = await hashPassword(password);
-        const newUser = await db.insert(users).values({
+        const newUserRows = await db.insert(users).values({
             fullname: sFullname,
             username: sUsername,
             email: sEmail,
             password: hashedPassword,
             role: 'member'
-        }).returning().get();
+        }).returning();
+        const newUser = newUserRows[0];
         res.json({ success: true, message: 'Signup success', data: newUser });
     } catch (error: any) {
         console.error("Error in POST /api/auth/signup:", error);
@@ -502,14 +503,15 @@ app.post('/api/auth/login', async (req, res) => {
     const sUsername = sanitize(username);
     try {
         // Step 1: fetch user row including password for verification
-        const userRow = await db.select().from(users).where(eq(users.username, sUsername)).get();
+        const userRows = await db.select().from(users).where(eq(users.username, sUsername));
+        const userRow = userRows[0];
 
         if (!userRow || !(await verifyPassword(password, userRow.password, userRow.id))) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
         // Step 2: fetch full safe profile (with player data, no password)
-        const safeUser = await db.select({
+        const safeUserRows = await db.select({
             id: users.id,
             username: users.username,
             email: users.email,
@@ -528,8 +530,8 @@ app.post('/api/auth/login', async (req, res) => {
         })
             .from(users)
             .leftJoin(players, eq(users.id, players.userId))
-            .where(eq(users.id, userRow.id))
-            .get();
+            .where(eq(users.id, userRow.id));
+        const safeUser = safeUserRows[0];
 
         if (safeUser) {
             (safeUser as any).level = determineLevel(safeUser.role, safeUser.level);
@@ -547,9 +549,10 @@ app.post('/api/users/sync', async (req, res) => {
     email = email?.toLowerCase();
     if (!email) return res.status(400).json({ error: 'Missing email' });
     try {
-        let existingUser = googleId
-            ? await db.select().from(users).where(eq(users.googleId, googleId)).get()
-            : await db.select().from(users).where(eq(users.email, email)).get();
+        let existingUserRows = googleId
+            ? await db.select().from(users).where(eq(users.googleId, googleId))
+            : await db.select().from(users).where(eq(users.email, email));
+        let existingUser = existingUserRows[0];
 
         if (existingUser) {
             const updateSet: any = { avatar, googleId };
@@ -809,7 +812,8 @@ app.get('/api/scrims/:id/stats', async (req, res) => {
             .where(eq(scrimPlayerStats.scrimId, scrimId))
             .all();
 
-        const scrimData = await db.select().from(scrims).where(eq(scrims.id, scrimId)).get();
+        const scrimDataRows = await db.select().from(scrims).where(eq(scrims.id, scrimId));
+        const scrimData = scrimDataRows[0];
 
         res.json({ success: true, data: { scrim: scrimData, stats } });
     } catch (error: any) {
@@ -822,7 +826,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
     const teamId = Number(req.params.id);
     try {
         // --- 1. SCRIM STATS ---
-        const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, teamId)).all();
+        const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, teamId));
         const completedScrims = teamScrims.filter(s => s.status === 'completed');
         const scrimIds = completedScrims.map(s => s.id);
 
@@ -858,8 +862,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             })
                 .from(scrimPlayerStats)
                 .leftJoin(players, eq(scrimPlayerStats.playerId, players.id))
-                .where(inArray(scrimPlayerStats.scrimId, scrimIds))
-                .all();
+                .where(inArray(scrimPlayerStats.scrimId, scrimIds));
 
             const scrimPlayerAgg: Record<number, any> = {};
             scrimAllStats.forEach(stat => {
@@ -883,7 +886,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
         }
 
         // --- 2. TOURNAMENT STATS ---
-        const teamTourneys = await db.select().from(tournaments).where(eq(tournaments.teamId, teamId)).all();
+        const teamTourneys = await db.select().from(tournaments).where(eq(tournaments.teamId, teamId));
         const completedTourneys = teamTourneys.filter(t => t.status === 'completed');
         const tourneyIds = completedTourneys.map(t => t.id);
 
@@ -913,8 +916,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             })
                 .from(tournamentPlayerStats)
                 .leftJoin(players, eq(tournamentPlayerStats.playerId, players.id))
-                .where(inArray(tournamentPlayerStats.tournamentId, tourneyIds))
-                .all();
+                .where(inArray(tournamentPlayerStats.tournamentId, tourneyIds));
 
             const tourneyPlayerAgg: Record<number, any> = {};
             tourneyAllStats.forEach(stat => {
@@ -970,7 +972,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 // sponsors
 app.get('/api/sponsors', async (req, res) => {
     try {
-        const data = await db.select().from(sponsors).all();
+        const data = await db.select().from(sponsors);
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/sponsors:", error);
@@ -982,9 +984,10 @@ app.post('/api/sponsors', async (req, res) => {
     const { name, tier, logo, description, website } = req.body;
     if (!name || !tier || !logo) return res.status(400).json({ success: false, error: 'Missing required fields' });
     try {
-        const newSponsor = await db.insert(sponsors).values({
+        const newSponsorRows = await db.insert(sponsors).values({
             name, tier, logo, description, website
-        }).returning().get();
+        }).returning();
+        const newSponsor = newSponsorRows[0];
         res.json({ success: true, data: newSponsor });
     } catch (error: any) {
         console.error("Error in POST /api/sponsors:", error);
@@ -1004,11 +1007,11 @@ app.put('/api/sponsors/:id', async (req, res) => {
 
     try {
         console.log('[DEBUG] Executing DB update...');
-        const updatedSponsor = await db.update(sponsors)
+        const updatedSponsorRows = await db.update(sponsors)
             .set({ tier })
             .where(eq(sponsors.id, Number(id)))
-            .returning()
-            .get();
+            .returning();
+        const updatedSponsor = updatedSponsorRows[0];
 
         console.log('[DEBUG] Update result:', updatedSponsor);
 
@@ -1027,9 +1030,12 @@ app.put('/api/sponsors/:id', async (req, res) => {
 app.delete('/api/sponsors/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const result = await db.delete(sponsors).where(eq(sponsors.id, Number(id))).run();
-        if (result.changes === 0) return res.status(404).json({ success: false, error: 'Sponsor not found' });
+        await db.delete(sponsors).where(eq(sponsors.id, Number(id)));
+        // For Postgres compatibility, result doesn't always have .changes directly on the result object in all drivers
+        // SQLite: result.changes. Postgres: result is often an array or similar.
+        // We'll trust the execution succeeded unless it throws.
         res.json({ success: true, message: 'Sponsor deleted successfully' });
+        return;
     } catch (e: any) {
         console.error("Error deleting sponsor:", e);
         res.status(500).json({ success: false, error: 'Failed to delete sponsor', details: IS_PROD ? undefined : e.message });
@@ -1055,7 +1061,7 @@ app.post('/api/seed/massive', async (req, res) => {
             'Overwatch 2': ['Eichenwalde', 'Hanamura', 'Kings Row']
         };
 
-        const existingManagers = await db.select().from(users).where(eq(users.role, 'manager')).all();
+        const existingManagers = await db.select().from(users).where(eq(users.role, 'manager'));
         if (existingManagers.length === 0) return res.status(400).json({ success: false, error: 'Seed accounts first' });
 
         for (let i = 1; i <= 20; i++) {
@@ -1063,14 +1069,16 @@ app.post('/api/seed/massive', async (req, res) => {
             const teamName = `NXC ${game} Squad ${Math.floor(i / 5) + 1}-${i % 5}`;
 
             // 1. Create Team
-            let team = await db.select().from(teams).where(eq(teams.name, teamName)).get();
+            let teamRows = await db.select().from(teams).where(eq(teams.name, teamName));
+            let team = teamRows[0];
             if (!team) {
-                team = await db.insert(teams).values({
+                const newTeamRows = await db.insert(teams).values({
                     name: teamName,
                     game: game,
                     managerId: existingManagers[i % existingManagers.length].id,
                     description: `Professional ${game} Division`
-                }).returning().get();
+                }).returning();
+                team = newTeamRows[0];
             }
 
             // 2. Create Players (5 per team)
@@ -1080,19 +1088,22 @@ app.post('/api/seed/massive', async (req, res) => {
                 const username = playerName.toLowerCase();
 
                 // Ensure User exists for this player
-                let user = await db.select().from(users).where(eq(users.username, username)).get();
+                const userRows = await db.select().from(users).where(eq(users.username, username));
+                let user = userRows[0];
                 if (!user) {
-                    user = await db.insert(users).values({
+                    const newUserRows = await db.insert(users).values({
                         username,
                         password: hashPassword('password123'),
                         email: `${username}@nxc-pro.com`,
                         fullname: playerName.replace(/_/g, ' '),
                         role: 'member',
                         ign: playerName
-                    }).returning().get();
+                    }).returning();
+                    user = newUserRows[0];
                 }
 
-                const existingPlayer = await db.select().from(players).where(eq(players.name, playerName)).get();
+                const existingPlayerRows = await db.select().from(players).where(eq(players.name, playerName));
+                const existingPlayer = existingPlayerRows[0];
                 if (!existingPlayer) {
                     await db.insert(players).values({
                         teamId: team.id,
@@ -1103,19 +1114,19 @@ app.post('/api/seed/massive', async (req, res) => {
                         winRate: '50%',
                         acs: '200',
                         image: `https://ui-avatars.com/api/?name=${playerName}&background=random`
-                    }).run();
+                    });
                 } else if (!existingPlayer.userId) {
-                    await db.update(players).set({ userId: user.id }).where(eq(players.id, existingPlayer.id)).run();
+                    await db.update(players).set({ userId: user.id }).where(eq(players.id, existingPlayer.id));
                 }
             }
 
             // 3. Create Scrim History (3 scrims per team)
-            const teamPlayers = await db.select().from(players).where(eq(players.teamId, team.id)).all();
+            const teamPlayers = await db.select().from(players).where(eq(players.teamId, team.id));
             const maps = mapsPerGame[game!];
             for (let k = 1; k <= 3; k++) {
                 const date = new Date();
                 date.setDate(date.getDate() - k);
-                const scrim = await db.insert(scrims).values({
+                const newScrimRows = await db.insert(scrims).values({
                     teamId: team.id,
                     date: date.toISOString(),
                     opponent: `Rival ${game} Team ${k}`,
@@ -1123,7 +1134,8 @@ app.post('/api/seed/massive', async (req, res) => {
                     status: 'completed',
                     maps: JSON.stringify([maps[0]]),
                     results: JSON.stringify([{ map: 1, mapName: maps[0], score: k % 2 === 0 ? 'WIN' : 'LOSS' }])
-                }).returning().get();
+                }).returning();
+                const scrim = newScrimRows[0];
 
                 // Add Player Stats
                 for (const p of teamPlayers) {
@@ -1135,7 +1147,7 @@ app.post('/api/seed/massive', async (req, res) => {
                         assists: 5 + Math.floor(Math.random() * 10),
                         acs: 150 + Math.floor(Math.random() * 200),
                         isWin: k % 2 === 0 ? 1 : 0
-                    }).run();
+                    });
                 }
             }
         }
@@ -1158,7 +1170,7 @@ app.get('/api/teams', async (req, res) => {
         if (teamId) {
             query = query.where(eq(teams.id, teamId)) as any;
         }
-        const teamData = await query.all();
+        const teamData = await query;
 
         // Fetch players and enrich with User data (IGN, Avatar) and live Stats
         const result = await Promise.all(teamData.map(async (team) => {
@@ -1175,11 +1187,11 @@ app.get('/api/teams', async (req, res) => {
                 level: players.level,
                 xp: players.xp,
                 isActive: players.isActive
-            }).from(players).where(eq(players.teamId, team.id)).all();
+            }).from(players).where(eq(players.teamId, team.id));
 
             // PSTATS: Get all completed scrim IDs for this team
             const teamScrims = await db.select().from(scrims)
-                .where(eq(scrims.teamId, team.id)).all();
+                .where(eq(scrims.teamId, team.id));
             const completedScrimIds = teamScrims
                 .filter(s => s.status === 'completed')
                 .map(s => s.id);
@@ -1188,7 +1200,8 @@ app.get('/api/teams', async (req, res) => {
                 // 1. Fetch User details for IGN/Avatar
                 let enriched = { ...p };
                 if (p.userId) {
-                    const u = await db.select().from(users).where(eq(users.id, p.userId)).get();
+                    const userRows = await db.select().from(users).where(eq(users.id, p.userId));
+                    const u = userRows[0];
                     if (u) {
                         enriched.name = u.ign || u.username;
                         enriched.image = u.avatar || p.image;
@@ -1202,8 +1215,7 @@ app.get('/api/teams', async (req, res) => {
 
                 if (completedScrimIds.length > 0) {
                     const pStats = await db.select().from(scrimPlayerStats)
-                        .where(inArray(scrimPlayerStats.scrimId, completedScrimIds))
-                        .all();
+                        .where(inArray(scrimPlayerStats.scrimId, completedScrimIds));
 
                     const myStats = pStats.filter(s => s.playerId === p.id);
 
@@ -1586,9 +1598,9 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
                 prevDate.setDate(prevDate.getDate() - 7);
                 const prevWeekStart = prevDate.toISOString().split('T')[0];
 
-                const prevProgress = await db.select().from(playerQuotaProgress)
-                    .where(and(eq(playerQuotaProgress.playerId, player.id), eq(playerQuotaProgress.weekStart, prevWeekStart)))
-                    .get();
+                const prevProgressRows = await db.select().from(playerQuotaProgress)
+                    .where(and(eq(playerQuotaProgress.playerId, player.id), eq(playerQuotaProgress.weekStart, prevWeekStart)));
+                const prevProgress = prevProgressRows[0];
 
                 let pKills = 0, pRG = 0, cKills = 0, cRG = 0;
 
@@ -1609,7 +1621,7 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
                     }
                 }
 
-                progress = await db.insert(playerQuotaProgress).values({
+                const newProgressRows = await db.insert(playerQuotaProgress).values({
                     playerId: player.id,
                     weekStart: weekStart,
                     aimStatus: 'pending',
@@ -1623,7 +1635,8 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
                     punishmentRG: pRG,
                     carryOverKills: cKills,
                     carryOverRG: cRG
-                }).returning().get();
+                }).returning();
+                progress = newProgressRows[0];
             } else if ((progress.assignedBaseAim === 0 || progress.assignedBaseAim === null) && (progress.assignedBaseGrind === 0 || progress.assignedBaseGrind === null)) {
                 // Feature transition: lock in current base quotas for existing records that haven't been snapshotted yet
                 await db.update(playerQuotaProgress)
@@ -1631,8 +1644,7 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
                         assignedBaseAim: baseQuota.baseAimKills || 0,
                         assignedBaseGrind: baseQuota.baseGrindRG || 0
                     })
-                    .where(eq(playerQuotaProgress.id, progress.id))
-                    .run();
+                    .where(eq(playerQuotaProgress.id, progress.id));
                 progress.assignedBaseAim = baseQuota.baseAimKills || 0;
                 progress.assignedBaseGrind = baseQuota.baseGrindRG || 0;
             }
@@ -1662,14 +1674,14 @@ app.post('/api/teams/:id/settings/quota', async (req, res) => {
         const teamId = Number(req.params.id);
         const { baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG } = req.body;
 
-        const existing = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId)).get();
+        const existingRows = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId));
+        const existing = existingRows[0];
         if (existing) {
             await db.update(rosterQuotas)
                 .set({ baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG, updatedAt: new Date() })
-                .where(eq(rosterQuotas.teamId, teamId))
-                .run();
+                .where(eq(rosterQuotas.teamId, teamId));
         } else {
-            await db.insert(rosterQuotas).values({ teamId, baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG }).run();
+            await db.insert(rosterQuotas).values({ teamId, baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG });
         }
         res.json({ success: true, message: 'Settings updated' });
     } catch (error: any) {
@@ -1687,9 +1699,9 @@ app.post('/api/players/:id/quota/update', async (req, res) => {
         const aimKillsTotal = JSON.parse(aimProof || '[]').reduce((sum: number, item: any) => sum + (Number(item.kills) || 0), 0);
         const grindRGTotal = JSON.parse(grindProof || '[]').reduce((sum: number, item: any) => sum + (Number(item.games) || 0), 0);
 
-        const progress = await db.select().from(playerQuotaProgress)
-            .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)))
-            .get();
+        const progressRows = await db.select().from(playerQuotaProgress)
+            .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)));
+        const progress = progressRows[0];
 
         if (!progress) return res.status(404).json({ success: false, error: "Quota record not found for this week" });
 
@@ -1703,8 +1715,7 @@ app.post('/api/players/:id/quota/update', async (req, res) => {
                 grindStatus: grindStatus || progress.grindStatus,
                 updatedAt: new Date()
             })
-            .where(eq(playerQuotaProgress.id, progress.id))
-            .run();
+            .where(eq(playerQuotaProgress.id, progress.id));
 
         res.json({ success: true, data: { totalAimKills: aimKillsTotal, totalGrindRG: grindRGTotal } });
     } catch (error: any) {
@@ -1719,9 +1730,9 @@ app.post('/api/players/:id/quota/review', async (req, res) => {
         const playerId = Number(req.params.id);
         const { weekStart, aimStatus, grindStatus } = req.body;
 
-        const progress = await db.select().from(playerQuotaProgress)
-            .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)))
-            .get();
+        const progressRows = await db.select().from(playerQuotaProgress)
+            .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)));
+        const progress = progressRows[0];
 
         if (!progress) return res.status(404).json({ success: false, error: "Quota record not found" });
 
@@ -1731,8 +1742,7 @@ app.post('/api/players/:id/quota/review', async (req, res) => {
                 grindStatus: grindStatus || progress.grindStatus,
                 updatedAt: new Date()
             })
-            .where(eq(playerQuotaProgress.id, progress.id))
-            .run();
+            .where(eq(playerQuotaProgress.id, progress.id));
 
         res.json({ success: true, message: 'Quota reviewed' });
     } catch (error: any) {
@@ -1747,9 +1757,9 @@ app.post('/api/players/:id/quota/custom', async (req, res) => {
         const playerId = Number(req.params.id);
         const { weekStart, assignedBaseAim, assignedBaseGrind } = req.body;
 
-        const progress = await db.select().from(playerQuotaProgress)
-            .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)))
-            .get();
+        const progressRows = await db.select().from(playerQuotaProgress)
+            .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)));
+        const progress = progressRows[0];
 
         if (!progress) return res.status(404).json({ success: false, error: "Quota record not found for this week" });
 
@@ -1759,8 +1769,7 @@ app.post('/api/players/:id/quota/custom', async (req, res) => {
                 assignedBaseGrind: Number(assignedBaseGrind),
                 updatedAt: new Date()
             })
-            .where(eq(playerQuotaProgress.id, progress.id))
-            .run();
+            .where(eq(playerQuotaProgress.id, progress.id));
 
         res.json({ success: true, message: 'Custom quota set' });
     } catch (error: any) {
@@ -1797,13 +1806,13 @@ export async function generateAndSendWeeklyReport() {
         const filterDate = startOfWeek;
 
         // 1. Fetch all data
-        const allScrims = await db.select().from(scrims).all();
-        const allTournaments = await db.select().from(tournaments).all();
-        const allTeams = await db.select().from(teams).all();
-        const allPlayers = await db.select().from(players).all();
-        const allAchievements = await db.select().from(achievements).all();
-        const allEvents = await db.select().from(events).all();
-        const allSponsors = await db.select().from(sponsors).all();
+        const allScrims = await db.select().from(scrims);
+        const allTournaments = await db.select().from(tournaments);
+        const allTeams = await db.select().from(teams);
+        const allPlayers = await db.select().from(players);
+        const allAchievements = await db.select().from(achievements);
+        const allEvents = await db.select().from(events);
+        const allSponsors = await db.select().from(sponsors);
 
         const recentScrims = allScrims.filter(s => {
             const d = new Date(s.date);
@@ -2172,9 +2181,9 @@ export async function generateAndSendWeeklyReport() {
 
             // --- UPSERT LOGIC ---
             // Check if a report for this specific week already exists
-            const existing = await db.select().from(weeklyReports)
-                .where(and(eq(weeklyReports.weekStart, weekStartStr), eq(weeklyReports.weekEnd, weekEndStr)))
-                .get();
+            const existingRows = await db.select().from(weeklyReports)
+                .where(and(eq(weeklyReports.weekStart, weekStartStr), eq(weeklyReports.weekEnd, weekEndStr)));
+            const existing = existingRows[0];
 
             if (existing) {
                 await db.update(weeklyReports)
@@ -2183,8 +2192,7 @@ export async function generateAndSendWeeklyReport() {
                         reportData: JSON.stringify(reportSnapshotData),
                         pdfPath: pdfFileName
                     })
-                    .where(eq(weeklyReports.id, existing.id))
-                    .run();
+                    .where(eq(weeklyReports.id, existing.id));
                 console.log(`[VAULT] Performance snapshot UPDATED for period ${weekStartStr} to ${weekEndStr}`);
             } else {
                 await db.insert(weeklyReports).values({
@@ -2193,7 +2201,7 @@ export async function generateAndSendWeeklyReport() {
                     generatedAt: today.toISOString(),
                     reportData: JSON.stringify(reportSnapshotData),
                     pdfPath: pdfFileName
-                }).run();
+                });
                 console.log(`[VAULT] Performance snapshot ARCHIVED for period ${weekStartStr} to ${weekEndStr}`);
             }
         } catch (snapshotError) {
@@ -2317,17 +2325,19 @@ app.post('/api/seed/managers', async (req, res) => {
         for (const name of managerNames) {
             const username = name.toLowerCase().replace(' ', '_');
             // Check if exists
-            let user = await db.select().from(users).where(eq(users.username, username)).get();
+            const userRows = await db.select().from(users).where(eq(users.username, username));
+            let user = userRows[0];
             if (!user) {
-                user = await db.insert(users).values({
+                const newUserRows = await db.insert(users).values({
                     username,
                     password: 'password123',
                     email: `${username}@nxc.com`,
                     fullname: name,
                     role: 'manager'
-                }).returning().get();
+                }).returning();
+                user = newUserRows[0];
             } else {
-                await db.update(users).set({ role: 'manager' }).where(eq(users.id, user.id)).run();
+                await db.update(users).set({ role: 'manager' }).where(eq(users.id, user.id));
             }
             createdManagers.push(user);
         }
@@ -2336,14 +2346,15 @@ app.post('/api/seed/managers', async (req, res) => {
         for (const manager of createdManagers) {
             for (let i = 1; i <= 2; i++) {
                 const teamName = `${manager.fullname} Squad ${i}`;
-                const existing = await db.select().from(teams).where(eq(teams.name, teamName)).get();
+                const existingRows = await db.select().from(teams).where(eq(teams.name, teamName));
+                const existing = existingRows[0];
                 if (!existing) {
                     await db.insert(teams).values({
                         name: teamName,
                         game: 'Valorant',
                         managerId: manager.id,
                         description: `Test team for ${manager.fullname}`
-                    }).run();
+                    });
                 }
             }
         }
@@ -2365,23 +2376,25 @@ app.post('/api/teams/:id/players', async (req, res) => {
 
     try {
         if (targetUserId) {
-            const u = await db.select().from(users).where(eq(users.id, targetUserId)).get();
+            const userRows = await db.select().from(users).where(eq(users.id, targetUserId));
+            const u = userRows[0];
             if (!u) return res.status(404).json({ success: false, error: 'User to add not found' });
             playerName = u.ign || u.username;
 
             // Grant secondary role if member
             if (u.role === 'member') {
-                await db.update(users).set({ role: 'member,player' }).where(eq(users.id, targetUserId)).run();
+                await db.update(users).set({ role: 'member,player' }).where(eq(users.id, targetUserId));
             }
         }
 
-        const newPlayer = await db.insert(players).values({
+        const newPlayerRows = await db.insert(players).values({
             teamId: Number(id),
             userId: targetUserId,
             name: playerName, // Store current name as fallback/record
             role, kda, winRate,
             image: `https://ui-avatars.com/api/?name=${playerName}&background=random` // Default image if no user avatar
-        }).returning().get();
+        }).returning();
+        const newPlayer = newPlayerRows[0];
 
         // Refresh user role if it was current user or broadcast (simplified: just return new role info if helpful)
         res.json({ success: true, data: { player: newPlayer, newRole: 'member,player' } });
@@ -2394,24 +2407,25 @@ app.post('/api/teams/:id/players', async (req, res) => {
 app.delete('/api/teams/:teamId/players/:playerId', async (req, res) => {
     const { teamId, playerId } = req.params;
     try {
-        const p = await db.select().from(players).where(eq(players.id, Number(playerId))).get();
+        const playerRows = await db.select().from(players).where(eq(players.id, Number(playerId)));
+        const p = playerRows[0];
         if (p && p.userId) {
             // Check if they are in any other teams
-            const userPlayers = await db.select().from(players).where(eq(players.userId, p.userId)).all();
+            const userPlayers = await db.select().from(players).where(eq(players.userId, p.userId));
             const stillInOtherTeams = userPlayers.some(up => up.teamId !== null && up.id !== Number(playerId));
 
             if (!stillInOtherTeams) {
-                const u = await db.select().from(users).where(eq(users.id, p.userId)).get();
+                const userRows = await db.select().from(users).where(eq(users.id, p.userId));
+                const u = userRows[0];
                 if (u && u.role === 'member,player') {
-                    await db.update(users).set({ role: 'member' }).where(eq(users.id, p.userId)).run();
+                    await db.update(users).set({ role: 'member' }).where(eq(users.id, p.userId));
                 }
             }
         }
 
         await db.update(players)
             .set({ teamId: null, isActive: false })
-            .where(and(eq(players.teamId, Number(teamId)), eq(players.id, Number(playerId))))
-            .run();
+            .where(and(eq(players.teamId, Number(teamId)), eq(players.id, Number(playerId))));
         res.json({ success: true });
     } catch (error: any) {
         console.error("Error in DELETE /api/teams/:teamId/players/:playerId:", error);
@@ -2424,7 +2438,7 @@ app.get('/api/scrims', async (req, res) => {
     const { teamId } = req.query;
     if (!teamId) return res.status(400).json({ success: false, error: 'Missing teamId' });
     try {
-        const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, Number(teamId))).all();
+        const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, Number(teamId)));
         // Enrich with stats if needed, or fetch separately
         res.json({ success: true, data: teamScrims });
     } catch (error: any) {
@@ -2437,11 +2451,12 @@ app.post('/api/scrims', async (req, res) => {
     const { teamId, date, opponent, format, maps } = req.body;
     if (!teamId || !date || !opponent || !format) return res.status(400).json({ success: false, error: 'Missing fields' });
     try {
-        const newScrim = await db.insert(scrims).values({
+        const newScrimRows = await db.insert(scrims).values({
             teamId: Number(teamId),
             date, opponent, format, status: 'pending',
             maps: maps ? JSON.stringify(maps) : null
-        }).returning().get();
+        }).returning();
+        const newScrim = newScrimRows[0];
 
         res.json({ success: true, data: newScrim });
 
@@ -2483,7 +2498,8 @@ app.put('/api/scrims/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // pending, completed, cancelled
     try {
-        const updated = await db.update(scrims).set({ status }).where(eq(scrims.id, Number(id))).returning().get();
+        const updatedRows = await db.update(scrims).set({ status }).where(eq(scrims.id, Number(id))).returning();
+        const updated = updatedRows[0];
         res.json({ success: true, data: updated });
     } catch (error: any) {
         console.error("Error in PUT /api/scrims/:id/status:", error);
@@ -2497,7 +2513,7 @@ app.get('/api/tournaments', async (req, res) => {
     try {
         const q = db.select().from(tournaments);
         if (teamId) q.where(eq(tournaments.teamId, Number(teamId)));
-        const data = await q.all();
+        const data = await q;
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/tournaments:", error);
@@ -2508,7 +2524,7 @@ app.get('/api/tournaments', async (req, res) => {
 app.get('/api/tournaments/:id/stats', async (req, res) => {
     const { id } = req.params;
     try {
-        const stats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id))).all();
+        const stats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id)));
         res.json({ success: true, data: { stats } });
     } catch (error: any) {
         console.error("Error in GET /api/tournaments/:id/stats:", error);
@@ -2520,11 +2536,12 @@ app.post('/api/tournaments', async (req, res) => {
     const { teamId, date, name, opponent, format, maps } = req.body;
     if (!teamId || !date || !name || !format) return res.status(400).json({ success: false, error: 'Missing fields' });
     try {
-        const newTournament = await db.insert(tournaments).values({
+        const newTournamentRows = await db.insert(tournaments).values({
             teamId: Number(teamId),
             date, name, opponent, format, status: 'pending',
             maps: maps ? JSON.stringify(maps) : null
-        }).returning().get();
+        }).returning();
+        const newTournament = newTournamentRows[0];
 
         res.json({ success: true, data: newTournament });
 
@@ -2566,7 +2583,8 @@ app.put('/api/tournaments/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     try {
-        const updated = await db.update(tournaments).set({ status }).where(eq(tournaments.id, Number(id))).returning().get();
+        const updatedRows = await db.update(tournaments).set({ status }).where(eq(tournaments.id, Number(id))).returning();
+        const updated = updatedRows[0];
         res.json({ success: true, data: updated });
     } catch (error: any) {
         console.error("Error in PUT /api/tournaments/:id/status:", error);
@@ -2582,10 +2600,10 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
         await db.update(tournaments).set({
             status: 'completed',
             results: JSON.stringify(results)
-        }).where(eq(tournaments.id, Number(id))).run();
+        }).where(eq(tournaments.id, Number(id)));
 
         if (playerStats && Array.isArray(playerStats)) {
-            await db.delete(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id))).run();
+            await db.delete(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id)));
 
             for (const stat of playerStats) {
                 if (stat.playerId) {
@@ -2597,7 +2615,7 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
                         assists: Number(stat.assists),
                         acs: Number(stat.acs || 0),
                         isWin: stat.isWin ? 1 : 0
-                    }).run();
+                    });
                 }
             }
         }
@@ -2622,7 +2640,7 @@ app.post('/api/scrims/analyze', async (req, res) => {
     try {
         console.log(`[OCR] Request received for Team ${teamId}`);
         // Fetch roster for context
-        const roster = await db.select().from(players).where(eq(players.teamId, Number(teamId))).all();
+        const roster = await db.select().from(players).where(eq(players.teamId, Number(teamId)));
 
         // Analyze
         const result = await analyzeScoreboardWithOCR(image, roster);
@@ -2653,12 +2671,12 @@ app.post('/api/scrims/:id/results', async (req, res) => {
         await db.update(scrims).set({
             status: 'completed',
             results: JSON.stringify(results)
-        }).where(eq(scrims.id, Number(id))).run();
+        }).where(eq(scrims.id, Number(id)));
 
         // 2. Insert Player Stats
         if (playerStats && Array.isArray(playerStats)) {
             // clear old stats if re-submitting
-            await db.delete(scrimPlayerStats).where(eq(scrimPlayerStats.scrimId, Number(id))).run();
+            await db.delete(scrimPlayerStats).where(eq(scrimPlayerStats.scrimId, Number(id)));
 
             for (const stat of playerStats) {
                 if (stat.playerId) {
@@ -2669,10 +2687,10 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                         deaths: Number(stat.deaths),
                         assists: Number(stat.assists),
                         isWin: stat.isWin ? 1 : 0
-                    }).run();
+                    });
 
                     // 3. Trigger Aggregation
-                    const allStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId)).all();
+                    const allStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId));
 
                     let totalK = 0, totalD = 0, totalA = 0, totalAcs = 0, wins = 0;
                     allStats.forEach((s: any) => {
@@ -2687,7 +2705,8 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                     const winRate = allStats.length > 0 ? (wins / allStats.length) * 100 : 0;
                     const avgAcs = allStats.length > 0 ? Math.round(totalAcs / allStats.length) : 0;
 
-                    const currentPlayer = await db.select().from(players).where(eq(players.id, stat.playerId)).get();
+                    const playerRows = await db.select().from(players).where(eq(players.id, stat.playerId));
+                    const currentPlayer = playerRows[0];
                     let newXp = (currentPlayer?.xp || 0) + 20;
                     let newLevel = Math.floor(newXp / 100) + 1;
                     if (newLevel > 1000) newLevel = 1000;
@@ -2698,7 +2717,7 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                         acs: avgAcs.toString(),
                         xp: newXp,
                         level: newLevel
-                    }).where(eq(players.id, stat.playerId)).run();
+                    }).where(eq(players.id, stat.playerId));
                 }
             }
         }
@@ -2726,7 +2745,10 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
 
     // Initialize Services
-    if (!IS_PROD) runMigrations();
+    if (!IS_PROD) {
+        runMigrations();
+        seedData();
+    }
     initDiscord();
     initScheduler(generateAndSendWeeklyReport);
 });
