@@ -17,7 +17,7 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress } from './schema.js';
-import { eq, inArray, and } from 'drizzle-orm';
+import { eq, inArray, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import fs from 'fs';
 import { finished } from 'stream/promises';
@@ -165,6 +165,34 @@ const determineLevel = (role: string | null, xpLevel: number | null): number => 
 
 app.get('/ping', (req, res) => {
     res.json({ status: 'ok', server: 'Identity Service' });
+});
+
+app.get('/api/diag', async (req, res) => {
+    try {
+        const queryClient = await db.queryClient; // Access underlying postgres client if possible
+        // Actually, drizzle with postgres-js has it. Let's just use raw queries via db.execute
+        const dbInfo = await db.execute(postgres.sql`SELECT current_database(), current_user, inet_server_addr(), version()`);
+        const userCount = await db.select({ count: postgres.sql`count(*)` }).from(users);
+
+        res.json({
+            success: true,
+            dbInfo: dbInfo[0],
+            userCount: userCount[0].count,
+            env: {
+                NODE_ENV: process.env.NODE_ENV,
+                DATABASE_URL_SET: !!process.env.DATABASE_URL,
+                DATABASE_URL_PORT: process.env.DATABASE_URL?.split(':')[3]?.split('/')[0] || 'unknown'
+            }
+        });
+    } catch (err: any) {
+        console.error('[DIAG ERROR]', err);
+        res.status(500).json({
+            success: false,
+            error: err.message,
+            stack: err.stack,
+            hint: "Check if the database user has permissions for these queries."
+        });
+    }
 });
 
 app.get('/api/health', async (req, res) => {
