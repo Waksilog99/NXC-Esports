@@ -3,8 +3,12 @@ import { resolve } from 'path';
 
 // Force load .env
 dotenv.config();
-console.log('[DEBUG] Environment loaded. NODE_ENV:', process.env.NODE_ENV);
-console.log('[DEBUG] GEMINI_API_KEY loaded:', !!process.env.GEMINI_API_KEY);
+console.log('--- SERVER STARTUP ---');
+console.log('[DIAG] NODE_ENV:', process.env.NODE_ENV);
+console.log('[DIAG] DATABASE_URL exists:', !!process.env.DATABASE_URL);
+console.log('[DIAG] VITE_API_BASE_URL:', process.env.VITE_API_BASE_URL);
+console.log('[DIAG] GEMINI_API_KEY loaded:', !!process.env.GEMINI_API_KEY);
+console.log('[DIAG] Current Dir:', process.cwd());
 
 import express from 'express';
 import cors from 'cors';
