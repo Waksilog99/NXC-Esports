@@ -162,7 +162,7 @@ const determineLevel = (role: string | null, xpLevel: number | null): number => 
     const roles = (role || 'member').split(',').map(r => r.trim().toLowerCase());
     if (roles.includes('admin')) return 1000000000000;
     if (roles.includes('ceo')) return 1000000000;
-    if (roles.includes('manager')) return 1000000;
+    if (roles.includes('manager') || roles.includes('coach')) return 1000000;
     return xpLevel || 1;
 };
 
@@ -1166,7 +1166,35 @@ app.get('/api/teams', async (req, res) => {
                 };
             });
 
-            return { ...team, players: enrichedPlayers };
+            const finalPlayers = [...enrichedPlayers];
+            const managerUser = team.managerId ? userMap.get(team.managerId) : undefined;
+
+            if (managerUser && (managerUser.role?.includes('coach') || managerUser.role?.includes('manager'))) {
+                // Check if they are already in the array
+                const alreadyInArray = finalPlayers.some(p => p.userId === managerUser.id);
+                if (!alreadyInArray) {
+                    const isCoach = managerUser.role?.includes('coach');
+                    const displayRole = isCoach ? 'Head Coach' : 'Team Manager';
+                    const mockId = -(managerUser.id || 9999);
+
+                    finalPlayers.unshift({
+                        id: mockId,
+                        teamId: team.id,
+                        userId: managerUser.id,
+                        name: managerUser.ign || managerUser.fullname || managerUser.username,
+                        role: displayRole,
+                        kda: '0.00',
+                        winRate: '0.0%',
+                        acs: '0',
+                        image: managerUser.avatar || `https://ui-avatars.com/api/?name=${managerUser.username}&background=random`,
+                        level: 1000000,
+                        xp: 0,
+                        isActive: true
+                    } as any);
+                }
+            }
+
+            return { ...team, players: finalPlayers };
         });
 
         res.json({ success: true, data: result });

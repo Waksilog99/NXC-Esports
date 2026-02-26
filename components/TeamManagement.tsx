@@ -712,7 +712,7 @@ const TeamManagement: React.FC<{
                                                                 setSelectedTeamId(scrim.teamId); // Hardlock sector to scrim owner
                                                                 const count = getMapCount(scrim.format);
                                                                 const init: any = {};
-                                                                const rosterPlayers = currentTeam?.players.map(p => ({
+                                                                const rosterPlayers = currentTeam?.players.filter(p => p.id > 0).map(p => ({
                                                                     name: p.name,
                                                                     playerId: p.id,
                                                                     kills: 0,

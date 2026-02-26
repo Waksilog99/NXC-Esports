@@ -135,9 +135,9 @@ const App: React.FC = () => {
   const isAuthorized = (view: string) => {
     const roles = userRole?.split(',') || [];
     if (view === 'admin') return roles.includes('admin') || roles.includes('ceo');
-    if (view === 'manager') return roles.includes('manager') || roles.includes('admin') || roles.includes('ceo');
-    if (view === 'team-management' || view === 'tournament-management') return roles.includes('manager') || roles.includes('admin') || roles.includes('ceo');
-    if (view === 'operations') return roles.includes('player') || roles.includes('manager') || roles.includes('admin') || roles.includes('ceo');
+    if (view === 'manager') return roles.includes('manager') || roles.includes('coach') || roles.includes('admin') || roles.includes('ceo');
+    if (view === 'team-management' || view === 'tournament-management') return roles.includes('manager') || roles.includes('coach') || roles.includes('admin') || roles.includes('ceo');
+    if (view === 'operations') return roles.includes('player') || roles.includes('manager') || roles.includes('coach') || roles.includes('admin') || roles.includes('ceo');
     if (view === 'sponsor-zone') return roles.includes('sponsor') || roles.includes('admin') || roles.includes('ceo');
     return true;
   };
@@ -294,7 +294,7 @@ const App: React.FC = () => {
 
             <footer className="pt-20 border-t border-white/5 text-center text-slate-500 text-sm">
               <div className="flex justify-center space-x-6 mb-8">
-                <a href="https://discord.gg/ykUVzNUK2U" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Discord</a>
+                <a href="https://discord.gg/xx2Z7C9XXM" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Discord</a>
                 <a href="https://www.facebook.com/WaksCorporation" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Facebook</a>
                 <a href="https://www.tiktok.com/@nxcesports" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">TikTok</a>
               </div>

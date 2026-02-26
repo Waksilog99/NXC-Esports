@@ -18,7 +18,7 @@ interface User {
     avatar: string;
 }
 
-const ROLES = ['member', 'manager', 'admin', 'ceo'];
+const ROLES = ['member', 'coach', 'manager', 'admin', 'ceo'];
 
 interface AdminPanelProps {
     onViewProfile: (userId: number) => void;

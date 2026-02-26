@@ -42,7 +42,7 @@ const Hero: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-8">
           <a
-            href="https://discord.gg/ykUVzNUK2U"
+            href="https://discord.gg/xx2Z7C9XXM"
             target="_blank"
             rel="noopener noreferrer"
             className="w-full sm:w-auto px-10 md:px-12 py-4 md:py-5 bg-gradient-to-r from-amber-500 to-amber-700 text-black font-black uppercase tracking-[0.2em] text-[10px] md:text-xs rounded-2xl shadow-[0_15px_40px_rgba(251,191,36,0.3)] hover:scale-105 active:scale-95 transition-all border border-amber-400/20 flex items-center justify-center"
