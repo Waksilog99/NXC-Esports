@@ -352,6 +352,12 @@ const StoreModal = ({ isOpen, onClose, onNeedLogin }: { isOpen: boolean; onClose
                                 <span className="text-[9px] font-black text-slate-400 group-hover:text-white uppercase tracking-widest hidden sm:block">Logistics</span>
                                 <div className="w-2 h-2 bg-slate-500 group-hover:bg-amber-500 rounded-full group-hover:animate-ping" />
                             </button>
+                            <button
+                                onClick={onClose}
+                                className="group relative flex items-center justify-center bg-white/5 hover:bg-white/10 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 px-3 py-2 rounded-xl transition-all text-slate-400 hover:text-red-400"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
                         </div>
                     </div>
 

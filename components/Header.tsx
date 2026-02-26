@@ -71,7 +71,7 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
 
         <div className="flex items-center space-x-3 cursor-pointer relative z-10" onClick={() => onNavigate('home')}>
           <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-purple-600 via-amber-400 to-amber-600 rounded-xl md:rounded-2xl flex items-center justify-center font-black text-black italic shadow-[0_4px_20px_rgba(251,191,36,0.3)]">
-            N
+            W
           </div>
           <div className="flex-col leading-[0.9] flex">
             <span className="font-black text-lg md:text-xl tracking-tighter text-[var(--text-color)]">

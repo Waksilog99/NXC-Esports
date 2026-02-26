@@ -295,8 +295,6 @@ const App: React.FC = () => {
             <footer className="pt-20 border-t border-white/5 text-center text-slate-500 text-sm">
               <div className="flex justify-center space-x-6 mb-8">
                 <a href="https://discord.gg/xx2Z7C9XXM" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Discord</a>
-                <a href="https://www.facebook.com/WaksCorporation" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Facebook</a>
-                <a href="https://www.tiktok.com/@nxcesports" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">TikTok</a>
               </div>
               <p>© 2025 Waks Corporation. All signals encrypted.</p>
             </footer>
