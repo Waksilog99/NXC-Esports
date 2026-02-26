@@ -91,8 +91,8 @@ export const signInWithGoogle = async () => {
 };
 
 const dispatchAuthChange = () => {
-    console.log("[authService] Dispatching nxc-auth-changed event");
-    window.dispatchEvent(new CustomEvent('nxc-auth-changed', { detail: { timestamp: Date.now() } }));
+    console.log("[authService] Dispatching wc-auth-changed event");
+    window.dispatchEvent(new CustomEvent('wc-auth-changed', { detail: { timestamp: Date.now() } }));
     window.dispatchEvent(new Event('storage')); // For other tabs
 };
 
@@ -176,7 +176,7 @@ const syncUserToBackend = async (user: User, additionalData?: { birthday?: strin
 export const loginAsAdminDev = async () => {
     const mockUser = {
         uid: 'super_admin_seed',
-        email: 'admin@novanexus.io',
+        email: 'admin@waks.com',
         displayName: 'Super Commander',
         photoURL: 'https://ui-avatars.com/api/?name=Super+Commander&background=fbbf24&color=000',
         emailVerified: true,
@@ -227,7 +227,7 @@ export const loginAsAdminDev = async () => {
 export const loginAsMemberDev = async () => {
     const mockUser = {
         uid: 'member_seed',
-        email: 'member@novanexus.io',
+        email: 'member@waks.com',
         displayName: 'Elite Operative',
         photoURL: 'https://ui-avatars.com/api/?name=Elite+Operative&background=10b981&color=fff',
         emailVerified: true,
@@ -276,7 +276,7 @@ export const loginAsMemberDev = async () => {
 export const loginAsManagerDev = async () => {
     const mockUser = {
         uid: 'manager_seed',
-        email: 'manager@novanexus.io',
+        email: 'manager@waks.com',
         displayName: 'Strategic Director',
         photoURL: 'https://ui-avatars.com/api/?name=Strategic+Director&background=8b5cf6&color=fff',
         emailVerified: true,
@@ -367,7 +367,7 @@ export const useUser = () => {
 
         // Add event listeners for cross-instance and tab sync
         window.addEventListener('storage', syncFromStorage);
-        window.addEventListener('nxc-auth-changed', syncFromStorage);
+        window.addEventListener('wc-auth-changed', syncFromStorage);
 
         // Sync initially in case something changed between render and effect
         syncFromStorage();
@@ -388,7 +388,7 @@ export const useUser = () => {
         return () => {
             userListeners.delete(listener);
             window.removeEventListener('storage', syncFromStorage);
-            window.removeEventListener('nxc-auth-changed', syncFromStorage);
+            window.removeEventListener('wc-auth-changed', syncFromStorage);
             unsubscribeFirebase();
         };
     }, []);

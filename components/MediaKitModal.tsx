@@ -29,7 +29,7 @@ const MediaKitModal: React.FC<MediaKitModalProps> = ({ isOpen, onClose, onBooste
         {
             name: 'Silver / Support',
             price: 'Start-up Tier',
-            features: ['Logo on NXC Website', 'Discord Role & Channel', 'Quarterly Social Blast', 'Community Night Access'],
+            features: ['Logo on WC Website', 'Discord Role & Channel', 'Quarterly Social Blast', 'Community Night Access'],
             color: 'border-slate-500 text-slate-400',
             bg: 'bg-slate-500/10'
         },
@@ -66,7 +66,7 @@ const MediaKitModal: React.FC<MediaKitModalProps> = ({ isOpen, onClose, onBooste
                                 <span>Classified Intelligence</span>
                             </div>
                             <h2 className="text-4xl sm:text-6xl font-black text-white italic tracking-tighter uppercase leading-none">
-                                NXC <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">Media Kit</span>
+                                WC <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">Media Kit</span>
                             </h2>
                         </div>
 
@@ -109,7 +109,7 @@ const MediaKitModal: React.FC<MediaKitModalProps> = ({ isOpen, onClose, onBooste
                             </h3>
                             <p className="text-slate-400 leading-relaxed">
                                 Our audience consists of high-value, tech-savvy individuals who define the digital frontier.
-                                NXC commands attention where it matters most.
+                                WC commands attention where it matters most.
                             </p>
 
                             <div className="space-y-4">
@@ -186,15 +186,15 @@ const MediaKitModal: React.FC<MediaKitModalProps> = ({ isOpen, onClose, onBooste
                         </div>
                         <div className="flex space-x-4">
                             <a
-                                href="/brand-assets/nxc-logo-vector.svg"
-                                download="NXC_Logo_Vector.svg"
+                                href="/brand-assets/wc-logo-vector.svg"
+                                download="WC_Logo_Vector.svg"
                                 className="px-6 py-3 bg-black border border-white/10 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest hover:border-amber-500 transition-colors flex items-center justify-center"
                             >
                                 Download .SVG
                             </a>
                             <a
-                                href="/brand-assets/nxc-brand-guidelines.txt"
-                                download="NXC_Brand_Guidelines.txt"
+                                href="/brand-assets/wc-brand-guidelines.txt"
+                                download="WC_Brand_Guidelines.txt"
                                 className="px-6 py-3 bg-black border border-white/10 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest hover:border-purple-500 transition-colors flex items-center justify-center"
                             >
                                 Download Guide

@@ -58,7 +58,7 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-8">
                 <div>
                     <h1 className="text-5xl font-black text-white tracking-tighter uppercase italic">System Core Configurations</h1>
-                    <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.4em] mt-3 ml-1">Terminal ID://SECURE-NXC-OPS-001</p>
+                    <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.4em] mt-3 ml-1">Terminal ID://SECURE-WC-OPS-001</p>
                 </div>
             </div>
 
@@ -149,7 +149,7 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
                         Termination sequence
                     </h3>
                     <p className="text-slate-500 dark:text-red-200/40 mb-10 text-[10px] font-black uppercase tracking-[0.3em] ml-1">
-                        Permanently remove your access and data from the nexus. this action cannot be undone.
+                        Permanently remove your access and data from Waks Corporation. testing this action cannot be undone.
                     </p>
                     <button
                         onClick={handleDeleteAccount}

@@ -216,9 +216,9 @@ const Roster: React.FC = () => {
             <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.4em]">Active Operatives // Tactical Roster</p>
           </div>
           <AnimatedTitle
-            text1="The Nexus"
+            text1="Corporation"
             text2="Roster"
-            className="text-4xl md:text-6xl font-black text-[var(--text-color)] tracking-tight italic uppercase"
+            className="text-4xl md:text-5xl lg:text-6xl font-black text-[var(--text-color)] tracking-tight italic uppercase"
           />
           <p className="text-slate-600 dark:text-slate-500 font-bold max-w-xl leading-relaxed text-xs md:text-sm uppercase tracking-wide mx-auto lg:mx-0">
             Elite competitors synchronized through our Command Deck. Real-time performance metrics pulled from scrimmage analytics.

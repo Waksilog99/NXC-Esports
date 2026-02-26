@@ -1,113 +1,18 @@
-
+import 'dotenv/config';
 import { db } from '../server/db';
-import { users, achievements, events, sponsors, teams, players } from '../server/schema';
+import { users, achievements, events, sponsors, teams, players, products, orders } from '../server/schema';
 import { eq } from 'drizzle-orm';
-import Database from 'better-sqlite3';
 import crypto from 'crypto';
 
 const hashPassword = (password: string) => {
     return crypto.createHash('sha256').update(password).digest('hex');
 };
 
-const runMigrations = () => {
-    try {
-        const sqlite = new Database('local.db');
-        console.log("Running migrations...");
-
-        sqlite.prepare(`
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
-                fullname TEXT NOT NULL,
-                google_id TEXT UNIQUE,
-                avatar TEXT,
-                role TEXT DEFAULT 'member',
-                bio TEXT,
-                games_played TEXT,
-                achievements TEXT,
-                birthday TEXT,
-                created_at INTEGER DEFAULT (unixepoch()),
-                ign TEXT
-            )
-        `).run();
-
-        try { sqlite.prepare("ALTER TABLE users ADD COLUMN ign TEXT").run(); } catch (e) { }
-
-        sqlite.prepare(`
-            CREATE TABLE IF NOT EXISTS achievements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                date TEXT NOT NULL,
-                description TEXT NOT NULL,
-                image TEXT,
-                placement TEXT
-            )
-        `).run();
-
-        sqlite.prepare(`
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                date TEXT NOT NULL,
-                location TEXT,
-                description TEXT,
-                status TEXT DEFAULT 'upcoming',
-                image TEXT
-            )
-        `).run();
-
-        sqlite.prepare(`
-            CREATE TABLE IF NOT EXISTS sponsors (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                tier TEXT NOT NULL,
-                logo TEXT NOT NULL,
-                description TEXT,
-                website TEXT
-            )
-        `).run();
-
-        sqlite.prepare(`
-            CREATE TABLE IF NOT EXISTS teams (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                game TEXT NOT NULL,
-                logo TEXT,
-                description TEXT
-            )
-        `).run();
-
-        sqlite.prepare(`
-            CREATE TABLE IF NOT EXISTS players (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                team_id INTEGER REFERENCES teams(id),
-                user_id INTEGER REFERENCES users(id),
-                name TEXT NOT NULL,
-                role TEXT NOT NULL,
-                kda TEXT,
-                win_rate TEXT,
-                image TEXT,
-                is_active INTEGER DEFAULT 1
-            )
-        `).run();
-
-        try { sqlite.prepare("ALTER TABLE players ADD COLUMN user_id INTEGER").run(); } catch (e) { }
-
-        sqlite.close();
-        console.log("Migrations complete.");
-    } catch (e) {
-        console.error("Migration failed:", e);
-    }
-};
-
 const seed = async () => {
-    console.log("Starting seed...");
-    runMigrations();
+    console.log("Starting seed on Supabase...");
 
     // 1. Achievements
-    const existingAchievements = await db.select().from(achievements).all();
+    const existingAchievements = await db.select().from(achievements);
     if (existingAchievements.length === 0) {
         console.log("Seeding achievements...");
         await db.insert(achievements).values([
@@ -117,17 +22,17 @@ const seed = async () => {
     }
 
     // 2. Events
-    const existingEvents = await db.select().from(events).all();
+    const existingEvents = await db.select().from(events);
     if (existingEvents.length === 0) {
         console.log("Seeding events...");
         await db.insert(events).values([
-            { title: 'Nexus Community Cup', date: '2024-06-10', location: 'Online', description: 'Open tournament for all ranks.', status: 'upcoming' },
+            { title: 'Waks Community Cup', date: '2024-06-10', location: 'Online', description: 'Open tournament for all ranks.', status: 'upcoming' },
             { title: 'Summer Split Finals', date: '2024-08-25', location: 'Seoul, KR', description: 'Watch party at HQ.', status: 'upcoming' }
         ]);
     }
 
     // 3. Sponsors
-    const existingSponsors = await db.select().from(sponsors).all();
+    const existingSponsors = await db.select().from(sponsors);
     if (existingSponsors.length === 0) {
         console.log("Seeding sponsors...");
         await db.insert(sponsors).values([
@@ -137,22 +42,22 @@ const seed = async () => {
     }
 
     // 4. Teams & Players
-    const existingTeams = await db.select().from(teams).all();
+    const existingTeams = await db.select().from(teams);
 
     // Helper to create or get user for player
     const ensureUserForPlayer = async (username: string, ign: string, avatar: string) => {
-        let user = await db.select().from(users).where(eq(users.username, username)).get();
+        let user = (await db.select().from(users).where(eq(users.username, username)))[0];
         if (!user) {
             console.log(`Creating user for ${ign}...`);
-            user = await db.insert(users).values({
+            user = (await db.insert(users).values({
                 username: username,
                 password: hashPassword('password123'),
-                email: `${username}@novanexus.io`,
+                email: `${username}@waks.com`,
                 fullname: ign, // Use IGN as name for simplicity in seed
                 ign: ign, // Set IGN
                 avatar: avatar,
                 role: 'member'
-            }).returning().get();
+            }).returning())[0];
         }
         return user;
     };
@@ -161,11 +66,11 @@ const seed = async () => {
         console.log("Seeding teams...");
 
         // Valorant Team
-        const valorantTeam = await db.insert(teams).values({
+        const valorantTeam = (await db.insert(teams).values({
             name: 'Valorant Alpha',
             game: 'Valorant',
             description: 'Our premier tactical shooter squad.'
-        }).returning().get();
+        }).returning())[0];
 
         if (valorantTeam) {
             const p1 = await ensureUserForPlayer('xenon_val', 'Xenon', 'https://ui-avatars.com/api/?name=Xenon&background=random');
@@ -186,14 +91,14 @@ const seed = async () => {
         console.log("Teams already exist, checking/adding additional teams...");
 
         // Check for Dota 2 Team
-        const dotaTeamExists = await db.select().from(teams).where(eq(teams.name, 'Dota 2 Omega')).get();
+        const dotaTeamExists = (await db.select().from(teams).where(eq(teams.name, 'Dota 2 Omega')))[0];
         if (!dotaTeamExists) {
             console.log("Seeding Dota 2 team...");
-            const dotaTeam = await db.insert(teams).values({
+            const dotaTeam = (await db.insert(teams).values({
                 name: 'Dota 2 Omega',
                 game: 'Dota 2',
                 description: 'The ancient guardians of our legacy.'
-            }).returning().get();
+            }).returning())[0];
 
             if (dotaTeam) {
                 const p1 = await ensureUserForPlayer('miracle_dota', 'Miracle', 'https://ui-avatars.com/api/?name=Miracle&background=random');
@@ -213,14 +118,14 @@ const seed = async () => {
         }
 
         // Check for CS:GO Team
-        const csgoTeamExists = await db.select().from(teams).where(eq(teams.name, 'CS:GO Delta')).get();
+        const csgoTeamExists = (await db.select().from(teams).where(eq(teams.name, 'CS:GO Delta')))[0];
         if (!csgoTeamExists) {
             console.log("Seeding CS:GO team...");
-            const csgoTeam = await db.insert(teams).values({
+            const csgoTeam = (await db.insert(teams).values({
                 name: 'CS:GO Delta',
                 game: 'CS:GO',
                 description: 'Precision and tactics defined.'
-            }).returning().get();
+            }).returning())[0];
 
             if (csgoTeam) {
                 const p1 = await ensureUserForPlayer('s1mple_cs', 'S1mple', 'https://ui-avatars.com/api/?name=S1mple&background=random');
@@ -237,6 +142,78 @@ const seed = async () => {
                     { teamId: csgoTeam.id, userId: p5.id, name: 'Karrigan', role: 'IGL', kda: '0.9', winRate: '55%', image: p5.avatar }
                 ]);
             }
+        }
+    }
+
+    // 5. Store & E-Commerce
+    let sponsorUserRows = await db.select().from(users).where(eq(users.username, 'sponsor_admin'));
+    let sponsorUser = sponsorUserRows[0];
+    if (!sponsorUser) {
+        console.log("Creating sponsor dummy user...");
+        const newSponsors = await db.insert(users).values({
+            username: 'sponsor_admin',
+            password: hashPassword('password123'),
+            email: 'sponsor@waks.com',
+            fullname: 'Brand Rep',
+            role: 'sponsor'
+        }).returning();
+        sponsorUser = newSponsors[0];
+    }
+
+    const existingProducts = await db.select().from(products);
+    if (existingProducts.length === 0) {
+        console.log("Seeding products...");
+        const p1Rows = await db.insert(products).values({
+            name: 'Waks Pro Jersey 2026',
+            description: 'Official match jersey worn by Waks Corporation operatives. Made with sweat-wicking tactical fabric.',
+            price: 5999,
+            stock: 100,
+            sponsorId: null,
+            imageUrl: 'https://placehold.co/400x400?text=Waks+Jersey'
+        }).returning();
+        const p1 = p1Rows[0];
+
+        const p2Rows = await db.insert(products).values({
+            name: 'Command Setup Mousepad',
+            description: 'Extended glide surface for precision aiming. Waks Corporation aesthetic.',
+            price: 2499,
+            stock: 0, // out of stock testing
+            sponsorId: null,
+            imageUrl: 'https://placehold.co/600x300?text=Waks+Mousepad'
+        }).returning();
+
+        if (sponsorUser) {
+            const s1Rows = await db.insert(products).values({
+                name: 'TechCore Elite Headset',
+                description: 'Crystal clear comms. Tactical audio advantage provided by TechCore.',
+                price: 12900,
+                stock: 50,
+                sponsorId: sponsorUser.id,
+                imageUrl: 'https://placehold.co/400x400?text=TechCore+Headset'
+            }).returning();
+            const s1 = s1Rows[0];
+
+            console.log("Seeding dummy orders...");
+            await db.insert(orders).values([
+                {
+                    userId: sponsorUser.id,
+                    productId: p1.id,
+                    recipientName: 'Test Buyer',
+                    deliveryAddress: '123 Waks HQ, Metro Manila',
+                    contactNumber: '09123456789',
+                    paymentMethod: 'E-Wallet',
+                    status: 'Pending'
+                },
+                {
+                    userId: sponsorUser.id,
+                    productId: s1.id,
+                    recipientName: 'Elite Operative',
+                    deliveryAddress: 'Secret Base, 404',
+                    contactNumber: '09000000000',
+                    paymentMethod: 'Card',
+                    status: 'Completed'
+                }
+            ]);
         }
     }
 

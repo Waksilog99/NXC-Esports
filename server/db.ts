@@ -20,7 +20,7 @@ export function getDb() {
         const queryClient = postgres(dbUrl, {
             ssl: { rejectUnauthorized: false },
             connect_timeout: 5,
-            max: 1,
+            max: 20,
             idle_timeout: 20,
             prepare: false,
             onnotice: () => { }

@@ -13,6 +13,8 @@ import Events from './components/Events';
 import Sponsors from './components/Sponsors';
 import TeamManagement from './components/TeamManagement';
 import PlayerConsole from './components/PlayerConsole';
+import SponsorZone from './components/SponsorZone';
+import StoreModal from './components/StoreModal';
 import { useUser } from './services/authService';
 import { useTheme } from './hooks/useTheme';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -20,12 +22,15 @@ import { NotificationProvider } from './hooks/useNotification';
 
 const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isStoreOpen, setIsStoreOpen] = useState(false);
+  const [isStoreBtnVisible, setIsStoreBtnVisible] = useState(true);
   const { user, loading } = useUser();
   useTheme(); // Initialize theme
   const [userRole, setUserRole] = useState<string>('member');
   const [dbUserId, setDbUserId] = useState<number | undefined>(undefined);
+  const [sponsorTier, setSponsorTier] = useState<string | undefined>(undefined);
   const [isRoleLoading, setIsRoleLoading] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'profile' | 'settings' | 'roster' | 'achievements' | 'events' | 'sponsors' | 'admin' | 'manager' | 'team-management' | 'tournament-management'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'profile' | 'settings' | 'roster' | 'achievements' | 'events' | 'sponsors' | 'admin' | 'manager' | 'team-management' | 'tournament-management' | 'sponsor-zone'>('home');
   const [previousView, setPreviousView] = useState<typeof currentView>('home');
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined);
 
@@ -48,7 +53,7 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         // If we are in a sub-view, go back to previous or home
-        const subViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'operations'];
+        const subViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'operations', 'sponsor-zone'];
         if (subViews.includes(currentView)) {
           console.log(`[ESC] Navigating back from ${currentView}`);
           const backTo = (previousView === currentView || !previousView) ? 'home' : previousView;
@@ -76,15 +81,30 @@ const App: React.FC = () => {
       setIsRoleLoading(true);
       try {
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+        // Fetch User Data
         const response = await fetch(`${API_BASE_URL}/api/users`);
         const data = await response.json();
         const me = data.find((u: any) => u.email?.toLowerCase() === user.email?.toLowerCase());
         if (me) {
           setUserRole(me.role);
           setDbUserId(me.id);
+
+          // Fetch Sponsor Tier if applicable
+          if (me.role?.includes('sponsor')) {
+            const sponsorsRes = await fetch(`${API_BASE_URL}/api/sponsors`);
+            const sponsorsData = await sponsorsRes.json();
+            if (sponsorsData.success) {
+              const mySponsor = sponsorsData.data.find((s: any) => s.userId === me.id);
+              if (mySponsor) {
+                setSponsorTier(mySponsor.tier);
+              }
+            }
+          }
         } else {
           setUserRole('member');
           setDbUserId(undefined);
+          setSponsorTier(undefined);
         }
       } catch (e) {
         console.error("Failed to fetch role");
@@ -105,7 +125,7 @@ const App: React.FC = () => {
 
   // Redirect to home when logged out from restricted views
   useEffect(() => {
-    const protectedViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management'];
+    const protectedViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'sponsor-zone'];
     if (!loading && !user && protectedViews.includes(currentView)) {
       handleNavigate('home');
       setIsLoginOpen(true); // Auto-open login modal after logout/account deletion
@@ -118,6 +138,7 @@ const App: React.FC = () => {
     if (view === 'manager') return roles.includes('manager') || roles.includes('admin') || roles.includes('ceo');
     if (view === 'team-management' || view === 'tournament-management') return roles.includes('manager') || roles.includes('admin') || roles.includes('ceo');
     if (view === 'operations') return roles.includes('player') || roles.includes('manager') || roles.includes('admin') || roles.includes('ceo');
+    if (view === 'sponsor-zone') return roles.includes('sponsor') || roles.includes('admin') || roles.includes('ceo');
     return true;
   };
 
@@ -153,7 +174,7 @@ const App: React.FC = () => {
         </div>
         <div className="text-center">
           <p className="text-amber-500 font-black uppercase tracking-[0.4em] text-xs animate-pulse">Establishing Secure Signal...</p>
-          <p className="text-[10px] text-slate-500 uppercase font-bold mt-2 tracking-widest">Nexus Collective Command Center</p>
+          <p className="text-[10px] text-slate-500 uppercase font-bold mt-2 tracking-widest">Waks Corporation Command Center</p>
         </div>
       </div>
     );
@@ -176,6 +197,7 @@ const App: React.FC = () => {
             onNavigate={(view) => handleNavigate(view)}
             currentView={currentView}
             userRole={userRole}
+            sponsorTier={sponsorTier}
           />
 
           <main className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-24">
@@ -259,19 +281,58 @@ const App: React.FC = () => {
                     </section>
                   )
                 )}
+
+                {currentView === 'sponsor-zone' && (
+                  !isAuthorized('sponsor-zone') ? <AccessDenied /> : (
+                    <section className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                      <SponsorZone />
+                    </section>
+                  )
+                )}
               </>
             )}
 
             <footer className="pt-20 border-t border-white/5 text-center text-slate-500 text-sm">
               <div className="flex justify-center space-x-6 mb-8">
                 <a href="https://discord.gg/ykUVzNUK2U" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Discord</a>
-                <a href="https://www.facebook.com/NexusCollective" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Facebook</a>
+                <a href="https://www.facebook.com/WaksCorporation" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">Facebook</a>
                 <a href="https://www.tiktok.com/@nxcesports" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">TikTok</a>
               </div>
-              <p>© 2025 Nexus Collective. All signals encrypted.</p>
+              <p>© 2025 Waks Corporation. All signals encrypted.</p>
             </footer>
           </main>
+
+          {/* Floating Store Button */}
+          {isStoreBtnVisible && !isStoreOpen && (
+            <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-2 animate-in slide-in-from-right-8 fade-in duration-500">
+              <button
+                onClick={() => setIsStoreBtnVisible(false)}
+                className="bg-black/80 text-slate-400 hover:text-white p-1 rounded-full border border-white/10 hover:border-white/30 transition-colors backdrop-blur-md self-end mb-1"
+                title="Hide Store Button"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <button
+                onClick={() => setIsStoreOpen(true)}
+                className="group relative flex items-center justify-center p-4 bg-gradient-to-r from-purple-600 to-amber-500 rounded-full shadow-[0_10px_30px_rgba(168,85,247,0.4)] hover:shadow-[0_10px_40px_rgba(251,191,36,0.6)] hover:scale-105 active:scale-95 transition-all outline-none"
+              >
+                <div className="absolute inset-0 rounded-full bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+          <StoreModal
+            isOpen={isStoreOpen}
+            onClose={() => setIsStoreOpen(false)}
+            onNeedLogin={() => {
+              setIsStoreOpen(false);
+              setIsLoginOpen(true);
+            }}
+          />
         </div>
       </NotificationProvider>
     </ErrorBoundary>

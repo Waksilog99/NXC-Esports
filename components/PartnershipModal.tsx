@@ -17,7 +17,7 @@ const PartnershipModal: React.FC<PartnershipModalProps> = ({ isOpen, onClose }) 
 
 
     const handleScheduleMeeting = () => {
-        const calendarUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Strategic+Partnership+Briefing&details=Agenda:+Discussing+potential+collaboration,+integrations,+and+sponsorship+tiers+with+NXC+Esports.&add=partnerships@novanexus.io";
+        const calendarUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Strategic+Partnership+Briefing&details=Agenda:+Discussing+potential+collaboration,+integrations,+and+sponsorship+tiers+with+WC+Esports.&add=partnerships@waks.com";
 
         // Open in a popup window to encourage closing after save
         const width = 1000;
@@ -27,7 +27,7 @@ const PartnershipModal: React.FC<PartnershipModalProps> = ({ isOpen, onClose }) 
 
         const win = window.open(
             calendarUrl,
-            'NXCPartnershipUplink',
+            'WCPartnershipUplink',
             `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=yes`
         );
         calendarWindowRef.current = win;
@@ -122,7 +122,7 @@ const PartnershipModal: React.FC<PartnershipModalProps> = ({ isOpen, onClose }) 
                                     Greetings! We are honored to explore a potential alliance with you.
                                 </p>
                                 <p>
-                                    The Nexus Collective is fully prepared to deploy resources and integrate your vision into our operations. We look forward to the briefing.
+                                    The Waks Corporation is fully prepared to deploy resources and integrate your vision into our operations. We look forward to the briefing.
                                 </p>
                             </div>
 
@@ -139,7 +139,7 @@ const PartnershipModal: React.FC<PartnershipModalProps> = ({ isOpen, onClose }) 
 
                     <div className="pt-4 border-t border-white/5">
                         <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-                            Secure Channel: partnerships@novanexus.io
+                            Secure Channel: partnerships@waks.com
                         </p>
                     </div>
                 </div>

@@ -7,6 +7,7 @@ import AddSponsorForm from './AddSponsorForm';
 import TacticalIntelGraphs from './TacticalIntelGraphs';
 import { GAME_TITLES } from './constants';
 import Modal from './Modal';
+import SponsorZone from './SponsorZone';
 
 interface User {
     id: number;
@@ -57,53 +58,83 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     const [selectedSquadForModal, setSelectedSquadForModal] = useState<any | null>(null);
 
     useEffect(() => {
-        fetchUsers();
-        fetchTeams();
-        fetchSponsors();
-        fetchWeeklyReport();
-        fetchReportHistory();
+        const fetchAllData = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const [usersRes, teamsRes, sponsorsRes, weeklyRes, historyRes] = await Promise.all([
+                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`),
+                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`),
+                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`),
+                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/weekly`),
+                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/history`)
+                ]);
+
+                const [usersData, teamsData, sponsorsData, weeklyData, historyData] = await Promise.all([
+                    usersRes.json(),
+                    teamsRes.json(),
+                    sponsorsRes.json(),
+                    weeklyRes.json(),
+                    historyRes.json()
+                ]);
+
+                const rawUsers = Array.isArray(usersData) ? usersData : (usersData.data || []);
+                if (Array.isArray(rawUsers)) {
+                    setUsers(rawUsers.map((u: any) => ({
+                        id: u.id,
+                        name: u.fullname || u.username,
+                        username: u.username,
+                        email: u.email,
+                        role: u.role,
+                        avatar: u.avatar
+                    })));
+                }
+
+                if (teamsData.success) setTeams(teamsData.data);
+                if (sponsorsData.success) setSponsors(sponsorsData.data);
+                if (weeklyData.success) setWeeklyReport(weeklyData.data);
+                if (historyData.success) setReportHistory(historyData.data);
+
+            } catch (err: any) {
+                console.error("Failed to batch fetch Admin Panel data:", err);
+                setError(err.message || "Failed to establish connection with secure servers.");
+                showNotification({ message: 'Failed to synchronize admin dashboard', type: 'error' });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchAllData();
     }, []);
 
-    const fetchSponsors = async () => {
+    const fetchUsers = async () => { /* Keep for targeted re-fetches */
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`);
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`);
             const result = await res.json();
-            if (result.success) {
-                setSponsors(result.data);
-            } else {
-                showNotification({ message: result.error || 'Failed to fetch sponsors', type: 'error' });
-            }
+            const rawUsers = Array.isArray(result) ? result : (result.data || []);
+            setUsers(rawUsers.map((u: any) => ({
+                id: u.id, name: u.fullname || u.username, username: u.username,
+                email: u.email, role: u.role, avatar: u.avatar
+            })));
         } catch (e) {
-            console.error("Failed to fetch sponsors", e);
+            console.error(e);
         }
+    };
+
+    const fetchTeams = async () => {
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`);
+            const result = await res.json();
+            if (result.success) setTeams(result.data);
+        } catch (e) { console.error(e); }
     };
 
     const fetchWeeklyReport = async () => {
         try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/weekly`);
             const result = await res.json();
-            if (result.success) {
-                setWeeklyReport(result.data);
-            } else {
-                showNotification({ message: result.error || 'Failed to fetch weekly report', type: 'error' });
-            }
-        } catch (e) {
-            console.error("Failed to fetch weekly report", e);
-        }
-    };
-
-    const fetchReportHistory = async () => {
-        try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/history`);
-            const result = await res.json();
-            if (result.success) {
-                setReportHistory(result.data);
-            } else {
-                showNotification({ message: result.error || 'Failed to fetch report history', type: 'error' });
-            }
-        } catch (e) {
-            console.error("Failed to fetch report history", e);
-        }
+            if (result.success) setWeeklyReport(result.data);
+        } catch (e) { console.error(e); }
     };
 
     const fetchHistoricalReport = async (id: string) => {
@@ -122,48 +153,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
             } else {
                 showNotification({ message: result.error || 'Failed to fetch historical report', type: 'error' });
             }
-        } catch (e) {
-            console.error("Failed to fetch historical report", e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchTeams = async () => {
-        try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`);
-            const result = await res.json();
-            if (result.success) {
-                setTeams(result.data);
-            } else {
-                showNotification({ message: result.error || 'Failed to fetch teams', type: 'error' });
-            }
-        } catch (e) {
-            console.error("Failed to fetch teams", e);
-        }
-    };
-
-    const fetchUsers = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`);
-            const result = await res.json();
-            // /api/users returns a plain array (no success wrapper)
-            const rawUsers = Array.isArray(result) ? result : (result.data || []);
-            if (!Array.isArray(rawUsers)) throw new Error(result.error || 'Failed to access user database');
-            const mapped = rawUsers.map((u: any) => ({
-                id: u.id,
-                name: u.fullname || u.username,
-                username: u.username,
-                email: u.email,
-                role: u.role,
-                avatar: u.avatar
-            }));
-            setUsers(mapped);
         } catch (e: any) {
-            console.error("Failed to fetch users", e);
-            setError(e.message || "Identity API connection failed.");
+            console.error("Failed to fetch historical report", e);
         } finally {
             setLoading(false);
         }
@@ -807,7 +798,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                         Onboard Partner
                     </h3>
                     <div className="relative z-10">
-                        <AddSponsorForm />
+                        <AddSponsorForm users={users} />
                     </div>
                 </div>
 
@@ -911,29 +902,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mt-3 ml-16">High-Authority Performance Aggregation</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        {reportHistory.length > 0 && (
-                            <select
-                                value={selectedReportId}
-                                onChange={(e) => fetchHistoricalReport(e.target.value)}
-                                className="px-4 py-2.5 bg-white/5 rounded-2xl border border-white/10 text-[10px] font-black tracking-[0.2em] text-cyan-400 uppercase shadow-inner outline-none focus:border-cyan-500/50 appearance-none cursor-pointer"
-                                style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
-                            >
-                                <option value="live" className="bg-slate-900 text-cyan-400">Current Week (Live)</option>
+                        <select
+                            value={selectedReportId}
+                            onChange={(e) => fetchHistoricalReport(e.target.value)}
+                            className="px-4 py-2.5 bg-white/5 rounded-2xl border border-white/10 text-[10px] font-black tracking-[0.2em] text-cyan-400 uppercase shadow-inner outline-none focus:border-cyan-500/50 appearance-none cursor-pointer"
+                            style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                        >
+                            <option value="live" className="bg-slate-900 text-cyan-400">
                                 {(() => {
-                                    const seenRanges = new Set<string>();
-                                    return reportHistory.filter(h => {
-                                        const key = `${h.weekStart}-${h.weekEnd}`;
-                                        if (seenRanges.has(key)) return false;
-                                        seenRanges.add(key);
-                                        return true;
-                                    }).map((h) => (
-                                        <option key={h.id} value={h.id} className="bg-slate-900 text-slate-300">
-                                            Week: {h.weekStart} to {h.weekEnd}
-                                        </option>
-                                    ));
+                                    const d = new Date();
+                                    const day = d.getDay();
+                                    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                    const start = new Date(d.setDate(diff));
+                                    const end = new Date(start);
+                                    end.setDate(end.getDate() + 6);
+                                    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+                                    return `Live Week: ${start.toLocaleDateString(undefined, opts)} - ${end.toLocaleDateString(undefined, opts)}`;
                                 })()}
-                            </select>
-                        )}
+                            </option>
+                            {(() => {
+                                const seenRanges = new Set<string>();
+                                return reportHistory.filter(h => {
+                                    const key = `${h.weekStart}-${h.weekEnd}`;
+                                    if (seenRanges.has(key)) return false;
+                                    seenRanges.add(key);
+                                    return true;
+                                }).map((h) => (
+                                    <option key={h.id} value={h.id} className="bg-slate-900 text-slate-300">
+                                        Archive: {new Date(h.weekStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(h.weekEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </option>
+                                ));
+                            })()}
+                        </select>
                         <div className="px-6 py-3 bg-white/5 rounded-2xl border border-white/10 text-[10px] font-black tracking-[0.2em] text-cyan-400 uppercase shadow-inner">
                             EPOCH: {selectedReportId === 'live' ? new Date().toLocaleDateString() : (reportHistory.find(h => String(h.id) === selectedReportId)?.weekStart || 'PAST')} // STATUS: {selectedReportId === 'live' ? 'SECURE' : 'ARCHIVED'}
                         </div>
@@ -1064,7 +1064,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                     </div>
                 )}
 
-                <div className="mt-12 flex justify-end">
+                <div className="mt-12 mb-12 flex justify-end">
                     <button
                         onClick={handlePushTelemetry}
                         disabled={pushingTelemetry}
@@ -1081,6 +1081,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                             </>
                         )}
                     </button>
+                </div>
+            </div>
+
+            {/* 7. Partner Store Logistics - NEW */}
+            <div
+                id="sponsor-zone"
+                className="mt-12 p-10 bg-[#0f091a] rounded-[48px] border-2 border-dashed border-purple-500/30 group overflow-hidden relative"
+            >
+                <div className="absolute top-0 right-0 p-8">
+                    <div className="w-48 h-48 bg-purple-600/5 blur-[100px] rounded-full group-hover:bg-purple-600/10 transition-colors duration-1000" />
+                </div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12 relative z-10">
+                    <div>
+                        <h3 className="text-3xl font-black text-white flex items-center tracking-tighter">
+                            <div className="p-2.5 rounded-2xl bg-purple-500 text-black mr-5 shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+                                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                            Partner Store Logistics
+                        </h3>
+                        <p className="text-[10px] text-purple-400 font-black uppercase tracking-[0.4em] mt-3 ml-16">Global Supply Chain Management</p>
+                    </div>
+                </div>
+
+                {/* Embed the SponsorZone component here */}
+                <div className="mt-8">
+                    <SponsorZone />
                 </div>
             </div>
 
@@ -1181,7 +1207,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                     </div>
                 </div>}
             </Modal>
-        </div>
+        </div >
     );
 };
 

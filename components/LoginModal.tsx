@@ -67,7 +67,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                                 {isLogin ? 'Welcome Back' : 'Create Account'}
                             </h2>
                             <p className="text-slate-600 dark:text-slate-500 text-xs mt-1 font-medium tracking-wide">
-                                {isLogin ? 'Enter your credentials to access your account' : 'Join the elite Nexus Collective roster'}
+                                {isLogin ? 'Enter your credentials to access your account' : 'Join the elite Waks Corporation roster'}
                             </p>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
@@ -91,7 +91,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                                     value={fullname}
                                     onChange={(e) => setFullname(e.target.value)}
                                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
-                                    placeholder="Leon 'Nexus' Knight"
+                                    placeholder="Leon 'Waks' Knight"
                                     required
                                 />
                             </div>
@@ -104,7 +104,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
-                                placeholder="nexus_commander"
+                                placeholder="waks_commander"
                                 required
                             />
                         </div>
@@ -117,7 +117,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
-                                    placeholder="commander@novanexus.io"
+                                    placeholder="commander@waks.com"
                                     required
                                 />
                             </div>
@@ -174,7 +174,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         </button>
 
                         <p className="text-center text-xs text-slate-500">
-                            {isLogin ? "New to Nexus Collective? " : "Already have security clearance? "}
+                            {isLogin ? "New to Waks Corporation? " : "Already have security clearance? "}
                             <button
                                 onClick={() => { setIsLogin(!isLogin); setError(null); }}
                                 className="text-amber-600 dark:text-amber-500 hover:text-amber-500 dark:hover:text-amber-400 font-black transition-colors"

@@ -1,9 +1,9 @@
-# NXC-Esports Startup Script
+# WC-Esports Startup Script
 
 # 1. Bypass execution policy for the current process
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
 
-Write-Host "Starting NXC-Esports Services..." -ForegroundColor Cyan
+Write-Host "Starting WC-Esports Services..." -ForegroundColor Cyan
 
 # 2. Check if ports are available
 $p3001 = Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue

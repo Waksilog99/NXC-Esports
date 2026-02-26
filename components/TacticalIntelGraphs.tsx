@@ -260,7 +260,7 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[] }> = ({ sc
             {mapData.length > 0 && (
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8">
                     <SectionLabel label="Theater Win Rate (%)" />
-                    <div className="h-[220px]">
+                    <div className="h-[220px] min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={mapData} barSize={28}>
                                 <defs>
@@ -376,7 +376,7 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[] 
             {opponentData.length > 0 && (
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8">
                     <SectionLabel label="Opponent Frequency" color="text-purple-400/60" />
-                    <div className="h-[220px]">
+                    <div className="h-[220px] min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={opponentData} barSize={28}>
                                 <defs>
@@ -411,6 +411,7 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
     const [tourneyStats, setTourneyStats] = useState<PlayerStat[]>([]);
     const [loading, setLoading] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [selectedTimeFilter, setSelectedTimeFilter] = useState('All');
 
     const selectedTeam = availableTeams.find(t => t.id === selectedTeamId) || availableTeams[0];
 
@@ -441,6 +442,51 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
             .finally(() => setLoading(false));
     }, [selectedTeamId]);
 
+    const availableMonths = React.useMemo(() => {
+        const months = new Set<string>();
+        const allItems = [...scrims, ...tournaments];
+        console.log("Tactical Intel Data:", allItems);
+        allItems.forEach(item => {
+            if (!item.date) return;
+            const d = new Date(item.date);
+            if (isNaN(d.getTime())) return;
+            // Get first and last day of the month
+            const start = new Date(d.getFullYear(), d.getMonth(), 1);
+            const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+
+            const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+            months.add(JSON.stringify({
+                label: `${start.toLocaleDateString(undefined, opts)} - ${end.toLocaleDateString(undefined, opts)}`,
+                start: start.getTime(),
+                end: end.getTime()
+            }));
+        });
+
+        return Array.from(months)
+            .map(m => JSON.parse(m))
+            .sort((a, b) => b.start - a.start);
+    }, [scrims, tournaments]);
+
+    const filteredScrims = React.useMemo(() => {
+        if (selectedTimeFilter === 'All') return scrims;
+        const filterObj = JSON.parse(selectedTimeFilter);
+        return scrims.filter(s => {
+            if (!s.date) return false;
+            const t = new Date(s.date).getTime();
+            return t >= filterObj.start && t <= filterObj.end;
+        });
+    }, [scrims, selectedTimeFilter]);
+
+    const filteredTournaments = React.useMemo(() => {
+        if (selectedTimeFilter === 'All') return tournaments;
+        const filterObj = JSON.parse(selectedTimeFilter);
+        return tournaments.filter(t => {
+            if (!t.date) return false;
+            const time = new Date(t.date).getTime();
+            return time >= filterObj.start && time <= filterObj.end;
+        });
+    }, [tournaments, selectedTimeFilter]);
+
     return (
         <div className="space-y-8">
             {/* Header */}
@@ -468,6 +514,25 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                                     }`}
                             >{tab.label}</button>
                         ))}
+                    </div>
+                    {/* Time Filter Dropdown */}
+                    <div className="relative">
+                        <select
+                            value={selectedTimeFilter}
+                            onChange={(e) => setSelectedTimeFilter(e.target.value)}
+                            className={`bg-black/40 border border-white/10 rounded-2xl px-5 py-2.5 text-[10px] font-black uppercase appearance-none cursor-pointer focus:outline-none focus:border-amber-500/50 transition-all shadow-inner ${selectedTimeFilter !== 'All' ? 'text-amber-400 border-amber-500/50' : 'text-slate-400 hover:text-white hover:bg-black/60'}`}
+                            style={{ backgroundImage: 'none' }}
+                        >
+                            <option value="All" className="bg-[#0d0d14] text-amber-400">All Time Stats</option>
+                            {availableMonths.map((m, i) => (
+                                <option key={i} value={JSON.stringify(m)} className="bg-[#0d0d14] text-slate-300">
+                                    Month: {m.label}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <svg className="w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                        </div>
                     </div>
                     {/* Team Selector */}
                     {availableTeams.length > 0 && (
@@ -519,9 +584,9 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
             ) : (
                 <div className="animate-in fade-in duration-500">
                     {activeTab === 'scrim' ? (
-                        <ScrimIntel scrims={scrims} playerStats={scrimStats} />
+                        <ScrimIntel scrims={filteredScrims} playerStats={scrimStats} />
                     ) : (
-                        <TournamentIntel tournaments={tournaments} playerStats={tourneyStats} />
+                        <TournamentIntel tournaments={filteredTournaments} playerStats={tourneyStats} />
                     )}
                 </div>
             )}

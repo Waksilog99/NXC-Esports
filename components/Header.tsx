@@ -7,15 +7,17 @@ interface HeaderProps {
   onLoginClick: () => void;
   onProfileClick: () => void;
   onSettingsClick: () => void;
-  onNavigate: (view: 'home' | 'roster' | 'achievements' | 'events' | 'sponsors' | 'admin' | 'manager') => void;
+  onNavigate: (view: 'home' | 'roster' | 'achievements' | 'events' | 'sponsors' | 'admin' | 'manager' | 'sponsor-zone') => void;
   currentView: string;
   userRole?: string;
+  sponsorTier?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSettingsClick, onNavigate, currentView, userRole }) => {
+const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSettingsClick, onNavigate, currentView, userRole, sponsorTier }) => {
   const { user, loading } = useUser();
   const { theme, toggleTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
+  const [showCommandMenu, setShowCommandMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navClass = (view: string) => `transition-all duration-300 cursor-pointer relative py-2 ${currentView === view ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-200 font-bold'}`;
@@ -23,6 +25,7 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
   const handleSubNavigate = (view: any, id: string) => {
     onNavigate(view);
     setIsMobileMenuOpen(false);
+    setShowCommandMenu(false);
     // Use a short delay to ensure the component is mounted if we switch views
     setTimeout(() => {
       const el = document.getElementById(id);
@@ -31,6 +34,30 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
       }
     }, 100);
   };
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showCommandMenu) {
+        setShowCommandMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCommandMenu]);
+
+  const getSponsorLevel = (tier?: string) => {
+    switch (tier) {
+      case 'Bronze': return '200,000';
+      case 'Silver': return '400,000';
+      case 'Gold': return '600,000';
+      case 'Platinum': return '1,000,000';
+      default: return null;
+    }
+  };
+
+  const isSponsor = userRole?.includes('sponsor');
+  const sponsorDisplayLevel = isSponsor ? getSponsorLevel(sponsorTier) : null;
+  const displayLevel = sponsorDisplayLevel || user?.level;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 md:pt-6 px-4 md:px-6">
@@ -48,12 +75,12 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
           </div>
           <div className="flex-col leading-[0.9] flex">
             <span className="font-black text-lg md:text-xl tracking-tighter text-[var(--text-color)]">
-              {"Nexus".split('').map((char, i) => (
+              {"Waks".split('').map((char, i) => (
                 <span key={i} className="animate-letter inline-block" style={{ animationDelay: `${i * 0.1}s` }}>{char}</span>
               ))}
             </span>
             <span className="text-[7px] md:text-[9px] text-amber-500 font-black uppercase tracking-[0.4em]">
-              {"Collective".split('').map((char, i) => (
+              {"Corporation".split('').map((char, i) => (
                 <span key={i} className="animate-letter inline-block" style={{ animationDelay: `${0.5 + i * 0.1}s` }}>{char}</span>
               ))}
             </span>
@@ -69,15 +96,18 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
           <a onClick={() => onNavigate('sponsors')} className={navClass('sponsors')}>Sponsors</a>
 
           {user && (userRole?.split(',').some(r => ['admin', 'ceo'].includes(r))) && (
-            <div className="relative group/command">
-              <a onClick={() => onNavigate('admin')} className={`${navClass('admin')} text-amber-500 flex items-center`}>
+            <div className="relative">
+              <a
+                onClick={(e) => { e.stopPropagation(); setShowCommandMenu(!showCommandMenu); }}
+                className={`${navClass('admin')} text-amber-500 flex items-center select-none`}
+              >
                 <span className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-2.5 shadow-[0_0_12px_#fbbf24]" />
                 Command
-                <svg className="w-3 h-3 ml-2 opacity-50 group-hover/command:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                <svg className={`w-3 h-3 ml-2 opacity-50 transition-transform ${showCommandMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
               </a>
 
               {/* Dropdown menu */}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 opacity-0 invisible group-hover/command:opacity-100 group-hover/command:visible transition-all duration-300 transform group-hover/command:translate-y-0 translate-y-2 z-50">
+              <div className={`absolute top-full left-1/2 -translate-x-1/2 pt-4 transition-all duration-300 transform z-50 ${showCommandMenu ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-2'}`} onClick={(e) => e.stopPropagation()}>
                 <div className="w-56 bg-[#020617]/95 backdrop-blur-3xl border border-white/10 rounded-[28px] p-2 shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col gap-1 overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-purple-500/5 pointer-events-none" />
                   {[
@@ -87,7 +117,8 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
                     { label: 'Protocol Schedule', id: 'schedule', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
                     { label: 'Partner Network', id: 'partners', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
                     { label: 'Tactical Analysis', id: 'tactical', icon: 'M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
-                    { label: 'Intelligence Hub', id: 'intel', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }
+                    { label: 'Intelligence Hub', id: 'intel', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+                    { label: 'Partner Store Logistics', id: 'sponsor-zone', icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' }
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -114,6 +145,12 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
             <a onClick={() => (onNavigate as any)('operations')} className={`${navClass('operations')} text-emerald-400 flex items-center`}>
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-2.5 shadow-[0_0_12px_#10b981]" />
               Team View
+            </a>
+          )}
+          {user && (userRole?.split(',').includes('sponsor') && !userRole?.split(',').some(r => ['admin', 'ceo'].includes(r))) && (
+            <a onClick={() => onNavigate('sponsor-zone')} className={`${navClass('sponsor-zone')} text-indigo-400 flex items-center`}>
+              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-2.5 shadow-[0_0_12px_#6366f1]" />
+              Sponsor Portal
             </a>
           )}
         </div>
@@ -161,12 +198,12 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-lg font-black text-[var(--text-color)] leading-tight">{user.displayName}</p>
-                        <p className="text-[11px] text-slate-400 font-bold mt-1 opacity-60">ID://{user.id || 'NXC-PRO'}</p>
+                        <p className="text-[11px] text-slate-400 font-bold mt-1 opacity-60">ID://{user.id || 'WC-PRO'}</p>
                       </div>
-                      {user.level && (
+                      {displayLevel && (
                         <div className="flex flex-col items-end">
                           <span className="text-[8px] text-amber-500 font-black uppercase tracking-[0.2em] mb-1">Rank</span>
-                          <span className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded text-[10px] font-black text-amber-500">LVL {user.level}</span>
+                          <span className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded text-[10px] font-black text-amber-500">LVL {displayLevel}</span>
                         </div>
                       )}
                     </div>
@@ -281,6 +318,16 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
                   >
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-3 shadow-[0_0_8px_#10b981]" />
                     Team View
+                  </button>
+                )}
+
+                {user && (userRole?.split(',').some(r => ['sponsor', 'admin', 'ceo'].includes(r))) && (
+                  <button
+                    onClick={() => { onNavigate('sponsor-zone'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left px-6 py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-sm transition-all flex items-center ${currentView === 'sponsor-zone' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'text-indigo-400/60 hover:bg-indigo-500/5'}`}
+                  >
+                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-3 shadow-[0_0_8px_#6366f1]" />
+                    Sponsor Portal
                   </button>
                 )}
               </div>

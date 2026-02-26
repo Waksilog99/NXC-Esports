@@ -1,7 +1,8 @@
-// Standalone PDF preview generator — uses real data from local.db
-// Run: node --experimental-vm-modules generate_pdf_preview.mjs
-// Or:  npx tsx generate_pdf_preview.mjs
-import Database from 'better-sqlite3';
+// Standalone PDF preview generator — uses real data from Supabase
+// Run: npx tsx generate_pdf_preview.mjs
+import 'dotenv/config';
+import { db } from './server/db.js';
+import { scrims, tournaments, teams, players, achievements, events, sponsors } from './server/schema.js';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import { finished } from 'stream/promises';
@@ -9,20 +10,18 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = resolve(__dirname, 'local.db');
-const OUT_PATH = resolve(__dirname, 'NXC_Royal_Edict_Preview.pdf');
+const OUT_PATH = resolve(__dirname, 'WC_Royal_Edict_Preview.pdf');
 
-const raw = new Database(DB_PATH, { readonly: true });
-
-const allScrims = raw.prepare('SELECT * FROM scrims').all();
-const allTournaments = raw.prepare('SELECT * FROM tournaments').all();
-const allTeams = raw.prepare('SELECT * FROM teams').all();
-const allPlayers = raw.prepare('SELECT * FROM players').all();
-const allAchievements = raw.prepare('SELECT * FROM achievements').all();
-const allEvents = raw.prepare('SELECT * FROM events').all();
-const allSponsors = raw.prepare('SELECT * FROM sponsors').all();
-
-raw.close();
+console.log("Fetching intelligence data from Supabase...");
+const [allScrims, allTournaments, allTeams, allPlayers, allAchievements, allEvents, allSponsors] = await Promise.all([
+    db.select().from(scrims),
+    db.select().from(tournaments),
+    db.select().from(teams),
+    db.select().from(players),
+    db.select().from(achievements),
+    db.select().from(events),
+    db.select().from(sponsors)
+]);
 
 const oneWeekAgo = new Date(); oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 const recentScrims = allScrims.filter(s => new Date(s.date) >= oneWeekAgo);
@@ -125,7 +124,7 @@ const addBar = (label, value, maxVal, suffix = '') => {
 addPageBg();
 doc.rect(18, 18, 559, 120).fill(PURPLE);
 doc.fillColor(GOLD).fontSize(26).font('Times-Bold').text('ROYAL PERFORMANCE EDICT', 18, 38, { align: 'center', width: 559 });
-doc.fontSize(11).font('Times-Roman').text('NXC ESPORTS — COMPREHENSIVE COMMAND INTELLIGENCE', 18, 72, { align: 'center', width: 559 });
+doc.fontSize(11).font('Times-Roman').text('WC ESPORTS — COMPREHENSIVE COMMAND INTELLIGENCE', 18, 72, { align: 'center', width: 559 });
 doc.fontSize(9).text(`DECREED: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} | STATUS: SOVEREIGN & CONFIDENTIAL`, 18, 92, { align: 'center', width: 559 });
 doc.y = 160;
 
@@ -285,7 +284,7 @@ if (allSponsors.length > 0) {
 
 // Footer
 doc.fillColor(PURPLE).fontSize(8).font('Times-Italic')
-    .text('By Royal Decree of the NXC Executive Council. All metrics verified and sovereign. This document is confidential.', 18, 808, { align: 'center', width: 559 });
+    .text('By Royal Decree of the WC Executive Council. All metrics verified and sovereign. This document is confidential.', 18, 808, { align: 'center', width: 559 });
 
 doc.end();
 await finished(writeStream);

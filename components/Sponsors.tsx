@@ -65,7 +65,7 @@ const Sponsors: React.FC = () => {
                 <div className="relative z-10 max-w-4xl mx-auto space-y-6 md:space-y-10">
                     <div className="inline-flex items-center space-x-3 px-4 md:px-6 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] md:tracking-[0.4em] shadow-[0_0_20px_rgba(251,191,36,0.1)]">
                         <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_10px_#fbbf24]" />
-                        <span>Nexus Strategic Alliance Protocol</span>
+                        <span>Waks Strategic Alliance Protocol</span>
                     </div>
 
                     <h2 className="text-3xl md:text-7xl font-black text-white italic tracking-tighter leading-[0.9] uppercase">

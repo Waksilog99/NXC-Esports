@@ -215,7 +215,7 @@ async function sendTournamentReminder(tourney: any, timeText: string) {
             `**Countdown:** Starting in **${timeText}**\n` +
             `**Tournament:** ${tourney.name}\n` +
             `**Protocol:** ${tourney.format}\n\n` +
-            `*All operatives report for final briefing. Glory to the Collective.*`;
+            `*All operatives report for final briefing. Glory to the Corporation.*`;
 
         fs.appendFileSync('discord_audit.log', `[${new Date().toISOString()}] TO: ${process.env.DISCORD_TOURNAMENT_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}\n`);
         await sendToDiscord(discordMsg, null, process.env.DISCORD_TOURNAMENT_CHANNEL_ID);
@@ -242,7 +242,7 @@ export async function sendAIEventNotification(event: any, timeLabel: string) {
         const isImminent = timeLabel === '1h' || timeLabel === 'TEST';
 
         const prompt = `
-            You are the hype announcer for NXC Esports (Nexus Collective).
+            You are the hype announcer for WC Esports (Waks Corporation).
             Write a short, high-energy Discord notification for an upcoming event.
             
             Event Details:

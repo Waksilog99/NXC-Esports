@@ -16,8 +16,8 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
-import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress } from './schema.js';
-import { eq, inArray, and, sql } from 'drizzle-orm';
+import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress, products, orders, siteSettings } from './schema.js';
+import { eq, inArray, and, sql, desc } from 'drizzle-orm';
 import crypto from 'crypto';
 import fs from 'fs';
 import { finished } from 'stream/promises';
@@ -47,6 +47,9 @@ app.use(helmet({
 // ── Security: CORS whitelist ──────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
     'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://localhost:5176',
     'http://localhost:4173',
     ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
 ];
@@ -91,9 +94,12 @@ app.use((req, res, next) => {
 });
 
 // ── Body limits ───────────────────────────────────────────────────────────────
-// Avatar/image uploads get 50 MB; everything else gets 5 MB
+// Avatar/image uploads / QR / Payment Proofs get 50 MB; everything else gets 5 MB
 app.use('/api/users/:id/avatar', express.json({ limit: '50mb' }));
 app.use('/api/users/:id/avatar', express.urlencoded({ limit: '50mb', extended: true }));
+app.use('/api/sponsors/:id/qr', express.json({ limit: '50mb' }));
+app.use('/api/site-settings', express.json({ limit: '50mb' }));
+app.use('/api/orders', express.json({ limit: '50mb' }));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
@@ -105,8 +111,8 @@ app.post('/api/test/notification', async (req, res) => {
     try {
         const { sendAIEventNotification } = await import('./scheduler.js');
         const dummyEvent = {
-            title: "NOW RECRUITING: NXC Solana (VALORANT PC)",
-            description: "NXC is officially expanding our VALORANT PC FEMALE DIVISION with the launch of NXC Solana. We are looking for high potential players ready to build a legacy suitable for elite community leagues.\n\nRequirements:\n- Gender: Female\n- Rank: Diamond - Immortal\n- Team Size: 5 Main + 2 Subs\n- Commitment: Available for scrims/VODs.",
+            title: "NOW RECRUITING: WC Solana (VALORANT PC)",
+            description: "WC is officially expanding our VALORANT PC FEMALE DIVISION with the launch of WC Solana. We are looking for high potential players ready to build a legacy suitable for elite community leagues.\n\nRequirements:\n- Gender: Female\n- Rank: Diamond - Immortal\n- Team Size: 5 Main + 2 Subs\n- Commitment: Available for scrims/VODs.",
             location: "Discord Ticket #player-applications",
             date: new Date().toISOString()
         };
@@ -421,8 +427,8 @@ app.post('/api/users/sync', async (req, res) => {
             const newUserRes = await db.insert(users).values({
                 username: sUsername,
                 password: hashedPassword,
-                googleId, email, fullname: sanitize(name) || 'Nexus Agent',
-                avatar, birthday, role: email === 'admin@novanexus.io' ? 'admin' : 'member'
+                googleId, email, fullname: sanitize(name) || 'Waks Agent',
+                avatar, birthday, role: email === 'admin@waks.com' ? 'admin' : 'member'
             }).returning();
             const newUser = newUserRes[0];
 
@@ -800,10 +806,65 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 });
 
 // sponsors
+// ── Sponsor QR Management ───────────────────────────────────────────────────
+app.put('/api/sponsors/:id/qr', async (req, res) => {
+    const { id } = req.params;
+    const { qrEWallet, qrBank } = req.body;
+    try {
+        const updated = await db.update(sponsors).set({ qrEWallet, qrBank }).where(eq(sponsors.id, Number(id))).returning();
+        res.json({ success: true, data: updated[0] });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: 'Failed to update Sponsor QR' });
+    }
+});
+
+// ── Site Settings (Waks Corp QR) ──────────────────────────────────────────────
+app.get('/api/site-settings', async (req, res) => {
+    try {
+        let settings = await db.select().from(siteSettings);
+        if (settings.length === 0) {
+            // Initialize if missing
+            const init = await db.insert(siteSettings).values({ waksQrEWallet: null, waksQrBank: null }).returning();
+            settings = init;
+        }
+        res.json({ success: true, data: settings[0] });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: 'Failed to fetch site settings' });
+    }
+});
+
+app.put('/api/site-settings', async (req, res) => {
+    const { waksQrEWallet, waksQrBank } = req.body;
+    try {
+        // Check if settings exist
+        const settings = await db.select().from(siteSettings);
+        let result;
+        if (settings.length === 0) {
+            result = await db.insert(siteSettings).values({ waksQrEWallet, waksQrBank }).returning();
+        } else {
+            result = await db.update(siteSettings).set({ waksQrEWallet, waksQrBank }).returning();
+        }
+        res.json({ success: true, data: result[0] });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: 'Failed to update site settings' });
+    }
+});
 app.get('/api/sponsors', async (req, res) => {
     try {
+        // Fetch all sponsors
         const data = await db.select().from(sponsors);
-        res.json({ success: true, data });
+
+        // Also fetch users to check roles
+        const allUsers = await db.select().from(users);
+
+        // Filter sponsors: they must have a userId AND that user must have 'sponsor' in their role
+        const filteredSponsors = data.filter(sponsor => {
+            if (!sponsor.userId) return false;
+            const u = allUsers.find(user => user.id === sponsor.userId);
+            return u && u.role && u.role.includes('sponsor');
+        });
+
+        res.json({ success: true, data: filteredSponsors });
     } catch (error: any) {
         console.error("Error in GET /api/sponsors:", error);
         res.status(500).json({ success: false, error: 'Failed to fetch sponsors', details: IS_PROD ? undefined : error.message });
@@ -811,13 +872,26 @@ app.get('/api/sponsors', async (req, res) => {
 });
 
 app.post('/api/sponsors', async (req, res) => {
-    const { name, tier, logo, description, website } = req.body;
+    const { name, tier, logo, description, website, userId } = req.body;
     if (!name || !tier || !logo) return res.status(400).json({ success: false, error: 'Missing required fields' });
     try {
         const newSponsorRows = await db.insert(sponsors).values({
-            name, tier, logo, description, website
+            name, tier, logo, description, website, userId: userId ? Number(userId) : null
         }).returning();
         const newSponsor = newSponsorRows[0];
+
+        // Ensure user gets the secondary role 'sponsor'
+        if (userId) {
+            const userRecord = await db.select().from(users).where(eq(users.id, Number(userId)));
+            if (userRecord[0]) {
+                const currentRole = userRecord[0].role || 'member';
+                if (!currentRole.includes('sponsor')) {
+                    const newRole = `${currentRole},sponsor`;
+                    await db.update(users).set({ role: newRole }).where(eq(users.id, Number(userId)));
+                }
+            }
+        }
+
         res.json({ success: true, data: newSponsor });
     } catch (error: any) {
         console.error("Error in POST /api/sponsors:", error);
@@ -896,7 +970,7 @@ app.post('/api/seed/massive', async (req, res) => {
 
         for (let i = 1; i <= 20; i++) {
             const game = games[i % games.length];
-            const teamName = `NXC ${game} Squad ${Math.floor(i / 5) + 1}-${i % 5}`;
+            const teamName = `WC ${game} Squad ${Math.floor(i / 5) + 1}-${i % 5}`;
 
             // 1. Create Team
             let teamRows = await db.select().from(teams).where(eq(teams.name, teamName));
@@ -924,7 +998,7 @@ app.post('/api/seed/massive', async (req, res) => {
                     const newUserRows = await db.insert(users).values({
                         username,
                         password: hashPassword('password123'),
-                        email: `${username}@nxc-pro.com`,
+                        email: `${username}@waks.com`,
                         fullname: playerName.replace(/_/g, ' '),
                         role: 'member',
                         ign: playerName
@@ -1001,66 +1075,87 @@ app.get('/api/teams', async (req, res) => {
             query = query.where(eq(teams.id, teamId)) as any;
         }
         const teamData = await query;
+        if (teamData.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
 
-        // Fetch players and enrich with User data (IGN, Avatar) and live Stats
-        const result = await Promise.all(teamData.map(async (team) => {
-            const teamPlayers = await db.select({
-                id: players.id,
-                teamId: players.teamId,
-                userId: players.userId,
-                name: players.name,
-                role: players.role,
-                kda: players.kda,
-                winRate: players.winRate,
-                acs: players.acs,
-                image: players.image,
-                level: players.level,
-                xp: players.xp,
-                isActive: players.isActive
-            }).from(players).where(eq(players.teamId, team.id));
+        const teamIds = teamData.map(t => t.id);
 
-            // PSTATS: Get all completed scrim IDs for this team
-            const teamScrims = await db.select().from(scrims)
-                .where(eq(scrims.teamId, team.id));
-            const completedScrimIds = teamScrims
-                .filter(s => s.status === 'completed')
-                .map(s => s.id);
+        // 1. Fetch ALL players for these teams in one query
+        const allPlayers = await db.select({
+            id: players.id,
+            teamId: players.teamId,
+            userId: players.userId,
+            name: players.name,
+            role: players.role,
+            kda: players.kda,
+            winRate: players.winRate,
+            acs: players.acs,
+            image: players.image,
+            level: players.level,
+            xp: players.xp,
+            isActive: players.isActive
+        }).from(players).where(inArray(players.teamId, teamIds));
 
-            const enrichedPlayers = await Promise.all(teamPlayers.map(async (p) => {
-                // 1. Fetch User details for IGN/Avatar
+        // 2. Fetch ALL associated users in one query
+        const userIds = allPlayers.map(p => p.userId).filter((id): id is number => id !== null);
+        let allUsers: any[] = [];
+        if (userIds.length > 0) {
+            allUsers = await db.select().from(users).where(inArray(users.id, userIds));
+        }
+
+        // 3. Fetch ALL scrims for these teams
+        const allScrims = await db.select().from(scrims).where(inArray(scrims.teamId, teamIds));
+        const completedScrimIds = allScrims.filter(s => s.status === 'completed').map(s => s.id);
+
+        // 4. Fetch ALL player stats for these completed scrims
+        let allStats: any[] = [];
+        if (completedScrimIds.length > 0) {
+            allStats = await db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.scrimId, completedScrimIds));
+        }
+
+        // Create mappings for O(1) lookups
+        const userMap = new Map(allUsers.map(u => [u.id, u]));
+        const teamPlayersMap = new Map<number, typeof allPlayers>();
+        teamData.forEach(t => teamPlayersMap.set(t.id, []));
+        allPlayers.forEach(p => {
+            const teamArr = teamPlayersMap.get(p.teamId!);
+            if (teamArr) teamArr.push(p);
+        });
+
+        const playerStatsMap = new Map<number, typeof allStats>();
+        allStats.forEach(s => {
+            if (!playerStatsMap.has(s.playerId)) playerStatsMap.set(s.playerId, []);
+            playerStatsMap.get(s.playerId)!.push(s);
+        });
+
+        // Assemble the final payload synchronously
+        const result = teamData.map(team => {
+            const tPlayers = teamPlayersMap.get(team.id) || [];
+
+            const enrichedPlayers = tPlayers.map(p => {
                 let enriched = { ...p };
-                if (p.userId) {
-                    const userRows = await db.select().from(users).where(eq(users.id, p.userId));
-                    const u = userRows[0];
-                    if (u) {
-                        enriched.name = u.ign || u.username;
-                        enriched.image = u.avatar || p.image;
-                    }
+                if (p.userId && userMap.has(p.userId)) {
+                    const u = userMap.get(p.userId);
+                    enriched.name = u.ign || u.username;
+                    enriched.image = u.avatar || p.image;
                 }
 
-                // 2. Compute Live Stats from Scrimmage Results (Scoped to Team)
                 let kdaValue = 0;
                 let avgAcs = 0;
                 let winRateVal = 0;
 
-                if (completedScrimIds.length > 0) {
-                    const pStats = await db.select().from(scrimPlayerStats)
-                        .where(inArray(scrimPlayerStats.scrimId, completedScrimIds));
-
-                    const myStats = pStats.filter(s => s.playerId === p.id);
-
-                    if (myStats.length > 0) {
-                        const totalAcs = myStats.reduce((acc, s) => acc + (s.acs || 0), 0);
-                        const sumKda = myStats.reduce((acc, s) => {
-                            const matchKda = (s.kills + s.assists) / (s.deaths || 1);
-                            return acc + matchKda;
-                        }, 0);
-                        kdaValue = sumKda / myStats.length;
-                        avgAcs = Math.round(totalAcs / myStats.length);
-
-                        const wins = myStats.filter(s => s.isWin === 1).length;
-                        winRateVal = (wins / myStats.length) * 100;
-                    }
+                const myStats = playerStatsMap.get(p.id) || [];
+                if (myStats.length > 0) {
+                    const totalAcs = myStats.reduce((acc, s) => acc + (s.acs || 0), 0);
+                    const sumKda = myStats.reduce((acc, s) => {
+                        const matchKda = (s.kills + s.assists) / (s.deaths || 1);
+                        return acc + matchKda;
+                    }, 0);
+                    kdaValue = sumKda / myStats.length;
+                    avgAcs = Math.round(totalAcs / myStats.length);
+                    const wins = myStats.filter(s => s.isWin === 1).length;
+                    winRateVal = (wins / myStats.length) * 100;
                 }
 
                 return {
@@ -1069,10 +1164,10 @@ app.get('/api/teams', async (req, res) => {
                     acs: avgAcs.toString(),
                     winRate: `${winRateVal.toFixed(1)}%`
                 };
-            }));
+            });
 
             return { ...team, players: enrichedPlayers };
-        }));
+        });
 
         res.json({ success: true, data: result });
     } catch (error: any) {
@@ -1195,17 +1290,28 @@ app.get('/api/analytics/performers', async (req, res) => {
             pList = await db.select().from(players);
         }
 
-        for (const p of pList) {
-            const playerStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, p.id));
-            if (playerStats.length > 0) {
-                const avgKda = playerStats.reduce((acc, s) => acc + (s.kills + s.assists) / (s.deaths || 1), 0) / playerStats.length;
-                const avgAcs = playerStats.reduce((acc, s) => acc + (s.acs || 0), 0) / playerStats.length;
-                analyticsResult.players.push({
-                    name: p.name,
-                    teamId: p.teamId,
-                    kda: avgKda.toFixed(2),
-                    acs: Math.round(avgAcs)
-                });
+        if (pList.length > 0) {
+            const playerIds = pList.map(p => p.id);
+            const allStats = await db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.playerId, playerIds));
+
+            const statsMap = new Map<number, typeof allStats>();
+            allStats.forEach(s => {
+                if (!statsMap.has(s.playerId)) statsMap.set(s.playerId, []);
+                statsMap.get(s.playerId)!.push(s);
+            });
+
+            for (const p of pList) {
+                const playerStats = statsMap.get(p.id) || [];
+                if (playerStats.length > 0) {
+                    const avgKda = playerStats.reduce((acc, s) => acc + (s.kills + s.assists) / (s.deaths || 1), 0) / playerStats.length;
+                    const avgAcs = playerStats.reduce((acc, s) => acc + (s.acs || 0), 0) / playerStats.length;
+                    analyticsResult.players.push({
+                        name: p.name,
+                        teamId: p.teamId,
+                        kda: avgKda.toFixed(2),
+                        acs: Math.round(avgAcs)
+                    });
+                }
             }
         }
         res.json({ success: true, data: analyticsResult });
@@ -1267,14 +1373,10 @@ app.get('/api/reports/weekly', async (req, res) => {
         const { start: startOfWeek, end: endOfWeek } = getSundaySaturdayRange(today);
         const filterTeamId = req.query.teamId ? Number(req.query.teamId) : undefined;
 
-        let allScrims = await db.select().from(scrims);
-        let allTournaments = await db.select().from(tournaments);
-
-        // Optional team filter
-        if (filterTeamId) {
-            allScrims = allScrims.filter(s => s.teamId === filterTeamId);
-            allTournaments = allTournaments.filter(t => (t as any).teamId === filterTeamId);
-        }
+        let [allScrims, allTournaments] = await Promise.all([
+            filterTeamId ? db.select().from(scrims).where(eq(scrims.teamId, filterTeamId)) : db.select().from(scrims),
+            filterTeamId ? db.select().from(tournaments).where(eq(tournaments.teamId, filterTeamId)) : db.select().from(tournaments)
+        ]);
 
         // Filter to current week (only for weekly mode, but keep all records for deckStats)
         const filteredScrims = allScrims.filter(s => {
@@ -1739,7 +1841,7 @@ export async function generateAndSendWeeklyReport() {
         const L_MARGIN = 60;
         const CHART_WIDTH = 420;
 
-        const pdfFileName = `NXC_Royal_Edict_${Date.now()}.pdf`;
+        const pdfFileName = `WC_Royal_Edict_${Date.now()}.pdf`;
         const pdfPath = resolve(process.cwd(), pdfFileName);
         const { default: PDFDocument } = await import('pdfkit');
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -1773,7 +1875,7 @@ export async function generateAndSendWeeklyReport() {
         addPageBg();
         doc.rect(18, 18, 559, 120).fill(PURPLE);
         doc.fillColor(GOLD).fontSize(26).font('Times-Bold').text('ROYAL PERFORMANCE EDICT', 18, 38, { align: 'center', width: 559 });
-        doc.fontSize(11).font('Times-Roman').text('NXC ESPORTS — COMPREHENSIVE COMMAND INTELLIGENCE', 18, 72, { align: 'center', width: 559 });
+        doc.fontSize(11).font('Times-Roman').text('WC ESPORTS — COMPREHENSIVE COMMAND INTELLIGENCE', 18, 72, { align: 'center', width: 559 });
         doc.fontSize(9).text(`DECREED: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} | STATUS: SOVEREIGN & CONFIDENTIAL`, 18, 92, { align: 'center', width: 559 });
 
         doc.y = 160;
@@ -1971,7 +2073,7 @@ export async function generateAndSendWeeklyReport() {
 
         // Footer on last page
         doc.fillColor(PURPLE).fontSize(8).font('Times-Italic')
-            .text('By Royal Decree of the NXC Executive Council. All metrics verified and sovereign. This document is confidential.', 18, 808, { align: 'center', width: 559 });
+            .text('By Royal Decree of the WC Executive Council. All metrics verified and sovereign. This document is confidential.', 18, 808, { align: 'center', width: 559 });
 
         doc.end();
         await finished(writeStream);
@@ -2066,7 +2168,7 @@ export async function generateAndSendWeeklyReport() {
         // 6. Email Dispatch
         const gmailUser = process.env.GMAIL_USER;
         const gmailPass = process.env.GMAIL_APP_PASS;
-        const CEO_EMAIL = 'nexuscollectiveesports@gmail.com';
+        const CEO_EMAIL = 'wakscorporationesports@gmail.com';
 
         if (!gmailUser || !gmailPass) {
             console.warn('[EMAIL] GMAIL_USER or GMAIL_APP_PASS not found. Skipping email.');
@@ -2085,7 +2187,7 @@ export async function generateAndSendWeeklyReport() {
         });
 
         const emailBody = [
-            `By Royal Decree of the NXC Executive Council,`,
+            `By Royal Decree of the WC Executive Council,`,
             ``,
             `Attached is the comprehensive Royal Performance Edict covering all active divisions.`,
             ``,
@@ -2109,14 +2211,14 @@ export async function generateAndSendWeeklyReport() {
             ``,
             `Full breakdown archived in the Citadel.`,
             ``,
-            `— NXC Royal Intelligence Division`,
+            `— WC Royal Intelligence Division`,
         ].join('\n');
 
         const mailOptions = {
-            from: `"NXC Royal Intelligence" <${gmailUser}>`,
+            from: `"WC Royal Intelligence" <${gmailUser}>`,
             to: CEO_EMAIL,
             cc: gmailUser,
-            subject: `[NXC Royal Edict] Performance Report — ${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} to ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+            subject: `[WC Royal Edict] Performance Report — ${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} to ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
             text: emailBody,
             attachments: [{ filename: pdfFileName, path: pdfPath }]
         };
@@ -2562,6 +2664,163 @@ app.post('/api/scrims/:id/results', async (req, res) => {
     } catch (error: any) {
         console.error("Error in POST /api/scrims/:id/results:", error);
         res.status(500).json({ success: false, error: 'Failed to save results', details: IS_PROD ? undefined : error.message });
+    }
+});
+
+// --- E-COMMERCE API ROUTES ---
+app.get('/api/products', async (req, res) => {
+    try {
+        const allProducts = await db.select().from(products).orderBy(desc(products.createdAt));
+        res.json({ success: true, data: allProducts });
+    } catch (error: any) {
+        console.error("GET /api/products Error:", error);
+        res.status(500).json({ success: false, error: 'Failed to fetch products' });
+    }
+});
+
+app.post('/api/products', async (req, res) => {
+    try {
+        const { name, description, price, stock, sponsorId, imageUrl } = req.body;
+
+        if (!name || !description || price === undefined || stock === undefined || !imageUrl) {
+            return res.status(400).json({ success: false, error: 'Missing required product fields' });
+        }
+
+        const newProduct = await db.insert(products).values({
+            name,
+            description,
+            price: Number(price),
+            stock: Math.max(0, Number(stock)), // Guard against negative stock
+            sponsorId: sponsorId === null ? null : Number(sponsorId),
+            imageUrl
+        }).returning();
+
+        res.json({ success: true, data: newProduct[0] });
+    } catch (error: any) {
+        console.error("POST /api/products Error:", error);
+        res.status(500).json({ success: false, error: 'Failed to create product', detail: error.message });
+    }
+});
+
+app.put('/api/products/:id/stock', async (req, res) => {
+    const { id } = req.params;
+    const { stock } = req.body;
+    try {
+        const validatedStock = Math.max(0, Number(stock)); // Prevent negative stock
+        const updatedProduct = await db.update(products).set({ stock: validatedStock }).where(eq(products.id, Number(id))).returning();
+        res.json({ success: true, data: updatedProduct[0] });
+    } catch (error: any) {
+        console.error("PUT /api/products/:id/stock Error:", error);
+        res.status(500).json({ success: false, error: 'Failed to update stock' });
+    }
+});
+
+app.delete('/api/products/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await db.delete(products).where(eq(products.id, Number(id)));
+        res.json({ success: true, message: "Product deleted" });
+    } catch (error: any) {
+        console.error("DELETE /api/products/:id Error:", error);
+        res.status(500).json({ success: false, error: 'Failed to delete product' });
+    }
+});
+
+app.get('/api/orders', async (req, res) => {
+    try {
+        const allOrders = await db.select().from(orders).orderBy(desc(orders.createdAt));
+        res.json({ success: true, data: allOrders });
+    } catch (error: any) {
+        console.error("GET /api/orders Error:", error);
+        res.status(500).json({ success: false, error: 'Failed to fetch orders' });
+    }
+});
+
+app.post('/api/orders', async (req, res) => {
+    const { userId, items, recipientName, deliveryAddress, contactNumber, paymentMethod, paymentProofUrl } = req.body;
+
+    // MANDATORY DETAIL VALIDATION
+    if (!items || !Array.isArray(items) || items.length === 0 || !recipientName || !deliveryAddress || !contactNumber || !paymentMethod || !paymentProofUrl) {
+        return res.status(400).json({ success: false, error: "Mission Intel Missing: All order details including items and payment proof are required." });
+    }
+
+    try {
+        // 1. STOCK GUARD & VALIDATION
+        for (const item of items) {
+            const product = await db.select().from(products).where(eq(products.id, Number(item.productId)));
+            if (!product[0]) {
+                return res.status(404).json({ success: false, error: `Asset ID ${item.productId} not found in depot.` });
+            }
+            if (product[0].stock < item.quantity) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Supply Depleted: ${product[0].name} has only ${product[0].stock} units remaining. Required: ${item.quantity}.`
+                });
+            }
+        }
+
+        // 2. CREATE ORDERS
+        const createdOrders = [];
+        for (const item of items) {
+            // Note: If we don't have a quantity field in DB, we insert multiple rows if needed, 
+            // but for now we'll assume one entry denotes the procurement request for that product type.
+            // Ideally schema should have quantity, but to avoid migration we'll handle it logic-side or 
+            // just insert one row per product type as per original design.
+            const newOrder = await db.insert(orders).values({
+                userId,
+                productId: item.productId,
+                recipientName,
+                deliveryAddress,
+                contactNumber,
+                paymentMethod,
+                paymentProofUrl,
+                status: 'For Payment Verification'
+            }).returning();
+            createdOrders.push(newOrder[0]);
+        }
+
+        res.json({ success: true, data: createdOrders });
+    } catch (error: any) {
+        console.error("POST /api/orders Error:", error);
+        res.status(500).json({ success: false, error: 'Intersystem Error: Failed to process bulk procurement.' });
+    }
+});
+
+app.put('/api/orders/:id/status', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    try {
+        const orderRecord = await db.select().from(orders).where(eq(orders.id, Number(id)));
+        if (!orderRecord[0]) {
+            return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        const oldStatus = orderRecord[0].status;
+
+        // If transitioning from verification to something else, we deduct stock if not already deducted?
+        // Actually, we should deduct stock only when the payment is verified (moved to Pending).
+        if (oldStatus === 'For Payment Verification' && status === 'Pending') {
+            const product = await db.select().from(products).where(eq(products.id, orderRecord[0].productId));
+            if (product[0] && product[0].stock > 0) {
+                await db.update(products).set({ stock: product[0].stock - 1 }).where(eq(products.id, orderRecord[0].productId));
+            } else {
+                return res.status(400).json({ success: false, error: "Cannot verify payment: Product is now out of stock." });
+            }
+        }
+
+        // If moved to Refunded, restock
+        if (status === 'Refunded' && oldStatus !== 'Refunded') {
+            const product = await db.select().from(products).where(eq(products.id, orderRecord[0].productId));
+            if (product[0]) {
+                await db.update(products).set({ stock: product[0].stock + 1 }).where(eq(products.id, product[0].id));
+            }
+        }
+
+        const updatedOrder = await db.update(orders).set({ status }).where(eq(orders.id, Number(id))).returning();
+        res.json({ success: true, data: updatedOrder[0] });
+    } catch (error: any) {
+        console.error("PUT /api/orders/:id/status Error:", error);
+        res.status(500).json({ success: false, error: 'Failed to update order status' });
     }
 });
 

@@ -225,7 +225,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                         photoURL: updatedData.avatar || parsed.photoURL,
                     };
                     localStorage.setItem('dev_user', JSON.stringify(newSession));
-                    window.dispatchEvent(new Event('nxc-auth-changed'));
+                    window.dispatchEvent(new Event('wc-auth-changed'));
                 }
             }
 
@@ -345,7 +345,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                                 </div>
                                 <div className="flex flex-col items-start">
                                     <span className="text-amber-500 font-black uppercase text-[10px] tracking-[0.5em] mb-1 px-4 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/20">{profile.role}</span>
-                                    <span className="text-slate-500 font-black text-[9px] uppercase tracking-[0.3em] ml-4">ID://{profile.id || 'NXC-PRO'}</span>
+                                    <span className="text-slate-500 font-black text-[9px] uppercase tracking-[0.3em] ml-4">ID://{profile.id || 'WC-PRO'}</span>
                                 </div>
                             </div>
 
@@ -389,7 +389,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                                             <input type="text" value={fullname} onChange={(e) => setFullname(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all" />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Nexus Codename</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Waks Codename</label>
                                             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all font-mono" />
                                         </div>
                                         <div className="space-y-2">
@@ -405,7 +405,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                                         <div><p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] mb-2">Combat Handle</p><p className="text-amber-500 font-black text-xl italic tracking-tighter uppercase">{profile.ign || 'UNASSIGNED'}</p></div>
                                         <div><p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] mb-2">Legal Identity</p><p className="text-white font-black text-lg tracking-tight uppercase">{profile.fullname || '—'}</p></div>
-                                        <div><p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] mb-2">Nexus Codename</p><p className="text-slate-400 font-black text-sm font-mono italic">@{(profile.username || '').toUpperCase()}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] mb-2">Waks Codename</p><p className="text-slate-400 font-black text-sm font-mono italic">@{(profile.username || '').toUpperCase()}</p></div>
                                         <div><p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] mb-2">Secure Signal</p><p className="text-white font-black text-sm">{(profile.email || '').toUpperCase()}</p></div>
                                     </div>
                                 )}
@@ -543,7 +543,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                         <>
                             <button onClick={() => setIsEditing(false)} className="px-8 py-3 text-slate-500 hover:text-white font-black uppercase tracking-[0.3em] text-[10px] transition-all active:scale-95">De-Authorize Changes</button>
                             <button onClick={handleSave} disabled={isSaving} className="px-12 py-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-[0.4em] text-[10px] rounded-2xl transition-all shadow-2xl shadow-amber-500/20 active:scale-95 border-t border-white/20">
-                                {isSaving ? "ENCODING DATA..." : "COMMIT TO NEXUS COLLECTIVE"}
+                                {isSaving ? "ENCODING DATA..." : "COMMIT TO WAKS CORPORATION"}
                             </button>
                         </>
                     ) : (

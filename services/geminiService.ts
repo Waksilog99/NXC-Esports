@@ -24,6 +24,6 @@ export const getTeamAnalysis = async (stats: any): Promise<string> => {
     return response.text || "Analysis currently unavailable.";
   } catch (error) {
     console.error("Gemini analysis error:", error);
-    return "Tactical data processing failed. Please reconnect to the Nexus.";
+    return "Tactical data processing failed. Please reconnect to the Waks Corporation.";
   }
 };

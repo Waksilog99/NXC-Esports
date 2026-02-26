@@ -39,12 +39,12 @@ const main = async () => {
         await db.delete(schema.users);
 
         console.log('Seeding Admin and CEO accounts...');
-        const hashedPassword = await bcrypt.hash('NXC_Citadel_2025!', 12);
+        const hashedPassword = await bcrypt.hash('WC_Citadel_2025!', 12);
 
         await db.insert(schema.users).values([
             {
                 username: 'admin',
-                email: 'admin@novanexus.io',
+                email: 'admin@waks.com',
                 password: hashedPassword,
                 fullname: 'Citadel Administrator',
                 role: 'admin',
@@ -54,15 +54,15 @@ const main = async () => {
                 username: 'ceo',
                 email: 'ceo@nxc.com',
                 password: hashedPassword,
-                fullname: 'NXC CEO',
+                fullname: 'WC CEO',
                 role: 'ceo',
                 createdAt: new Date()
             }
         ]);
 
         console.log('Database reset and seed complete!');
-        console.log('Username: admin | Password: NXC_Citadel_2025!');
-        console.log('Username: ceo   | Password: NXC_Citadel_2025!');
+        console.log('Username: admin | Password: WC_Citadel_2025!');
+        console.log('Username: ceo   | Password: WC_Citadel_2025!');
     } catch (error) {
         console.error('Error resetting database:', error);
     } finally {

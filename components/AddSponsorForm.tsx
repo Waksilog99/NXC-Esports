@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
 
-const AddSponsorForm: React.FC = () => {
+interface AddSponsorFormProps {
+    users: any[];
+}
+
+const AddSponsorForm: React.FC<AddSponsorFormProps> = ({ users }) => {
     const { showNotification } = useNotification();
     const [name, setName] = useState('');
     const [tier, setTier] = useState('Silver');
+    const [userId, setUserId] = useState('');
     const [logo, setLogo] = useState('');
     const [description, setDescription] = useState('');
     const [website, setWebsite] = useState('');
@@ -17,14 +22,14 @@ const AddSponsorForm: React.FC = () => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, tier, logo, description, website })
+                body: JSON.stringify({ name, tier, logo, description, website, userId })
             });
             if (res.ok) {
                 showNotification({
                     message: 'Partner Onboarded Successfully!',
                     type: 'success'
                 });
-                setName(''); setTier('Silver'); setLogo(''); setDescription(''); setWebsite('');
+                setName(''); setTier('Silver'); setLogo(''); setDescription(''); setWebsite(''); setUserId('');
             } else {
                 showNotification({
                     message: 'Failed to add sponsor.',
@@ -47,6 +52,16 @@ const AddSponsorForm: React.FC = () => {
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Company Name</label>
                 <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500" placeholder="e.g. Apex Tech" />
+            </div>
+            <div>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Assign User Account</label>
+                <select value={userId} onChange={e => setUserId(e.target.value)} className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">
+                    <option value="">Select a user (optional)</option>
+                    {users.map((u: any) => (
+                        <option key={u.id} value={u.id}>{u.username} ({u.fullname}) - {u.email}</option>
+                    ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">Selecting a user grants them access to the Sponsor Zone.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div>

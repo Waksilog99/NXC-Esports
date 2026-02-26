@@ -1,8 +1,8 @@
-# NXC ESPORTS // BRAND INTELLIGENCE DOCUMENT
+# WC ESPORTS // BRAND INTELLIGENCE DOCUMENT
 CLASSIFIED: FOR AUTHORIZED PARTNERS ONLY
 
 ## 1. PRIMARY DIRECTIVE
-Our visual identity represents strength, precision, and sovereignty. Use these assets to maintain the integrity of the Nexus Collective brand.
+Our visual identity represents strength, precision, and sovereignty. Use these assets to maintain the integrity of the Waks Corporation brand.
 
 ## 2. COLOR PROTOCOLS
 
@@ -26,9 +26,9 @@ Our visual identity represents strength, precision, and sovereignty. Use these a
 - Body: 'Inter', Medium Weight, Relaxed Tracking.
 
 ## 4. LOGO USAGE
-- Always maintain clear space around the NXC mark.
+- Always maintain clear space around the WC mark.
 - Do not invert colors on light backgrounds; use the dark variant.
 - Do not distort or skew the "X" axis.
 
 ---
-// NEXUS COMMAND // TRANSMISSION END
+// WAKS COMMAND // TRANSMISSION END

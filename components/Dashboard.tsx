@@ -59,10 +59,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
   const loadScrimStats = async (teamId?: number) => {
     setIsLoadingScrim(true);
     try {
-      // Fetch aggregate stats
-      const url = teamId ? `${API}/api/reports/weekly?teamId=${teamId}` : `${API}/api/reports/weekly`;
-      const r = await fetch(url);
-      const result = await r.json();
+      // ── Parallelized API Fetching ──────────────────────────────────────────
+      const statsUrl = teamId ? `${API}/api/reports/weekly?teamId=${teamId}` : `${API}/api/reports/weekly`;
+      const rawUrl = teamId ? `${API}/api/scrims?teamId=${teamId}` : `${API}/api/scrims`;
+
+      const [statsRes, rawRes] = await Promise.all([
+        fetch(statsUrl),
+        fetch(rawUrl)
+      ]);
+
+      const [result, rawResult] = await Promise.all([
+        statsRes.json(),
+        rawRes.json()
+      ]);
+
       if (result?.success) {
         const at = result.data?.allTime || {};
         const wins = at.wins ?? 0;
@@ -77,10 +87,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
         ]);
       }
 
-      // Fetch raw scrims for chart
-      const rawUrl = teamId ? `${API}/api/scrims?teamId=${teamId}` : `${API}/api/scrims`;
-      const rawR = await fetch(rawUrl);
-      const rawResult = await rawR.json();
       const scrimList = rawResult.success ? rawResult.data : (Array.isArray(rawResult) ? rawResult : []);
       setRawScrims(scrimList);
     } catch { /* keep defaults */ }
@@ -113,9 +119,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
     setIsLoadingTour(false);
   };
 
-  // ── Fetch all teams for universal filter ─────────────────────────────────
+  // ── Initial load: global stats and teams in parallel ─────────────────────
   useEffect(() => {
-    const fetchTeams = async () => {
+    setScrimLabel('Global · All-Time');
+    setTourLabel('Global · All-Time');
+
+    // Fire off team loading simultaneously with scrim stats loading
+    const initDashboard = async () => {
+      loadScrimStats(); // Handles its own state
       try {
         const r = await fetch(`${API}/api/teams`);
         const result = await r.json();
@@ -124,14 +135,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
         }
       } catch { }
     };
-    fetchTeams();
-  }, []);
 
-  // ── Initial load: global stats by default ────────────────────────────────
-  useEffect(() => {
-    setScrimLabel('Global · All-Time');
-    setTourLabel('Global · All-Time');
-    loadScrimStats();
+    initDashboard();
   }, []);
 
   // ── Load tournament stats when Tactical tab is first opened ───────────────
@@ -398,7 +403,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
               </div>
             </div>
 
-            <div className="h-[320px] w-full relative z-10">
+            <div className="h-[320px] min-h-[320px] w-full relative z-10">
               {computedChartData.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center opacity-20">
                   <p className="text-[10px] font-black uppercase tracking-[0.5em] text-amber-500">No Data Available</p>

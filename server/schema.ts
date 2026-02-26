@@ -66,6 +66,15 @@ export const sponsors = pgTable('sponsors', {
     logo: text('logo').notNull(),
     description: text('description'),
     website: text('website'),
+    userId: integer('user_id').references(() => users.id), // Link to the user who represents this sponsor
+    qrEWallet: text('qr_ewallet'),
+    qrBank: text('qr_bank'),
+});
+
+export const siteSettings = pgTable('site_settings', {
+    id: serial('id').primaryKey(),
+    waksQrEWallet: text('waks_qr_ewallet'),
+    waksQrBank: text('waks_qr_bank'),
 });
 
 export const teams = pgTable('teams', {
@@ -173,3 +182,29 @@ export const playerQuotaProgress = pgTable('player_quota_progress', {
     carryOverRG: integer('carry_over_rg').default(0),
     updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const products = pgTable('products', {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull(),
+    price: integer('price').notNull(), // price in whole numbers e.g., cents or full currency value depending on use case. Let's use whole numbers representing standard currency for simplicity.
+    stock: integer('stock').notNull().default(0),
+    sponsorId: integer('sponsor_id').references(() => sponsors.id), // Can be null if it's Waks Corporation merch
+    imageUrl: text('image_url').notNull(),
+    status: text('status').default('active'),
+    createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const orders = pgTable('orders', {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id').references(() => users.id),
+    productId: integer('product_id').references(() => products.id),
+    recipientName: text('recipient_name').notNull(),
+    deliveryAddress: text('delivery_address').notNull(),
+    contactNumber: text('contact_number').notNull(),
+    paymentMethod: text('payment_method').notNull(), // 'E-Wallet', 'Bank Transfer'
+    paymentProofUrl: text('payment_proof_url'), // Customer uploads proof
+    status: text('status').default('For Payment Verification'), // 'For Payment Verification', 'Pending', 'For Shipping', 'Completed'
+    createdAt: timestamp('created_at').defaultNow(),
+});
+
