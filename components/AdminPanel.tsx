@@ -8,6 +8,7 @@ import TacticalIntelGraphs from './TacticalIntelGraphs';
 import { GAME_TITLES } from './constants';
 import Modal from './Modal';
 import SponsorZone from './SponsorZone';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface User {
     id: number;
@@ -63,11 +64,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
             setError(null);
             try {
                 const [usersRes, teamsRes, sponsorsRes, weeklyRes, historyRes] = await Promise.all([
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`),
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`),
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`),
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/weekly`),
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/history`)
+                    fetch(`${GET_API_BASE_URL()}/api/users`),
+                    fetch(`${GET_API_BASE_URL()}/api/teams`),
+                    fetch(`${GET_API_BASE_URL()}/api/sponsors`),
+                    fetch(`${GET_API_BASE_URL()}/api/reports/weekly`),
+                    fetch(`${GET_API_BASE_URL()}/api/reports/history`)
                 ]);
 
                 const [usersData, teamsData, sponsorsData, weeklyData, historyData] = await Promise.all([
@@ -109,7 +110,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
 
     const fetchUsers = async () => { /* Keep for targeted re-fetches */
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/users`);
             const result = await res.json();
             const rawUsers = Array.isArray(result) ? result : (result.data || []);
             setUsers(rawUsers.map((u: any) => ({
@@ -123,7 +124,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
 
     const fetchTeams = async () => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams`);
             const result = await res.json();
             if (result.success) setTeams(result.data);
         } catch (e) { console.error(e); }
@@ -131,7 +132,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
 
     const fetchWeeklyReport = async () => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/weekly`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/reports/weekly`);
             const result = await res.json();
             if (result.success) setWeeklyReport(result.data);
         } catch (e) { console.error(e); }
@@ -145,7 +146,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
         }
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/history/${id}`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/reports/history/${id}`);
             const result = await res.json();
             if (result.success) {
                 setWeeklyReport(result.data);
@@ -162,7 +163,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
 
     const updateUserRole = async (userId: number, newRole: string) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/${userId}/role`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/users/${userId}/role`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role: newRole, requesterId: user?.id })
@@ -191,7 +192,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
 
     const updateTeamManager = async (teamId: number, managerId: string) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/manager`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/manager`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ managerId: managerId === 'none' ? null : Number(managerId), requesterId: user?.id })
@@ -222,7 +223,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
         if (!confirm('This will seed 3 managers and 6 test teams. Proceed?')) return;
         setSeeding(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/seed/managers`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/seed/managers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ requesterId: user?.id })
@@ -255,7 +256,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     const handleRemoveSponsor = async (id: number) => {
         if (!confirm('Are you sure you want to remove this partner? This action cannot be undone.')) return;
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${id}`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/sponsors/${id}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ requesterId: user?.id })
@@ -284,7 +285,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
 
     const handleUpdateTier = async (id: number, newTier: string) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${id}`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/sponsors/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tier: newTier, requesterId: user?.id })
@@ -316,7 +317,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     const handlePushTelemetry = async () => {
         setPushingTelemetry(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/reports/telemetry/push`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/reports/telemetry/push`, {
                 method: 'POST'
             });
             const result = await res.json();

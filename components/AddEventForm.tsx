@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GAME_TITLES } from './constants';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 const AddEventForm: React.FC<{ requesterId?: number }> = ({ requesterId }) => {
     const { showNotification } = useNotification();
@@ -16,7 +17,7 @@ const AddEventForm: React.FC<{ requesterId?: number }> = ({ requesterId }) => {
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/events`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/events`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, game, date, location, description, image, requesterId })

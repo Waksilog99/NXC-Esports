@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadialBarChart, RadialBar, Cell } from 'recharts';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface PlayerStat {
     name: string;
@@ -35,7 +36,7 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/analytics/performers?teamId=${selectedTeamId}`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/analytics/performers?teamId=${selectedTeamId}`);
             if (res.ok) {
                 const result = await res.json();
                 setData(result);

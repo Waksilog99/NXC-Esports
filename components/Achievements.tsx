@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { GAME_TITLES } from './constants';
 import Modal from './Modal';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Achievement {
     id: number;
@@ -45,7 +46,7 @@ const Achievements: React.FC = () => {
 
     useEffect(() => {
         setLoading(true);
-        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/achievements`)
+        fetch(`${GET_API_BASE_URL()}/api/achievements`)
             .then(res => {
                 if (!res.ok) throw new Error(`Server returned ${res.status}`);
                 return res.json();

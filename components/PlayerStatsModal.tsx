@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { calculateKDA, getKDAColor, getTacticalRole } from '../utils/tactical';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 export interface PlayerStats {
     id: number;
@@ -53,7 +54,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, userRole, currentUserId, tr
         if (player && isOpen && userRole && showAdvancedIntel && isAuthorized(userRole)) {
             setLoadingBreakdown(true);
             setBreakdownError(null);
-            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players/${player.id}/stats/breakdown`)
+            fetch(`${GET_API_BASE_URL()}/api/players/${player.id}/stats/breakdown`)
                 .then(res => {
                     if (!res.ok) throw new Error('Tactical Neural Link Failure: Terminal Unresponsive');
                     return res.json();
@@ -129,7 +130,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, userRole, currentUserId, tr
 
         setLoadingMatchIntel(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${type}/${matchId}/stats`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/${type}/${matchId}/stats`);
             const result = await res.json();
             if (result.success) {
                 setMatchIntelDetail({
@@ -653,7 +654,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, userRole, currentUserId, tr
                                                             setSelectedMatchForStats({ id: m.matchId, type: m.type, opponent: m.opponent, date: m.date });
                                                             setLoadingDetails(true);
                                                             const endpoint = m.type === 'scrim' ? `scrims/${m.matchId}/stats` : `tournaments/${m.matchId}/stats`;
-                                                            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${endpoint}`)
+                                                            fetch(`${GET_API_BASE_URL()}/api/${endpoint}`)
                                                                 .then(res => res.json())
                                                                 .then(result => {
                                                                     if (result.success) setMatchDetails(Array.isArray(result.data) ? result.data : result.data.stats || []);

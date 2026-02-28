@@ -1,12 +1,15 @@
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "./firebaseConfig";
 import { useState, useEffect } from "react";
+import { GET_API_BASE_URL } from "../utils/apiUtils";
+
+const API_BASE_URL = GET_API_BASE_URL();
 
 const googleProvider = new GoogleAuthProvider();
 
 export const signup = async (fullname: string, username: string, email: string, password: string) => {
     try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/signup`, {
+        const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fullname, username, email, password }),
@@ -40,7 +43,7 @@ export const signup = async (fullname: string, username: string, email: string, 
 
 export const login = async (username: string, password: string) => {
     try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, {
+        const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
@@ -115,7 +118,7 @@ export const logout = async () => {
 };
 
 export const changePassword = async (userId: number, oldPass: string, newPass: string) => {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/change-password`, {
+    const res = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, oldPassword: oldPass, newPassword: newPass })
@@ -128,7 +131,7 @@ export const changePassword = async (userId: number, oldPass: string, newPass: s
 };
 
 export const deleteAccount = async (userId: number) => {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/${userId}`, {
+    const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'DELETE'
     });
     const result = await res.json();
@@ -144,7 +147,7 @@ export const deleteAccount = async (userId: number) => {
 // Updated for compatibility with new schema
 const syncUserToBackend = async (user: User, additionalData?: { birthday?: string, role?: string }) => {
     try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/sync`, {
+        const response = await fetch(`${API_BASE_URL}/api/users/sync`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

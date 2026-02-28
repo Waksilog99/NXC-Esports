@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface TeamStats {
     gamesPlayed: number;
@@ -19,7 +20,7 @@ const PerformanceTracker: React.FC<{ teamId: number }> = ({ teamId }) => {
     useEffect(() => {
         setLoading(true);
         setError(null);
-        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/stats`)
+        fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/stats`)
             .then(async res => {
                 if (!res.ok) {
                     if (res.status === 404) throw new Error('API Endpoint Not Found (404)');

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { GAME_TITLES } from './constants';
 import Modal from './Modal';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Event {
     id: number;
@@ -19,7 +20,7 @@ const Events: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
     useEffect(() => {
-        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/events`)
+        fetch(`${GET_API_BASE_URL()}/api/events`)
             .then(res => res.json())
             .then(result => {
                 if (result.success) {

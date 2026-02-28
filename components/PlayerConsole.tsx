@@ -3,6 +3,7 @@ import TeamManagement from './TeamManagement';
 import QuotaTracker from './QuotaTracker';
 import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
 import Playbook from './Playbook';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface PlayerConsoleProps {
     userId: number;
@@ -22,7 +23,7 @@ const PlayerConsole: React.FC<PlayerConsoleProps> = ({ userId, userRole, onBack 
     useEffect(() => {
         if (!userId) return;
         // Fetch the player's team based on their userId
-        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players?userId=${userId}`)
+        fetch(`${GET_API_BASE_URL()}/api/players?userId=${userId}`)
             .then(res => res.json())
             .then(result => {
                 if (result.success) {

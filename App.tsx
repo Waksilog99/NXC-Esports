@@ -20,6 +20,9 @@ import { useUser } from './services/authService';
 import { useTheme } from './hooks/useTheme';
 import ErrorBoundary from './components/ErrorBoundary';
 import { NotificationProvider } from './hooks/useNotification';
+import { GET_API_BASE_URL } from './utils/apiUtils';
+
+const API_BASE_URL = GET_API_BASE_URL();
 
 const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -110,8 +113,6 @@ const App: React.FC = () => {
       }
       setIsRoleLoading(true);
       try {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
         // Fetch User Data
         const response = await fetch(`${API_BASE_URL}/api/users`);
         const data = await response.json();

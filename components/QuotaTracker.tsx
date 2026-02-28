@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GAME_CATEGORY } from './constants';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 const scrollbarStyle = `
 .custom-scrollbar::-webkit-scrollbar {
@@ -85,7 +86,7 @@ const QuotaTracker: React.FC<{
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/quotas?week=${currentWeek}`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/quotas?week=${currentWeek}`);
             const result = await res.json();
             if (result.success) {
                 const data = result.data;
@@ -177,7 +178,7 @@ const QuotaTracker: React.FC<{
             const aimGoal = (baseQuota?.baseAimKills || 0) + (progress?.punishmentKills || 0) + (progress?.carryOverKills || 0);
             const grindGoal = (baseQuota?.baseGrindRG || 0) + (progress?.punishmentRG || 0) + (progress?.carryOverRG || 0);
 
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players/${playerId}/quota/update`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/players/${playerId}/quota/update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

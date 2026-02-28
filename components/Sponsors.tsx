@@ -10,6 +10,7 @@ interface Sponsor {
     website: string;
 }
 
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 import RocketLoader from './RocketLoader';
 import PartnershipModal from './PartnershipModal';
 import MediaKitModal from './MediaKitModal';
@@ -22,7 +23,7 @@ const Sponsors: React.FC = () => {
     const [showMediaKit, setShowMediaKit] = useState(false);
 
     useEffect(() => {
-        fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`)
+        fetch(`${GET_API_BASE_URL()}/api/sponsors`)
             .then(res => res.json())
             .then(result => {
                 if (result.success) {

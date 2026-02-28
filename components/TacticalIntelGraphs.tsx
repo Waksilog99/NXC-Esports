@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { calculateKDA, getKDAColor } from '../utils/tactical';
 import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface TacticalIntelGraphsProps {
     teamId?: number | null;
@@ -452,7 +453,7 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
         // Since we now have the ID from the backend stats, we can fetch the full player details 
         // using the new /api/teams/:id endpoint which includes players.
 
-        const API = import.meta.env.VITE_API_BASE_URL;
+        const API = GET_API_BASE_URL();
         fetch(`${API}/api/teams/${selectedTeamId}`)
             .then(res => res.json())
             .then(result => {
@@ -486,7 +487,7 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
 
     const selectedTeam = availableTeams.find(t => t.id === selectedTeamId) || availableTeams[0];
 
-    const API = import.meta.env.VITE_API_BASE_URL;
+    const API = GET_API_BASE_URL();
 
     useEffect(() => {
         if (availableTeams.length > 0 && !selectedTeamId) {
