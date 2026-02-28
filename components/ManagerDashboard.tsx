@@ -328,7 +328,7 @@ const ManagerDashboard: React.FC<{
                 <div className="space-y-12 animate-in fade-in duration-700">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                         {/* Unit Initialization Form */}
-                        <form onSubmit={handleCreateTeam} className="space-y-6 bg-white dark:bg-black/40 p-8 md:p-10 rounded-[32px] border border-slate-200 dark:border-white/5 relative overflow-hidden" style={{ boxShadow: 'var(--card-shadow)' }}>
+                        <form onSubmit={handleCreateTeam} className="space-y-6 bg-white dark:bg-black/40 p-8 md:p-10 rounded-[32px] border border-slate-200 dark:border-white/5 relative" style={{ boxShadow: 'var(--card-shadow)' }}>
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500/0 via-purple-500 to-purple-500/0" />
                             <h3 className="text-xl font-black text-[var(--text-color)] mb-6 uppercase tracking-tight flex items-center">
                                 <span className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center mr-3 text-purple-500">
@@ -364,7 +364,7 @@ const ManagerDashboard: React.FC<{
                         </form>
 
                         {/* Operative Matrix Form */}
-                        <form onSubmit={handleAddPlayer} className="space-y-6 bg-white dark:bg-black/40 p-8 md:p-10 rounded-[32px] border border-slate-200 dark:border-white/5 relative overflow-hidden" style={{ boxShadow: 'var(--card-shadow)' }}>
+                        <form onSubmit={handleAddPlayer} className="space-y-6 bg-white dark:bg-black/40 p-8 md:p-10 rounded-[32px] border border-slate-200 dark:border-white/5 relative" style={{ boxShadow: 'var(--card-shadow)' }}>
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/0 via-amber-500 to-amber-500/0" />
                             <h3 className="text-xl font-black text-[var(--text-color)] mb-6 uppercase tracking-tight flex items-center">
                                 <span className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center mr-3 text-amber-500">
@@ -396,7 +396,7 @@ const ManagerDashboard: React.FC<{
                                             </div>
                                         </div>
                                         {showSquadResults && (
-                                            <div className="absolute top-full left-0 w-full bg-white dark:bg-[#0d0d14] border border-t-0 border-slate-200 dark:border-white/10 rounded-b-xl z-[60] shadow-2xl max-h-40 overflow-y-auto custom-scrollbar">
+                                            <div className="absolute top-full left-0 w-full bg-white dark:bg-[#0d0d14] border border-t-0 border-slate-200 dark:border-white/10 rounded-b-xl z-[60] shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
                                                 {teams.filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase())).map(t => (
                                                     <div
                                                         key={t.id}
@@ -441,7 +441,7 @@ const ManagerDashboard: React.FC<{
                                             </div>
                                         </div>
                                         {showPersonnelResults && (
-                                            <div className="absolute top-full left-0 w-full bg-white dark:bg-[#0d0d14] border border-t-0 border-slate-200 dark:border-white/10 rounded-b-xl z-[60] shadow-2xl max-h-40 overflow-y-auto custom-scrollbar">
+                                            <div className="absolute top-full left-0 w-full bg-white dark:bg-[#0d0d14] border border-t-0 border-slate-200 dark:border-white/10 rounded-b-xl z-[60] shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
                                                 {usersList.filter(u =>
                                                     u.username.toLowerCase().includes(personnelSearch.toLowerCase()) ||
                                                     (u.fullname && u.fullname.toLowerCase().includes(personnelSearch.toLowerCase())) ||
