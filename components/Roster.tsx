@@ -263,7 +263,7 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
                       {/* Top Rank Badge */}
                       <div className="absolute top-6 left-6">
                         <span className="px-4 py-1.5 bg-white/60 dark:bg-black/60 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-lg text-[8px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.3em]">
-                          Lvl // {player.level || 1}
+                          {player.level && player.level >= 1000000 ? 'COACH' : `Lvl // ${player.level || 1}`}
                         </span>
                       </div>
                     </div>

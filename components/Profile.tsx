@@ -343,7 +343,9 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                             <div className="flex items-center space-x-8">
                                 <div className="flex flex-col items-center px-8 py-3 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md shadow-2xl">
                                     <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-[0.4em] mb-1">Operative Rank</span>
-                                    <span className="text-2xl font-black text-amber-400 italic tracking-tighter uppercase">LVL {profile.level || 1}</span>
+                                    <span className="text-2xl font-black text-amber-400 italic tracking-tighter uppercase">
+                                        {profile.level && profile.level >= 1000000 ? 'COACH' : `LVL ${profile.level || 1}`}
+                                    </span>
                                 </div>
                                 <div className="flex flex-col items-start">
                                     <span className="text-amber-500 font-black uppercase text-[10px] tracking-[0.5em] mb-1 px-4 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/20">{profile.role}</span>
