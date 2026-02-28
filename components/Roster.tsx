@@ -81,6 +81,19 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
     if (gameFilter !== 'All Games') {
       result = result.filter(t => t.game === gameFilter);
     }
+
+    // Ensure coaches are always at the end of the roster
+    result = result.map(team => ({
+      ...team,
+      players: [...team.players].sort((a, b) => {
+        const aIsCoach = a.role?.toLowerCase().includes('coach');
+        const bIsCoach = b.role?.toLowerCase().includes('coach');
+        if (aIsCoach && !bIsCoach) return 1;
+        if (!aIsCoach && bIsCoach) return -1;
+        return 0;
+      })
+    }));
+
     if (searchQuery) {
       result = result.map(team => ({
         ...team,
