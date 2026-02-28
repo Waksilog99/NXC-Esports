@@ -138,7 +138,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
     };
 
     initDashboard();
-  }, []);
+
+    const handleRefresh = () => {
+      console.log("[DASHBOARD] Real-time sync triggered");
+      loadScrimStats(selectedTeamId ?? undefined);
+      if (activeTab === 'tactical') loadTourStats(selectedTeamId ?? undefined);
+    };
+
+    window.addEventListener('nxc-db-refresh', handleRefresh);
+    return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
+  }, [userId, selectedTeamId, activeTab]);
 
   // ── Load tournament stats when Tactical tab is first opened ───────────────
   useEffect(() => {

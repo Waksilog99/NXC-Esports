@@ -50,32 +50,42 @@ const PlayerStatsModal = ({ player, isOpen, onClose, userRole, currentUserId, tr
         return roles.some(r => ['manager', 'coach', 'admin', 'ceo'].includes(r));
     };
 
-    useEffect(() => {
+    const fetchBreakdown = async () => {
         if (player && isOpen && userRole && showAdvancedIntel && isAuthorized(userRole)) {
             setLoadingBreakdown(true);
             setBreakdownError(null);
-            fetch(`${GET_API_BASE_URL()}/api/players/${player.id}/stats/breakdown`)
-                .then(res => {
-                    if (!res.ok) throw new Error('Tactical Neural Link Failure: Terminal Unresponsive');
-                    return res.json();
-                })
-                .then(result => {
-                    if (result.success) {
-                        setBreakdown(result.data);
-                    } else {
-                        throw new Error(result.error || 'Intelligence Stream Corrupted');
-                    }
-                })
-                .catch(err => {
-                    console.error("Error fetching breakdown", err);
-                    setBreakdownError(err.message);
-                })
-                .finally(() => setLoadingBreakdown(false));
+            try {
+                const res = await fetch(`${GET_API_BASE_URL()}/api/players/${player.id}/stats/breakdown`);
+                if (!res.ok) throw new Error('Tactical Neural Link Failure: Terminal Unresponsive');
+                const result = await res.json();
+                if (result.success) {
+                    setBreakdown(result.data);
+                } else {
+                    throw new Error(result.error || 'Intelligence Stream Corrupted');
+                }
+            } catch (err: any) {
+                console.error("Error fetching breakdown", err);
+                setBreakdownError(err.message);
+            } finally {
+                setLoadingBreakdown(false);
+            }
         } else {
             setBreakdown(null);
             setDetailView(null);
             setBreakdownError(null);
         }
+    };
+
+    useEffect(() => {
+        fetchBreakdown();
+
+        const handleRefresh = () => {
+            console.log("[PLAYER-STATS-MODAL] Real-time sync triggered");
+            fetchBreakdown();
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, [player, isOpen, userRole, showAdvancedIntel]);
 
     const getDetailData = () => {

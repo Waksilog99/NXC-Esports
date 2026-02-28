@@ -19,7 +19,8 @@ const Events: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
-    useEffect(() => {
+    const fetchEvents = () => {
+        setLoading(true);
         fetch(`${GET_API_BASE_URL()}/api/events`)
             .then(res => res.json())
             .then(result => {
@@ -29,6 +30,18 @@ const Events: React.FC = () => {
             })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchEvents();
+
+        const handleRefresh = () => {
+            console.log("[EVENTS] Real-time sync triggered");
+            fetchEvents();
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, []);
 
     const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);

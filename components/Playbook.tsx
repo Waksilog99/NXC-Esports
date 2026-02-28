@@ -57,30 +57,31 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
 
     const { showNotification } = useNotification();
 
-    useEffect(() => {
-        // Fetch teams user manages or is part of
-        const fetchTeams = async () => {
-            try {
-                // If manager or coach, fetch teams they manage/assist. If player, fetch teams they are in.
-                const isManagement = ['manager', 'coach', 'admin', 'ceo'].some(r => userRole?.includes(r));
-                let url = `${GET_API_BASE_URL()}/api/teams`;
+    // Fetch teams user manages or is part of
+    const fetchTeams = async () => {
+        try {
+            // If manager or coach, fetch teams they manage/assist. If player, fetch teams they are in.
+            const isManagement = ['manager', 'coach', 'admin', 'ceo'].some(r => userRole?.includes(r));
+            let url = `${GET_API_BASE_URL()}/api/teams`;
 
-                if (userId && !['admin', 'ceo'].some(r => userRole?.includes(r))) {
-                    url += `?requesterId=${userId}`;
-                }
-
-                const res = await fetch(url);
-                const result = await res.json();
-                if (result.success) {
-                    setTeams(result.data);
-                    if (!selectedTeamId && result.data.length > 0) {
-                        setSelectedTeamId(result.data[0].id);
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to fetch teams", err);
+            if (userId && !['admin', 'ceo'].some(r => userRole?.includes(r))) {
+                url += `?requesterId=${userId}`;
             }
-        };
+
+            const res = await fetch(url);
+            const result = await res.json();
+            if (result.success) {
+                setTeams(result.data);
+                if (!selectedTeamId && result.data.length > 0) {
+                    setSelectedTeamId(result.data[0].id);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch teams", err);
+        }
+    };
+
+    useEffect(() => {
         fetchTeams();
     }, [userRole, userId, lockedTeamId]);
 
@@ -109,6 +110,17 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
         } else {
             setStrats([]);
         }
+
+        const handleRefresh = () => {
+            console.log("[PLAYBOOK] Real-time sync triggered");
+            fetchTeams();
+            if (selectedTeamId) {
+                fetchStrats(selectedTeamId as number);
+            }
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, [selectedTeamId, userId]);
 
     const handleSaveStrat = async (e: React.FormEvent) => {

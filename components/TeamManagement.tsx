@@ -141,56 +141,66 @@ const TeamManagement: React.FC<{
         }
     };
 
-    useEffect(() => {
+    const fetchTeams = async () => {
         let url = `${GET_API_BASE_URL()}/api/teams?requesterId=${userId}`;
         if (lockedTeamId) {
             url += `&id=${lockedTeamId}`;
         }
 
-        fetch(url)
-            .then(res => res.json())
-            .then(result => {
-                if (result.success) {
-                    const data = result.data;
-                    setTeams(data);
-                    if (lockedTeamId) {
-                        setSelectedTeamId(lockedTeamId);
-                    } else if (data.length > 0) {
-                        setSelectedTeamId(data[0].id);
-                    }
-                } else {
-                    showNotification({ message: result.error || 'Failed to fetch teams', type: 'error' });
+        try {
+            const res = await fetch(url);
+            const result = await res.json();
+            if (result.success) {
+                const data = result.data;
+                setTeams(data);
+                if (lockedTeamId) {
+                    setSelectedTeamId(lockedTeamId);
+                } else if (data.length > 0 && !selectedTeamId) {
+                    setSelectedTeamId(data[0].id);
                 }
-            })
-            .catch(err => {
-                console.error("Teams fetch error:", err);
-                showNotification({ message: 'Network error while fetching teams', type: 'error' });
-            });
+            } else {
+                showNotification({ message: result.error || 'Failed to fetch teams', type: 'error' });
+            }
+        } catch (err) {
+            console.error("Teams fetch error:", err);
+            showNotification({ message: 'Network error while fetching teams', type: 'error' });
+        }
+    };
+
+    const fetchScrims = async () => {
+        if (!selectedTeamId) return;
+        try {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/${apiBase}?teamId=${selectedTeamId}&requesterId=${userId}`);
+            const result = await res.json();
+            if (result.success) {
+                setScrims(result.data);
+            } else {
+                showNotification({ message: result.error || `Failed to fetch ${labelPlural.toLowerCase()}`, type: 'error' });
+            }
+        } catch (err) {
+            console.error(`${apiBase} fetch error:`, err);
+            showNotification({ message: `Network error while fetching ${labelPlural.toLowerCase()}`, type: 'error' });
+        }
+    };
+
+    useEffect(() => {
+        fetchTeams();
     }, [userId, userRole, lockedTeamId]);
 
     useEffect(() => {
-        if (onViewChange) {
-            onViewChange(view);
-        }
-    }, [view, onViewChange]);
+        fetchScrims();
+    }, [selectedTeamId, view, apiBase, userId]); // apiBase added to handle mode changes
 
     useEffect(() => {
-        if (selectedTeamId) {
-            fetch(`${GET_API_BASE_URL()}/api/${apiBase}?teamId=${selectedTeamId}&requesterId=${userId}`)
-                .then(res => res.json())
-                .then(result => {
-                    if (result.success) {
-                        setScrims(result.data);
-                    } else {
-                        showNotification({ message: result.error || `Failed to fetch ${labelPlural.toLowerCase()}`, type: 'error' });
-                    }
-                })
-                .catch(err => {
-                    console.error(`${apiBase} fetch error:`, err);
-                    showNotification({ message: `Network error while fetching ${labelPlural.toLowerCase()}`, type: 'error' });
-                });
-        }
-    }, [selectedTeamId, view]); // Refresh on view change (after add)
+        const handleRefresh = () => {
+            console.log(`[TEAM-MANAGEMENT] Real-time sync triggered (${mode})`);
+            fetchTeams();
+            fetchScrims();
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
+    }, [selectedTeamId, mode]); // Depend on selectedTeamId to ensure closure has current ID
 
     const handleCreateScrim = async (e: React.FormEvent) => {
         e.preventDefault();

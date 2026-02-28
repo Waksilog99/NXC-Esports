@@ -120,6 +120,14 @@ const QuotaTracker: React.FC<{
 
     useEffect(() => {
         fetchData();
+
+        const handleRefresh = () => {
+            console.log("[QUOTA-TRACKER] Real-time sync triggered");
+            fetchData();
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, [playerId, teamId]);
 
     const handleUploadAimScreenshot = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -22,7 +22,8 @@ const Sponsors: React.FC = () => {
     const [showPartnershipModal, setShowPartnershipModal] = useState(false);
     const [showMediaKit, setShowMediaKit] = useState(false);
 
-    useEffect(() => {
+    const fetchSponsors = () => {
+        setLoading(true);
         fetch(`${GET_API_BASE_URL()}/api/sponsors`)
             .then(res => res.json())
             .then(result => {
@@ -32,6 +33,18 @@ const Sponsors: React.FC = () => {
             })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchSponsors();
+
+        const handleRefresh = () => {
+            console.log("[SPONSORS] Real-time sync triggered");
+            fetchSponsors();
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, []);
 
     const [selectedSponsor, setSelectedSponsor] = useState<Sponsor | null>(null);

@@ -53,7 +53,7 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
-  useEffect(() => {
+  const fetchTeams = () => {
     setLoading(true);
     const API_BASE_URL = GET_API_BASE_URL();
     fetch(`${API_BASE_URL}/api/teams`)
@@ -73,6 +73,18 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
         setError("Failed to initialize roster data. Tactical link offline.");
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchTeams();
+
+    const handleRefresh = (e: any) => {
+      console.log("[ROSTER] Real-time sync triggered");
+      fetchTeams();
+    };
+
+    window.addEventListener('nxc-db-refresh', handleRefresh);
+    return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
   }, []);
 
   const games = useMemo(() => ['All Games', ...GAME_TITLES], []);

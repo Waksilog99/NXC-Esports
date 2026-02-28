@@ -96,47 +96,55 @@ const ManagerDashboard: React.FC<{
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            if (view === 'menu') return;
-            setLoading(true);
-            setError(null);
-            try {
-                // Teams
-                if (view === 'operative-matrix' || view === 'performance-tracker' || view === 'tournament-network') {
-                    const url = ((userRole === 'manager' || userRole === 'coach') && userId)
-                        ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
-                        : `${GET_API_BASE_URL()}/api/teams`;
-                    const res = await fetch(url);
-                    const result = await res.json();
-                    if (result.success) {
-                        setTeams(result.data);
-                    } else {
-                        throw new Error(result.error || 'Failed to fetch teams');
-                    }
+    const fetchManagerData = async () => {
+        if (view === 'menu') return;
+        setLoading(true);
+        setError(null);
+        try {
+            // Teams
+            if (view === 'operative-matrix' || view === 'performance-tracker' || view === 'tournament-network') {
+                const url = ((userRole === 'manager' || userRole === 'coach') && userId)
+                    ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
+                    : `${GET_API_BASE_URL()}/api/teams`;
+                const res = await fetch(url);
+                const result = await res.json();
+                if (result.success) {
+                    setTeams(result.data);
+                } else {
+                    throw new Error(result.error || 'Failed to fetch teams');
                 }
-
-                // Users
-                if (view === 'operative-matrix') {
-                    const res = await fetch(`${GET_API_BASE_URL()}/api/users`);
-                    const result = await res.json();
-                    // /api/users returns a plain array (no success wrapper)
-                    const userArray = Array.isArray(result) ? result : (result.data || []);
-                    if (userArray.length >= 0) {
-                        setUsersList(userArray);
-                    } else {
-                        throw new Error(result.error || 'Failed to fetch user directory');
-                    }
-                }
-            } catch (err: any) {
-                console.error("Manager fetch failed:", err);
-                setError(err.message || "Connection to Identity API severed.");
-            } finally {
-                setLoading(false);
             }
+
+            // Users
+            if (view === 'operative-matrix') {
+                const res = await fetch(`${GET_API_BASE_URL()}/api/users`);
+                const result = await res.json();
+                // /api/users returns a plain array (no success wrapper)
+                const userArray = Array.isArray(result) ? result : (result.data || []);
+                if (userArray.length >= 0) {
+                    setUsersList(userArray);
+                } else {
+                    throw new Error(result.error || 'Failed to fetch user directory');
+                }
+            }
+        } catch (err: any) {
+            console.error("Manager fetch failed:", err);
+            setError(err.message || "Connection to Identity API severed.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchManagerData();
+
+        const handleRefresh = () => {
+            console.log("[MANAGER-DASHBOARD] Real-time sync triggered");
+            fetchManagerData();
         };
 
-        fetchData();
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, [view]);
 
     const handleCreateTeam = async (e: React.FormEvent) => {

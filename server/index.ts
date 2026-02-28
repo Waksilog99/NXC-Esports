@@ -105,10 +105,39 @@ app.use('/api/users/:id/avatar', express.urlencoded({ limit: '50mb', extended: t
 app.use('/api/sponsors/:id/qr', express.json({ limit: '50mb' }));
 app.use('/api/site-settings', express.json({ limit: '50mb' }));
 app.use('/api/orders', express.json({ limit: '50mb' }));
+// ── Real-time Support (SSE) ───────────────────────────────────────────────────
+let sseClients: { id: number, res: express.Response }[] = [];
+
+app.get('/api/realtime', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const clientId = Date.now();
+    const newClient = { id: clientId, res };
+    sseClients.push(newClient);
+
+    console.log(`[Realtime] Sync channel established for client ${clientId}. Total: ${sseClients.length}`);
+
+    req.on('close', () => {
+        sseClients = sseClients.filter(c => c.id !== clientId);
+        console.log(`[Realtime] Sync channel closed for client ${clientId}. Total: ${sseClients.length}`);
+    });
+});
+
+const notifyRefresh = () => {
+    if (sseClients.length === 0) return;
+    console.log(`[Realtime] Broadcasting global refresh signal to ${sseClients.length} clients...`);
+    sseClients.forEach(client => {
+        client.res.write('data: refresh\n\n');
+    });
+};
+
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 // Test Route for Discord Notification (Moved to top for debugging)
 app.post('/api/test/notification', async (req, res) => {
@@ -306,6 +335,7 @@ app.post('/api/auth/signup', async (req, res) => {
             role: 'member'
         }).returning();
         const newUser = newUserRows[0];
+        notifyRefresh();
         res.json({ success: true, message: 'Signup success', data: newUser });
     } catch (error: any) {
         console.error("Error in POST /api/auth/signup:", error);
@@ -438,6 +468,7 @@ app.post('/api/users/sync', async (req, res) => {
                 (updatedUser as any).level = determineLevel(updatedUser.role, updatedUser.level);
             }
 
+            notifyRefresh();
             return res.json({ message: 'User synced', user: updatedUser });
         } else {
             if (!googleId) return res.status(404).json({ error: 'Sign up first' });
@@ -479,6 +510,7 @@ app.post('/api/users/sync', async (req, res) => {
                 (enrichedNewUser as any).level = determineLevel(enrichedNewUser.role, enrichedNewUser.level);
             }
 
+            notifyRefresh();
             return res.json({ success: true, message: 'User created', data: enrichedNewUser });
         }
     } catch (error: any) {
@@ -494,6 +526,7 @@ app.put('/api/users/:id/role', async (req, res) => {
         const updatedRows = await db.update(users).set({ role }).where(eq(users.id, Number(id))).returning();
         const updatedUser = updatedRows[0];
         if (!updatedUser) return res.status(404).json({ success: false, error: 'User not found' });
+        notifyRefresh();
         res.json({ success: true, data: updatedUser });
     } catch (error: any) {
         console.error("Error in PUT /api/users/:id/role:", error);
@@ -528,6 +561,7 @@ app.put('/api/users/:id/profile', async (req, res) => {
         if (!updatedUser) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
+        notifyRefresh();
         res.json({ success: true, data: updatedUser });
     } catch (error: any) {
         console.error("Error in PUT /api/users/:id/profile:", error);
@@ -550,7 +584,8 @@ app.post('/api/auth/change-password', async (req, res) => {
 
         const hashedPassword = await hashPassword(newPassword);
         await db.update(users).set({ password: hashedPassword }).where(eq(users.id, uId));
-        res.json({ success: true, message: 'Password updated successfully' });
+        notifyRefresh();
+        res.json({ success: true, message: 'Identity credentials reset successful.' });
     } catch (error: any) {
         console.error("Error in POST /api/auth/change-password:", error);
         res.status(500).json({ success: false, error: 'Failed to change password', details: IS_PROD ? undefined : error.message });
@@ -580,6 +615,7 @@ app.delete('/api/users/:id', async (req, res) => {
         await db.delete(users).where(eq(users.id, userId));
         // Note: result.changes is SQLite specific. For Postgres, we can check returning() or just assume success if no throw.
         // I'll remove the 404 check for simplicity in the agnostic layer unless I use returning().
+        notifyRefresh();
         res.json({ success: true, message: 'Account deleted successfully' });
     } catch (error: any) {
         console.error("Error in DELETE /api/users/:id:", error);
@@ -608,6 +644,7 @@ app.post('/api/achievements', async (req, res) => {
             title, date, description, placement: placement || 'Finalist', image, game
         }).returning();
         const newAchievement = newAchievementRows[0];
+        notifyRefresh();
         res.json({ success: true, data: newAchievement });
     } catch (e: any) {
         console.error("Error creating achievement:", e);
@@ -634,6 +671,7 @@ app.post('/api/events', async (req, res) => {
             title, date, location, description, status: 'upcoming', image
         }).returning();
         const newEvent = newEventRows[0];
+        notifyRefresh();
         res.json({ success: true, data: newEvent });
     } catch (e: any) {
         console.error("Error creating event:", e);
@@ -909,6 +947,7 @@ app.put('/api/sponsors/:id/qr', async (req, res) => {
         }
 
         const updated = await db.update(sponsors).set({ qrEWallet, qrBank }).where(eq(sponsors.id, Number(id))).returning();
+        notifyRefresh();
         res.json({ success: true, data: updated[0] });
     } catch (error: any) {
         res.status(500).json({ success: false, error: 'Failed to update Sponsor QR' });
@@ -948,6 +987,7 @@ app.put('/api/site-settings', async (req, res) => {
         } else {
             result = await db.update(siteSettings).set({ waksQrEWallet, waksQrBank }).returning();
         }
+        notifyRefresh();
         res.json({ success: true, data: result[0] });
     } catch (error: any) {
         res.status(500).json({ success: false, error: 'Failed to update site settings' });
@@ -996,6 +1036,7 @@ app.post('/api/sponsors', async (req, res) => {
             }
         }
 
+        notifyRefresh();
         res.json({ success: true, data: newSponsor });
     } catch (error: any) {
         console.error("Error in POST /api/sponsors:", error);
@@ -1027,6 +1068,7 @@ app.put('/api/sponsors/:id', async (req, res) => {
             console.error(`[DEBUG] Sponsor with ID ${id} not found.`);
             return res.status(404).json({ success: false, error: 'Sponsor not found' });
         }
+        notifyRefresh();
         res.json({ success: true, data: updatedSponsor });
         console.log('[DEBUG] Response sent successfully.');
     } catch (e: any) {
@@ -1042,6 +1084,7 @@ app.delete('/api/sponsors/:id', async (req, res) => {
         // For Postgres compatibility, result doesn't always have .changes directly on the result object in all drivers
         // SQLite: result.changes. Postgres: result is often an array or similar.
         // We'll trust the execution succeeded unless it throws.
+        notifyRefresh();
         res.json({ success: true, message: 'Sponsor deleted successfully' });
         return;
     } catch (e: any) {
@@ -1159,6 +1202,7 @@ app.post('/api/seed/massive', async (req, res) => {
                 }
             }
         }
+        notifyRefresh();
         res.json({ success: true, message: 'Massive dataset seeded successfully' });
     } catch (e: any) {
         console.error("Error in massive seed:", e);
@@ -1581,6 +1625,7 @@ app.post('/api/teams', async (req, res) => {
             managerId: managerId ? Number(managerId) : null
         }).returning();
         const newTeam = newTeamRes[0];
+        notifyRefresh();
         res.json({ success: true, data: newTeam });
     } catch (error: any) {
         console.error("Error in POST /api/teams:", error);
@@ -1600,6 +1645,7 @@ app.put('/api/teams/:id/manager', async (req, res) => {
             return res.status(403).json({ success: false, error: 'Access Denied: Only Admin, CEO, or Manager can reassign unit command.' });
         }
         await db.update(teams).set({ managerId: managerId ? Number(managerId) : null }).where(eq(teams.id, Number(id)));
+        notifyRefresh();
         res.json({ success: true });
     } catch (error: any) {
         console.error("Error in PUT /api/teams/:id/manager:", error);
@@ -2064,6 +2110,7 @@ app.post('/api/teams/:id/settings/quota', async (req, res) => {
         } else {
             await db.insert(rosterQuotas).values({ teamId, baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG });
         }
+        notifyRefresh();
         res.json({ success: true, message: 'Settings updated' });
     } catch (error: any) {
         console.error("Quota Update Error:", error);
@@ -2097,7 +2144,7 @@ app.post('/api/players/:id/quota/update', async (req, res) => {
                 updatedAt: new Date()
             })
             .where(eq(playerQuotaProgress.id, progress.id));
-
+        notifyRefresh();
         res.json({ success: true, data: { totalAimKills: aimKillsTotal, totalGrindRG: grindRGTotal } });
     } catch (error: any) {
         console.error("Progress Update Error:", error);
@@ -2146,7 +2193,7 @@ app.post('/api/players/:id/quota/review', async (req, res) => {
                 updatedAt: new Date()
             })
             .where(eq(playerQuotaProgress.id, progress.id));
-
+        notifyRefresh();
         res.json({ success: true, message: 'Quota reviewed' });
     } catch (error: any) {
         console.error("Quota Review Error:", error);
@@ -2201,7 +2248,7 @@ app.post('/api/players/:id/quota/custom', async (req, res) => {
                 updatedAt: new Date()
             })
             .where(eq(playerQuotaProgress.id, progress.id));
-
+        notifyRefresh();
         res.json({ success: true, message: 'Custom quota set' });
     } catch (error: any) {
         console.error("Custom Quota Error:", error);
@@ -2636,6 +2683,7 @@ export async function generateAndSendWeeklyReport() {
                 });
                 console.log(`[VAULT] Performance snapshot ARCHIVED for period ${weekStartStr} to ${weekEndStr}`);
             }
+            notifyRefresh();
         } catch (snapshotError) {
             console.error('[VAULT] Snapshot failed:', snapshotError);
         }
@@ -2849,6 +2897,7 @@ app.post('/api/teams/:id/players', async (req, res) => {
         const newPlayer = newPlayerRows[0];
 
         // Refresh user role if it was current user or broadcast (simplified: just return new role info if helpful)
+        notifyRefresh();
         res.json({ success: true, data: { player: newPlayer, newRole: 'member,player' } });
     } catch (error: any) {
         console.error("Error in POST /api/teams/:id/players:", error);
@@ -2897,6 +2946,7 @@ app.delete('/api/teams/:teamId/players/:playerId', async (req, res) => {
         await db.update(players)
             .set({ teamId: null, isActive: false })
             .where(and(eq(players.teamId, Number(teamId)), eq(players.id, Number(playerId))));
+        notifyRefresh();
         res.json({ success: true });
     } catch (error: any) {
         console.error("Error in DELETE /api/teams/:teamId/players/:playerId:", error);
@@ -2984,6 +3034,7 @@ app.post('/api/scrims', async (req, res) => {
         }).returning();
         const newScrim = newScrimRows[0];
 
+        notifyRefresh();
         res.json({ success: true, data: newScrim });
 
         // Discord Notification (fire-and-forget, does not block response)
@@ -3052,6 +3103,7 @@ app.put('/api/scrims/:id/status', async (req, res) => {
         }
         const updatedRows = await db.update(scrims).set({ status }).where(eq(scrims.id, Number(id))).returning();
         const updated = updatedRows[0];
+        notifyRefresh();
         res.json({ success: true, data: updated });
     } catch (error: any) {
         console.error("Error in PUT /api/scrims/:id/status:", error);
@@ -3096,6 +3148,7 @@ app.put('/api/scrims/:id', async (req, res) => {
             maps: maps ? JSON.stringify(maps) : scrim.maps
         }).where(eq(scrims.id, Number(id))).returning();
 
+        notifyRefresh();
         res.json({ success: true, data: updatedRows[0] });
     } catch (error: any) {
         console.error("Error in PUT /api/scrims/:id:", error);
@@ -3290,6 +3343,7 @@ app.post('/api/tournaments', async (req, res) => {
         }).returning();
         const newTournament = newTournamentRows[0];
 
+        notifyRefresh();
         res.json({ success: true, data: newTournament });
 
         // Discord Notification (fire-and-forget, does not block response)
@@ -3358,6 +3412,7 @@ app.put('/api/tournaments/:id/status', async (req, res) => {
         }
         const updatedRows = await db.update(tournaments).set({ status }).where(eq(tournaments.id, Number(id))).returning();
         const updated = updatedRows[0];
+        notifyRefresh();
         res.json({ success: true, data: updated });
     } catch (error: any) {
         console.error("Error in PUT /api/tournaments/:id/status:", error);
@@ -3402,6 +3457,7 @@ app.put('/api/tournaments/:id', async (req, res) => {
             maps: maps ? JSON.stringify(maps) : tour.maps
         }).where(eq(tournaments.id, Number(id))).returning();
 
+        notifyRefresh();
         res.json({ success: true, data: updatedRows[0] });
     } catch (error: any) {
         console.error("Error in PUT /api/tournaments/:id:", error);
@@ -3501,6 +3557,7 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
                 }
             }
         }
+        notifyRefresh();
         res.json({ success: true, message: 'Tournament results saved' });
     } catch (error: any) {
         console.error("Error in POST /api/tournaments/:id/results:", error);
@@ -3647,6 +3704,7 @@ app.post('/api/scrims/:id/results', async (req, res) => {
             }
         }
 
+        notifyRefresh();
         res.json({ success: true, message: 'Results saved, stats updated, and XP awarded' });
     } catch (error: any) {
         console.error("Error in POST /api/scrims/:id/results:", error);
@@ -3682,6 +3740,7 @@ app.post('/api/products', async (req, res) => {
             imageUrl
         }).returning();
 
+        notifyRefresh();
         res.json({ success: true, data: newProduct[0] });
     } catch (error: any) {
         console.error("POST /api/products Error:", error);
@@ -3695,6 +3754,7 @@ app.put('/api/products/:id/stock', async (req, res) => {
     try {
         const validatedStock = Math.max(0, Number(stock)); // Prevent negative stock
         const updatedProduct = await db.update(products).set({ stock: validatedStock }).where(eq(products.id, Number(id))).returning();
+        notifyRefresh();
         res.json({ success: true, data: updatedProduct[0] });
     } catch (error: any) {
         console.error("PUT /api/products/:id/stock Error:", error);
@@ -3706,6 +3766,7 @@ app.delete('/api/products/:id', async (req, res) => {
     const { id } = req.params;
     try {
         await db.delete(products).where(eq(products.id, Number(id)));
+        notifyRefresh();
         res.json({ success: true, message: "Product deleted" });
     } catch (error: any) {
         console.error("DELETE /api/products/:id Error:", error);
@@ -3780,6 +3841,7 @@ app.post('/api/teams/:id/playbook', async (req, res) => {
             updatedAt: new Date()
         }).returning();
 
+        notifyRefresh();
         res.json({ success: true, data: inserted[0] });
     } catch (error: any) {
         console.error("POST /api/playbook Error:", error.message);
@@ -3819,6 +3881,7 @@ app.put('/api/playbook/:stratId', async (req, res) => {
 
         if (updated.length === 0) return res.status(404).json({ success: false, error: 'Strategy not found in tactical cache.' });
 
+        notifyRefresh();
         res.json({ success: true, data: updated[0] });
     } catch (error: any) {
         console.error("PUT /api/playbook Error:", error.message);
@@ -3849,6 +3912,7 @@ app.delete('/api/playbook/:stratId', async (req, res) => {
 
         if (deleted.length === 0) return res.status(404).json({ success: false, error: 'Strategy not found.' });
 
+        notifyRefresh();
         res.json({ success: true, message: 'Strategy purged from secure storage.' });
     } catch (error: any) {
         console.error("DELETE /api/playbook Error:", error.message);
@@ -3903,6 +3967,7 @@ app.post('/api/playbook/:stratId/copy', async (req, res) => {
             updatedAt: new Date()
         }).returning();
 
+        notifyRefresh();
         res.json({ success: true, data: copy[0], message: 'Tactical asset successfully cloned to target squad.' });
     } catch (error: any) {
         console.error("POST /api/playbook/:stratId/copy Error:", error.message);
@@ -3976,6 +4041,7 @@ app.post('/api/orders', async (req, res) => {
             createdOrders.push(newOrder[0]);
         }
 
+        notifyRefresh();
         res.json({ success: true, data: createdOrders });
     } catch (error: any) {
         console.error("POST /api/orders Error:", error);
@@ -4019,6 +4085,7 @@ app.put('/api/orders/:id/status', async (req, res) => {
         }
 
         const updatedOrder = await db.update(orders).set({ status }).where(eq(orders.id, Number(id))).returning();
+        notifyRefresh();
         res.json({ success: true, data: updatedOrder[0] });
     } catch (error: any) {
         console.error("PUT /api/orders/:id/status Error:", error);

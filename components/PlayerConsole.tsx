@@ -20,27 +20,40 @@ const PlayerConsole: React.FC<PlayerConsoleProps> = ({ userId, userRole, onBack 
     const [currentSubView, setCurrentSubView] = useState<string>('calendar');
     const [isStatsOpen, setIsStatsOpen] = useState(false);
 
-    useEffect(() => {
+    const fetchPlayerInfo = async () => {
         if (!userId) return;
-        // Fetch the player's team based on their userId
-        fetch(`${GET_API_BASE_URL()}/api/players?userId=${userId}`)
-            .then(res => res.json())
-            .then(result => {
-                if (result.success) {
-                    const data = result.data;
-                    const player = Array.isArray(data) ? data[0] : data;
-                    if (player) {
-                        setPlayerInfo(player);
-                        if (player.teamId) {
-                            setPlayersTeamId(player.teamId);
-                        }
+        try {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/players?userId=${userId}`);
+            const result = await res.json();
+            if (result.success) {
+                const data = result.data;
+                const player = Array.isArray(data) ? data[0] : data;
+                if (player) {
+                    setPlayerInfo(player);
+                    if (player.teamId) {
+                        setPlayersTeamId(player.teamId);
                     }
-                } else {
-                    console.error("Player fetch error:", result.error);
                 }
-            })
-            .catch(console.error)
-            .finally(() => setLoading(false));
+            } else {
+                console.error("Player fetch error:", result.error);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPlayerInfo();
+
+        const handleRefresh = () => {
+            console.log("[PLAYER-CONSOLE] Real-time sync triggered");
+            fetchPlayerInfo();
+        };
+
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, [userId]);
 
     if (loading) {

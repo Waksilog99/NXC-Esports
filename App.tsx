@@ -21,10 +21,12 @@ import { useTheme } from './hooks/useTheme';
 import ErrorBoundary from './components/ErrorBoundary';
 import { NotificationProvider } from './hooks/useNotification';
 import { GET_API_BASE_URL } from './utils/apiUtils';
+import { useRealtimeSync } from './hooks/useRealtimeSync';
 
 const API_BASE_URL = GET_API_BASE_URL();
 
 const App: React.FC = () => {
+  useRealtimeSync(); // Global Realtime Sync
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isStoreBtnVisible, setIsStoreBtnVisible] = useState(true);

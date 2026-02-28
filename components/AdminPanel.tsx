@@ -58,54 +58,62 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     const [pushingTelemetry, setPushingTelemetry] = useState(false);
     const [selectedSquadForModal, setSelectedSquadForModal] = useState<any | null>(null);
 
-    useEffect(() => {
-        const fetchAllData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const [usersRes, teamsRes, sponsorsRes, weeklyRes, historyRes] = await Promise.all([
-                    fetch(`${GET_API_BASE_URL()}/api/users`),
-                    fetch(`${GET_API_BASE_URL()}/api/teams`),
-                    fetch(`${GET_API_BASE_URL()}/api/sponsors`),
-                    fetch(`${GET_API_BASE_URL()}/api/reports/weekly`),
-                    fetch(`${GET_API_BASE_URL()}/api/reports/history`)
-                ]);
+    const fetchAllData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [usersRes, teamsRes, sponsorsRes, weeklyRes, historyRes] = await Promise.all([
+                fetch(`${GET_API_BASE_URL()}/api/users`),
+                fetch(`${GET_API_BASE_URL()}/api/teams`),
+                fetch(`${GET_API_BASE_URL()}/api/sponsors`),
+                fetch(`${GET_API_BASE_URL()}/api/reports/weekly`),
+                fetch(`${GET_API_BASE_URL()}/api/reports/history`)
+            ]);
 
-                const [usersData, teamsData, sponsorsData, weeklyData, historyData] = await Promise.all([
-                    usersRes.json(),
-                    teamsRes.json(),
-                    sponsorsRes.json(),
-                    weeklyRes.json(),
-                    historyRes.json()
-                ]);
+            const [usersData, teamsData, sponsorsData, weeklyData, historyData] = await Promise.all([
+                usersRes.json(),
+                teamsRes.json(),
+                sponsorsRes.json(),
+                weeklyRes.json(),
+                historyRes.json()
+            ]);
 
-                const rawUsers = Array.isArray(usersData) ? usersData : (usersData.data || []);
-                if (Array.isArray(rawUsers)) {
-                    setUsers(rawUsers.map((u: any) => ({
-                        id: u.id,
-                        name: u.fullname || u.username,
-                        username: u.username,
-                        email: u.email,
-                        role: u.role,
-                        avatar: u.avatar
-                    })));
-                }
-
-                if (teamsData.success) setTeams(teamsData.data);
-                if (sponsorsData.success) setSponsors(sponsorsData.data);
-                if (weeklyData.success) setWeeklyReport(weeklyData.data);
-                if (historyData.success) setReportHistory(historyData.data);
-
-            } catch (err: any) {
-                console.error("Failed to batch fetch Admin Panel data:", err);
-                setError(err.message || "Failed to establish connection with secure servers.");
-                showNotification({ message: 'Failed to synchronize admin dashboard', type: 'error' });
-            } finally {
-                setLoading(false);
+            const rawUsers = Array.isArray(usersData) ? usersData : (usersData.data || []);
+            if (Array.isArray(rawUsers)) {
+                setUsers(rawUsers.map((u: any) => ({
+                    id: u.id,
+                    name: u.fullname || u.username,
+                    username: u.username,
+                    email: u.email,
+                    role: u.role,
+                    avatar: u.avatar
+                })));
             }
+
+            if (teamsData.success) setTeams(teamsData.data);
+            if (sponsorsData.success) setSponsors(sponsorsData.data);
+            if (weeklyData.success) setWeeklyReport(weeklyData.data);
+            if (historyData.success) setReportHistory(historyData.data);
+
+        } catch (err: any) {
+            console.error("Failed to batch fetch Admin Panel data:", err);
+            setError(err.message || "Failed to establish connection with secure servers.");
+            showNotification({ message: 'Failed to synchronize admin dashboard', type: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAllData();
+
+        const handleRefresh = () => {
+            console.log("[ADMIN] Real-time sync triggered");
+            fetchAllData();
         };
 
-        fetchAllData();
+        window.addEventListener('nxc-db-refresh', handleRefresh);
+        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
     }, []);
 
     const fetchUsers = async () => { /* Keep for targeted re-fetches */
