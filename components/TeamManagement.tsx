@@ -95,6 +95,7 @@ const TeamManagement: React.FC<{
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
     const [viewDate, setViewDate] = useState(new Date());
 
+    const [isEditingDetails, setIsEditingDetails] = useState(false);
     const apiBase = isTournament ? 'tournaments' : 'scrims';
     const labelSingular = isTournament ? 'Tournament' : 'Scrim';
     const labelPlural = isTournament ? 'Tournaments' : 'Scrims';
@@ -223,8 +224,13 @@ const TeamManagement: React.FC<{
 
         try {
             const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-            const res = await fetch(`${API_BASE_URL}/api/${apiBase}`, {
-                method: 'POST',
+            const method = isEditingDetails ? 'PUT' : 'POST';
+            const url = isEditingDetails
+                ? `${API_BASE_URL}/api/${apiBase}/${selectedScrimId}`
+                : `${API_BASE_URL}/api/${apiBase}`;
+
+            const res = await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     teamId: selectedTeamId,
@@ -239,17 +245,19 @@ const TeamManagement: React.FC<{
             const result = await res.json();
             if (result.success) {
                 showNotification({
-                    message: `${labelSingular} scheduled!`,
+                    message: `${labelSingular} ${isEditingDetails ? 'updated' : 'scheduled'}!`,
                     type: 'success'
                 });
                 setView('calendar');
                 setScrimDate(''); setScrimOpponent(''); setSelectedMaps([]);
+                setIsEditingDetails(false);
+                setSelectedScrimId(null);
             } else {
-                showNotification({ message: result.error || `Failed to schedule ${labelSingular.toLowerCase()}`, type: 'error' });
+                showNotification({ message: result.error || `Failed to ${isEditingDetails ? 'update' : 'schedule'} ${labelSingular.toLowerCase()}`, type: 'error' });
             }
         } catch (err) {
-            console.error(`Create ${apiBase} error:`, err);
-            showNotification({ message: `Network error while scheduling ${labelSingular.toLowerCase()}`, type: 'error' });
+            console.error(`${isEditingDetails ? 'Update' : 'Create'} ${apiBase} error:`, err);
+            showNotification({ message: `Network error while ${isEditingDetails ? 'updating' : 'scheduling'} ${labelSingular.toLowerCase()}`, type: 'error' });
         }
     };
 
@@ -693,8 +701,8 @@ const TeamManagement: React.FC<{
                                                     <select
                                                         value={scrim.status}
                                                         onChange={(e) => handleStatusUpdate(scrim.id, e.target.value)}
-                                                        disabled={!canEdit()}
-                                                        className={`pl-4 pr-10 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none transition-all border appearance-none shadow-lg ${!canEdit() ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} ${scrim.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                                                        disabled={!canEdit() || scrim.status !== 'pending'}
+                                                        className={`pl-4 pr-10 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none transition-all border appearance-none shadow-lg ${(!canEdit() || scrim.status !== 'pending') ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} ${scrim.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
                                                             scrim.status === 'cancelled' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
                                                                 'bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20 animate-pulse'
                                                             }`}
@@ -917,7 +925,34 @@ const TeamManagement: React.FC<{
             )}
 
             {view === 'add-scrim' && (
-                <form onSubmit={handleCreateScrim} className="max-w-2xl mx-auto space-y-6 md:space-y-8 relative z-10 p-6 md:p-12 bg-white/[0.02] rounded-[32px] md:rounded-[40px] border border-white/5">
+                <form onSubmit={handleCreateScrim} className="max-w-2xl mx-auto space-y-6 md:space-y-8 relative z-10 p-6 md:p-12 bg-white/[0.02] rounded-[32px] md:rounded-[40px] border border-white/5 animate-in slide-in-from-bottom duration-500">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                        <div>
+                            <h2 className="text-xl md:text-3xl font-black text-white uppercase italic tracking-tighter">
+                                {isEditingDetails ? `Update ${labelSingular} Intel` : `Initialize New ${labelSingular}`}
+                            </h2>
+                            <p className="text-[8px] md:text-[10px] text-amber-500/60 font-black uppercase tracking-[0.3em] mt-1">
+                                {isEditingDetails ? 'Re-aligning combat parameters' : 'New combat engagement sequence'}
+                            </p>
+                        </div>
+                        {isEditingDetails && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsEditingDetails(false);
+                                    setSelectedScrimId(null);
+                                    setScrimDate('');
+                                    setScrimOpponent('');
+                                    setScrimFormat('BO1');
+                                    setSelectedMaps([]);
+                                    setView('calendar');
+                                }}
+                                className="px-4 py-2 bg-white/5 hover:bg-red-500 text-slate-400 hover:text-white border border-white/10 hover:border-red-500/50 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95"
+                            >
+                                Abort Update
+                            </button>
+                        )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                         <div className="space-y-3 md:space-y-4">
                             <label className="text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] md:tracking-[0.4em] ml-2">Opponent Signature</label>
@@ -1006,7 +1041,7 @@ const TeamManagement: React.FC<{
                         type="submit"
                         className="w-full py-4 md:py-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-[0.3em] md:tracking-[0.4em] text-[10px] rounded-xl md:rounded-2xl transition-all shadow-2xl shadow-amber-500/20 active:scale-[0.98] border-t border-white/20 mt-6 md:mt-8"
                     >
-                        Authorize Deployment
+                        {isEditingDetails ? 'Finalize Tactical Update' : 'Authorize Deployment'}
                     </button>
                 </form>
             )}
@@ -1443,12 +1478,37 @@ const TeamManagement: React.FC<{
                                 <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-4 py-1.5 rounded-xl whitespace-nowrap">{scrimDetailModal.format}</span>
                             </div>
                         </div>
-                        <button
-                            onClick={() => setScrimDetailModal(null)}
-                            className="absolute md:relative top-6 md:top-0 right-6 md:right-0 w-10 h-10 md:w-12 md:h-12 bg-white/5 hover:bg-amber-500 hover:text-black text-white rounded-xl md:rounded-2xl flex items-center justify-center transition-all duration-700 border border-white/10 group/close active:scale-90 shadow-2xl rotate-0 hover:rotate-90 z-40"
-                        >
-                            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
+                        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                            {canEdit() && scrimDetailModal.status === 'pending' && (
+                                <button
+                                    onClick={() => {
+                                        // Set date in local ISO format for the datetime-local input
+                                        const d = new Date(scrimDetailModal.date);
+                                        const offset = d.getTimezoneOffset() * 60000;
+                                        const localIso = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+
+                                        setScrimDate(localIso);
+                                        setScrimOpponent(scrimDetailModal.opponent);
+                                        setScrimFormat(scrimDetailModal.format);
+                                        setSelectedMaps(scrimDetailModal.maps ? JSON.parse(scrimDetailModal.maps) : []);
+                                        setSelectedScrimId(scrimDetailModal.id);
+                                        setIsEditingDetails(true);
+                                        setView('add-scrim');
+                                        setScrimDetailModal(null);
+                                    }}
+                                    className="w-full md:w-auto px-6 py-3 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-xl active:scale-95 flex items-center justify-center space-x-2 group-hover/detail:border-amber-500/40"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    <span>Edit Deployment</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setScrimDetailModal(null)}
+                                className="absolute md:relative top-6 md:top-0 right-6 md:right-0 w-10 h-10 md:w-12 md:h-12 bg-white/5 hover:bg-amber-500 hover:text-black text-white rounded-xl md:rounded-2xl flex items-center justify-center transition-all duration-700 border border-white/10 group/close active:scale-90 shadow-2xl rotate-0 hover:rotate-90 z-40"
+                            >
+                                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
 
                     </div>
 

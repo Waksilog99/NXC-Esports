@@ -3035,6 +3035,10 @@ app.put('/api/scrims/:id/status', async (req, res) => {
         const scrim = scrimRows[0];
         if (!scrim) return res.status(404).json({ success: false, error: 'Scrim not found.' });
 
+        if (scrim.status !== 'pending' && !isAdmin) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Terminal status reached. Only high-level command can override.' });
+        }
+
         if (isManager && !isAdmin) {
             const teamRows = await db.select().from(teams).where(eq(teams.id, scrim.teamId!));
             if (teamRows[0]?.managerId !== Number(requesterId)) {
@@ -3047,6 +3051,50 @@ app.put('/api/scrims/:id/status', async (req, res) => {
     } catch (error: any) {
         console.error("Error in PUT /api/scrims/:id/status:", error);
         res.status(500).json({ success: false, error: 'Failed to update status', details: IS_PROD ? undefined : error.message });
+    }
+});
+
+app.put('/api/scrims/:id', async (req, res) => {
+    const { id } = req.params;
+    const { date, opponent, format, maps, requesterId } = req.body;
+    if (!date || !opponent || !format) return res.status(400).json({ success: false, error: 'Missing fields' });
+
+    try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance.' });
+        }
+
+        const scrimRows = await db.select().from(scrims).where(eq(scrims.id, Number(id)));
+        const scrim = scrimRows[0];
+        if (!scrim) return res.status(404).json({ success: false, error: 'Scrim not found.' });
+
+        if (scrim.status !== 'pending') {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only pending engagements can be reassigned.' });
+        }
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, scrim.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: Command authority required.' });
+            }
+        }
+
+        const updatedRows = await db.update(scrims).set({
+            date, opponent, format,
+            maps: maps ? JSON.stringify(maps) : scrim.maps
+        }).where(eq(scrims.id, Number(id))).returning();
+
+        res.json({ success: true, data: updatedRows[0] });
+    } catch (error: any) {
+        console.error("Error in PUT /api/scrims/:id:", error);
+        res.status(500).json({ success: false, error: 'Failed to update scrim', details: IS_PROD ? undefined : error.message });
     }
 });
 
@@ -3293,6 +3341,10 @@ app.put('/api/tournaments/:id/status', async (req, res) => {
         const tour = tourRows[0];
         if (!tour) return res.status(404).json({ success: false, error: 'Tournament not found.' });
 
+        if (tour.status !== 'pending' && !isAdmin) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Terminal status reached. Only high-level command can override.' });
+        }
+
         if (isManager && !isAdmin) {
             const teamRows = await db.select().from(teams).where(eq(teams.id, tour.teamId!));
             if (teamRows[0]?.managerId !== Number(requesterId)) {
@@ -3305,6 +3357,50 @@ app.put('/api/tournaments/:id/status', async (req, res) => {
     } catch (error: any) {
         console.error("Error in PUT /api/tournaments/:id/status:", error);
         res.status(500).json({ success: false, error: 'Failed to update tournament status', details: IS_PROD ? undefined : error.message });
+    }
+});
+
+app.put('/api/tournaments/:id', async (req, res) => {
+    const { id } = req.params;
+    const { date, name, opponent, format, maps, requesterId } = req.body;
+    if (!date || !name || !format) return res.status(400).json({ success: false, error: 'Missing fields' });
+
+    try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance.' });
+        }
+
+        const tourRows = await db.select().from(tournaments).where(eq(tournaments.id, Number(id)));
+        const tour = tourRows[0];
+        if (!tour) return res.status(404).json({ success: false, error: 'Tournament not found.' });
+
+        if (tour.status !== 'pending') {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only pending operations can be recalibrated.' });
+        }
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, tour.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: Command authority required.' });
+            }
+        }
+
+        const updatedRows = await db.update(tournaments).set({
+            date, name, opponent, format,
+            maps: maps ? JSON.stringify(maps) : tour.maps
+        }).where(eq(tournaments.id, Number(id))).returning();
+
+        res.json({ success: true, data: updatedRows[0] });
+    } catch (error: any) {
+        console.error("Error in PUT /api/tournaments/:id:", error);
+        res.status(500).json({ success: false, error: 'Failed to update tournament', details: IS_PROD ? undefined : error.message });
     }
 });
 
