@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { useUser } from '../services/authService';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
+import { getRankBadge } from '../utils/tactical';
 
 interface ProfileProps {
     onBack: () => void;
@@ -344,7 +345,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                                 <div className="flex flex-col items-center px-8 py-3 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md shadow-2xl">
                                     <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-[0.4em] mb-1">Operative Rank</span>
                                     <span className="text-2xl font-black text-amber-400 italic tracking-tighter uppercase">
-                                        {profile.level && profile.level >= 1000000 ? 'COACH' : `LVL ${profile.level || 1}`}
+                                        {getRankBadge(profile.level, profile.role)}
                                     </span>
                                 </div>
                                 <div className="flex flex-col items-start">

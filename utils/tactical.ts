@@ -25,3 +25,21 @@ export const getTacticalRole = (roleStr: string): string => {
     const found = roles.find(r => tacticalRoles.some(tr => tr.toLowerCase() === r.toLowerCase()));
     return found || roles[0] || 'Operative';
 };
+
+export const getRankBadge = (level: number | undefined | null, roleStr?: string): string => {
+    if (!level) return 'LVL 1';
+
+    // Core/Leadership Levels from server/index.ts
+    if (level >= 1000000000000) return 'CORE';
+    if (level >= 1000000000) return 'CEO';
+    if (level >= 1000000) return 'COACH';
+
+    // Fallback to role string check if level is not a magic number
+    if (roleStr) {
+        const roles = roleStr.toLowerCase();
+        if (roles.includes('admin') || roles.includes('ceo')) return 'CORE';
+        if (roles.includes('coach') || roles.includes('manager')) return 'COACH';
+    }
+
+    return `LVL ${level}`;
+};

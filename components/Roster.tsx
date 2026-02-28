@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { GAME_TITLES } from './constants';
 import Modal from './Modal';
 import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
-import { getTacticalRole } from '../utils/tactical';
+import { getTacticalRole, getRankBadge } from '../utils/tactical'
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Player {
@@ -263,7 +263,7 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
                       {/* Top Rank Badge */}
                       <div className="absolute top-6 left-6">
                         <span className="px-4 py-1.5 bg-white/60 dark:bg-black/60 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-lg text-[8px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.3em]">
-                          {player.level && player.level >= 1000000 ? 'COACH' : `Lvl // ${player.level || 1}`}
+                          {getRankBadge(player.level, player.role)}
                         </span>
                       </div>
                     </div>
