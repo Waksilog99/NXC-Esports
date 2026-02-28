@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GAME_TITLES } from './constants';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 const AddAchievementForm: React.FC<{ requesterId?: number }> = ({ requesterId }) => {
     const { showNotification } = useNotification();
@@ -16,7 +17,7 @@ const AddAchievementForm: React.FC<{ requesterId?: number }> = ({ requesterId })
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/achievements`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/achievements`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, date, description, placement, image, game, requesterId })

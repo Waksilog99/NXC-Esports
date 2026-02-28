@@ -3,6 +3,7 @@ import { GAME_TITLES } from './constants';
 import Modal from './Modal';
 import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
 import { getTacticalRole } from '../utils/tactical';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Player {
   id: number;
@@ -54,7 +55,7 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
 
   useEffect(() => {
     setLoading(true);
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    const API_BASE_URL = GET_API_BASE_URL();
     fetch(`${API_BASE_URL}/api/teams`)
       .then(res => {
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
@@ -82,16 +83,21 @@ const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, us
       result = result.filter(t => t.game === gameFilter);
     }
 
-    // Ensure coaches are always at the end of the roster
+    // Ensure coaches are always at the end of the roster and filter out management roles
     result = result.map(team => ({
       ...team,
-      players: [...team.players].sort((a, b) => {
-        const aIsCoach = a.role?.toLowerCase().includes('coach');
-        const bIsCoach = b.role?.toLowerCase().includes('coach');
-        if (aIsCoach && !bIsCoach) return 1;
-        if (!aIsCoach && bIsCoach) return -1;
-        return 0;
-      })
+      players: team.players
+        .filter(p => {
+          const role = p.role?.toLowerCase() || '';
+          return !role.includes('manager') && !role.includes('admin') && !role.includes('ceo');
+        })
+        .sort((a, b) => {
+          const aIsCoach = a.role?.toLowerCase().includes('coach');
+          const bIsCoach = b.role?.toLowerCase().includes('coach');
+          if (aIsCoach && !bIsCoach) return 1;
+          if (!aIsCoach && bIsCoach) return -1;
+          return 0;
+        })
     }));
 
     if (searchQuery) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 import PerformanceTracker from './PerformanceTracker';
 import AddAchievementForm from './AddAchievementForm';
 import TacticalIntelGraphs from './TacticalIntelGraphs';
@@ -49,7 +50,7 @@ const ManagerDashboard: React.FC<{
     const handleRemovePlayer = async (teamId: number, playerId: number) => {
         if (!window.confirm('Are you sure you want to remove this operative from the active registry?')) return;
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/players/${playerId}?requesterId=${userId}`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/players/${playerId}?requesterId=${userId}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -61,8 +62,8 @@ const ManagerDashboard: React.FC<{
                 });
                 // Refresh teams to update player list
                 const url = (userRole === 'manager' || userRole === 'coach') && userId
-                    ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
-                    : `${import.meta.env.VITE_API_BASE_URL}/api/teams`;
+                    ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
+                    : `${GET_API_BASE_URL()}/api/teams`;
                 const resTeams = await fetch(url);
                 const resTeamsResult = await resTeams.json();
                 if (resTeamsResult.success) {
@@ -104,8 +105,8 @@ const ManagerDashboard: React.FC<{
                 // Teams
                 if (view === 'operative-matrix' || view === 'performance-tracker' || view === 'tournament-network') {
                     const url = ((userRole === 'manager' || userRole === 'coach') && userId)
-                        ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
-                        : `${import.meta.env.VITE_API_BASE_URL}/api/teams`;
+                        ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
+                        : `${GET_API_BASE_URL()}/api/teams`;
                     const res = await fetch(url);
                     const result = await res.json();
                     if (result.success) {
@@ -117,7 +118,7 @@ const ManagerDashboard: React.FC<{
 
                 // Users
                 if (view === 'operative-matrix') {
-                    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`);
+                    const res = await fetch(`${GET_API_BASE_URL()}/api/users`);
                     const result = await res.json();
                     // /api/users returns a plain array (no success wrapper)
                     const userArray = Array.isArray(result) ? result : (result.data || []);
@@ -141,7 +142,7 @@ const ManagerDashboard: React.FC<{
     const handleCreateTeam = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: teamName, game: teamGame, description: teamDesc, managerId: userId, requesterId: userId })
@@ -173,7 +174,7 @@ const ManagerDashboard: React.FC<{
         e.preventDefault();
         if (!selectedTeam) return;
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${selectedTeam}/players`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${selectedTeam}/players`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -196,8 +197,8 @@ const ManagerDashboard: React.FC<{
                 // Refresh teams for better UX
                 const isTacticalRole = ['manager', 'coach'].includes(userRole || '');
                 const resTeams = await fetch(isTacticalRole && userId
-                    ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
-                    : `${import.meta.env.VITE_API_BASE_URL}/api/teams`);
+                    ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
+                    : `${GET_API_BASE_URL()}/api/teams`);
                 const resTeamsResult = await resTeams.json();
                 if (resTeamsResult.success) {
                     setTeams(resTeamsResult.data);
@@ -646,8 +647,8 @@ const ManagerDashboard: React.FC<{
                                             await handleRemovePlayer(selectedSquadForModal.id, p.id);
                                             // Update local modal state after removal
                                             const res = await fetch((userRole === 'manager' || userRole === 'coach') && userId
-                                                ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
-                                                : `${import.meta.env.VITE_API_BASE_URL}/api/teams`);
+                                                ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
+                                                : `${GET_API_BASE_URL()}/api/teams`);
                                             const result = await res.json();
                                             if (result.success) {
                                                 setTeams(result.data);

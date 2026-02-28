@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { getTeamAnalysis } from '../services/geminiService';
 import { useUser } from '../services/authService';
 import { useNotification } from '../hooks/useNotification';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 const EMPTY_STATS = (label1: string, label2: string, label3: string, label4: string) => [
   { label: label1, value: '—', color: 'bg-amber-500' },
@@ -53,7 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
   const roles = (userRole || '').split(',').map(r => r.trim());
   const isPlayer = roles.some(r => r === 'player');
 
-  const API = import.meta.env.VITE_API_BASE_URL;
+  const API = GET_API_BASE_URL();
 
   // ── Load scrim stats from /api/reports/weekly ─────────────────────────────
   const loadScrimStats = async (teamId?: number) => {

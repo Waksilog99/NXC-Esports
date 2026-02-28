@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 import { VALORANT_AGENTS } from './constants';
 import { GAME_MAPS, GAME_CATEGORY, VALORANT_ROLES } from './constants';
 import Modal from './Modal';
@@ -141,7 +142,7 @@ const TeamManagement: React.FC<{
     };
 
     useEffect(() => {
-        let url = `${import.meta.env.VITE_API_BASE_URL}/api/teams?requesterId=${userId}`;
+        let url = `${GET_API_BASE_URL()}/api/teams?requesterId=${userId}`;
         if (lockedTeamId) {
             url += `&id=${lockedTeamId}`;
         }
@@ -175,7 +176,7 @@ const TeamManagement: React.FC<{
 
     useEffect(() => {
         if (selectedTeamId) {
-            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}?teamId=${selectedTeamId}&requesterId=${userId}`)
+            fetch(`${GET_API_BASE_URL()}/api/${apiBase}?teamId=${selectedTeamId}&requesterId=${userId}`)
                 .then(res => res.json())
                 .then(result => {
                     if (result.success) {
@@ -223,7 +224,7 @@ const TeamManagement: React.FC<{
         }
 
         try {
-            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+            const API_BASE_URL = GET_API_BASE_URL();
             const method = isEditingDetails ? 'PUT' : 'POST';
             const url = isEditingDetails
                 ? `${API_BASE_URL}/api/${apiBase}/${selectedScrimId}`
@@ -263,7 +264,7 @@ const TeamManagement: React.FC<{
 
     const handleStatusUpdate = async (id: number, status: string) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}/${id}/status`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/${apiBase}/${id}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status, requesterId: userId })
@@ -284,7 +285,7 @@ const TeamManagement: React.FC<{
 
     const fetchScrimDetails = async (scrim: Scrim) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}/${scrim.id}/stats`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/${apiBase}/${scrim.id}/stats`);
             const result = await res.json();
             if (result.success) {
                 // Enrich flat stats with Agent/Role from results JSON if available
@@ -345,7 +346,7 @@ const TeamManagement: React.FC<{
         if (!activeMapTab || !mapResults[activeMapTab]?.image) return;
         setIsAnalyzing(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/scrims/analyze`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/scrims/analyze`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -524,7 +525,7 @@ const TeamManagement: React.FC<{
         });
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}/${selectedScrimId}/results`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/${apiBase}/${selectedScrimId}/results`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

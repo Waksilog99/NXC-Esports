@@ -3,6 +3,7 @@ import CheckoutModal from '@/components/CheckoutModal';
 import MyOrdersModal from './MyOrdersModal';
 import { useUser } from '../services/authService';
 import { Product, Sponsor, CartItem } from './types';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 
 const StoreModal = ({ isOpen, onClose, onNeedLogin }: { isOpen: boolean; onClose: () => void; onNeedLogin: () => void }) => {
@@ -73,8 +74,8 @@ const StoreModal = ({ isOpen, onClose, onNeedLogin }: { isOpen: boolean; onClose
         setError(null);
         try {
             const [prodRes, spRes] = await Promise.all([
-                fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`),
-                fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`)
+                fetch(`${GET_API_BASE_URL()}/api/products`),
+                fetch(`${GET_API_BASE_URL()}/api/sponsors`)
             ]);
 
             const prodData = await prodRes.json();

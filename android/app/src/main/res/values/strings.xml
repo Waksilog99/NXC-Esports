@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Waks Corporation Esports</string>
+    <string name="title_activity_main">Waks Corporation Esports</string>
+    <string name="package_name">com.wakscorporation.esports</string>
+    <string name="custom_url_scheme">com.wakscorporation.esports</string>
+</resources>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useUser } from '../services/authService';
 import { useNotification } from '../hooks/useNotification';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Product {
     id: number;
@@ -60,7 +61,7 @@ const SponsorZone: React.FC = () => {
 
     const fetchSponsors = async () => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/sponsors`);
             const data = await res.json();
             if (data.success) {
                 setSponsors(data.data);
@@ -74,7 +75,7 @@ const SponsorZone: React.FC = () => {
 
             // Also fetch site settings for admins
             if (isAdmin) {
-                const sRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/site-settings`);
+                const sRes = await fetch(`${GET_API_BASE_URL()}/api/site-settings`);
                 const sData = await sRes.json();
                 if (sData.success) {
                     setSiteQr({
@@ -91,8 +92,8 @@ const SponsorZone: React.FC = () => {
         setLoading(true);
         try {
             const [prodRes, orderRes] = await Promise.all([
-                fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`),
-                fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders`)
+                fetch(`${GET_API_BASE_URL()}/api/products`),
+                fetch(`${GET_API_BASE_URL()}/api/orders`)
             ]);
 
             const [prodData, orderData] = await Promise.all([
@@ -142,7 +143,7 @@ const SponsorZone: React.FC = () => {
                 finalSponsorId = selectedSponsorId === 'waks' ? null : Number(selectedSponsorId);
             }
 
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/products`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -170,7 +171,7 @@ const SponsorZone: React.FC = () => {
 
     const updateOrderStatus = async (orderId: number, status: string) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders/${orderId}/status`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/orders/${orderId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status, requesterId: user?.id })
@@ -195,7 +196,7 @@ const SponsorZone: React.FC = () => {
         setIsSubmitting(true);
         try {
             if (user?.role?.includes('sponsor') && userSponsorId) {
-                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${userSponsorId}/qr`, {
+                const res = await fetch(`${GET_API_BASE_URL()}/api/sponsors/${userSponsorId}/qr`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ...sponsorQr, requesterId: user?.id })
@@ -204,7 +205,7 @@ const SponsorZone: React.FC = () => {
                     showNotification({ message: 'Sponsor QR Codes updated.', type: 'success' });
                 }
             } else if (isAdmin && selectedSponsorId === 'waks') {
-                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/site-settings`, {
+                const res = await fetch(`${GET_API_BASE_URL()}/api/site-settings`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -218,7 +219,7 @@ const SponsorZone: React.FC = () => {
                 }
             } else if (isAdmin && typeof selectedSponsorId === 'number') {
                 // Admin updating a sponsor's QR
-                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${selectedSponsorId}/qr`, {
+                const res = await fetch(`${GET_API_BASE_URL()}/api/sponsors/${selectedSponsorId}/qr`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -257,7 +258,7 @@ const SponsorZone: React.FC = () => {
 
     const updateProductStock = async (productId: number, stock: number) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/stock`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/products/${productId}/stock`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ stock, requesterId: user?.id })
@@ -274,7 +275,7 @@ const SponsorZone: React.FC = () => {
     const deleteProduct = async (productId: number) => {
         if (!confirm("Are you sure you want to decommission this asset? This action is irreversible.")) return;
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/products/${productId}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ requesterId: user?.id })

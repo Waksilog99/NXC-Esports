@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Modal from './Modal';
 import { useUser } from '../services/authService';
 import { Product, CartItem } from './types';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 
 interface CheckoutModalProps {
@@ -36,7 +37,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, items, o
 
                 if (!prod.sponsorId) {
                     setIsProductOwnerWaks(true);
-                    const sRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/site-settings`);
+                    const sRes = await fetch(`${GET_API_BASE_URL()}/api/site-settings`);
                     const sData = await sRes.json();
                     if (sData.success) {
                         console.log("[CHECKOUT] Waks settings fetched:", sData.data);
@@ -47,7 +48,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, items, o
                     }
                 } else {
                     setIsProductOwnerWaks(false);
-                    const spRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`);
+                    const spRes = await fetch(`${GET_API_BASE_URL()}/api/sponsors`);
                     const spData = await spRes.json();
                     if (spData.success) {
                         const sponsor = spData.data.find((s: any) => s.id === prod.sponsorId);
@@ -97,7 +98,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, items, o
         setStep('processing');
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/orders`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

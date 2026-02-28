@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface AddSponsorFormProps {
     users: any[];
@@ -20,7 +21,7 @@ const AddSponsorForm: React.FC<AddSponsorFormProps> = ({ users, requesterId }) =
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/sponsors`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, tier, logo, description, website, userId, requesterId })

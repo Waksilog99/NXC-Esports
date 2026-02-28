@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GAME_CATEGORY } from './constants';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 import Modal from './Modal';
 
 interface PlayerQuota {
@@ -185,7 +186,7 @@ const QuotaManagementView: React.FC<{
             if (!teamId) return;
 
             const cleanWeek = selectedWeek ? selectedWeek.split(':')[0] : '';
-            const url = `${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/quotas${cleanWeek ? `?week=${cleanWeek}` : ''}`;
+            const url = `${GET_API_BASE_URL()}/api/teams/${teamId}/quotas${cleanWeek ? `?week=${cleanWeek}` : ''}`;
             const res = await fetch(url);
             const result = await res.json();
 
@@ -210,7 +211,7 @@ const QuotaManagementView: React.FC<{
 
     const handleReview = async (playerId: number, routine: 'aim' | 'grind', status: 'approved' | 'rejected') => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players/${playerId}/quota/review`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/players/${playerId}/quota/review`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -244,7 +245,7 @@ const QuotaManagementView: React.FC<{
     const handleSaveBaseTargets = async () => {
         setIsSavingBase(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/settings/quota`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/settings/quota`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -273,7 +274,7 @@ const QuotaManagementView: React.FC<{
 
     const handleSetCustomQuota = async (playerId: number, aim: number, grind: number) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players/${playerId}/quota/custom`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/players/${playerId}/quota/custom`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

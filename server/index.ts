@@ -54,6 +54,8 @@ const ALLOWED_ORIGINS = [
     'http://localhost:5175',
     'http://localhost:5176',
     'http://localhost:4173',
+    'http://localhost',      // Android Capacitor
+    'capacitor://localhost', // iOS Capacitor
     ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
 ];
 app.use(cors({

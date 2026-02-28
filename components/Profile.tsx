@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { useUser } from '../services/authService';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface ProfileProps {
     onBack: () => void;
@@ -64,7 +65,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
         setIsLoadingProfile(true);
         try {
             setError(null);
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/users`);
             if (!res.ok) throw new Error('Failed to connect to server');
 
             // /api/users returns a plain array (no wrapper)
@@ -201,7 +202,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
 
         setIsSaving(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/${profile.id}/profile`, {
+            const response = await fetch(`${GET_API_BASE_URL()}/api/users/${profile.id}/profile`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),

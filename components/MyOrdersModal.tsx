@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '../services/authService';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Order {
     id: number;
@@ -39,8 +40,8 @@ const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose }) => {
             setError(null);
             try {
                 const [orderRes, prodRes] = await Promise.all([
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders?userId=${user.id}&requesterId=${user.id}`),
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`)
+                    fetch(`${GET_API_BASE_URL()}/api/orders?userId=${user.id}&requesterId=${user.id}`),
+                    fetch(`${GET_API_BASE_URL()}/api/products`)
                 ]);
 
                 const orderData = await orderRes.json();

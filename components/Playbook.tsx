@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import Modal from './Modal';
 import { GAME_TITLES, GAME_MAPS, VALORANT_AGENTS } from './constants';
+import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface Strat {
     id: number;
@@ -62,7 +63,7 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
             try {
                 // If manager or coach, fetch teams they manage/assist. If player, fetch teams they are in.
                 const isManagement = ['manager', 'coach', 'admin', 'ceo'].some(r => userRole?.includes(r));
-                let url = `${import.meta.env.VITE_API_BASE_URL}/api/teams`;
+                let url = `${GET_API_BASE_URL()}/api/teams`;
 
                 if (userId && !['admin', 'ceo'].some(r => userRole?.includes(r))) {
                     url += `?requesterId=${userId}`;
@@ -87,7 +88,7 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
         if (!teamId) return;
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/playbook?requesterId=${userId}`);
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/playbook?requesterId=${userId}`);
             const result = await res.json();
             if (result.success) {
                 setStrats(result.data);
@@ -127,13 +128,13 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
 
             let res;
             if (editId) {
-                res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/playbook/${editId}`, {
+                res = await fetch(`${GET_API_BASE_URL()}/api/playbook/${editId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
             } else {
-                res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${selectedTeamId}/playbook`, {
+                res = await fetch(`${GET_API_BASE_URL()}/api/teams/${selectedTeamId}/playbook`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -160,7 +161,7 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
         if (!confirm('Are you sure you want to purge this strategy from the database?')) return;
         setSaving(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/playbook/${id}`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/playbook/${id}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ requesterId: userId })
@@ -189,7 +190,7 @@ const Playbook: React.FC<{ userRole?: string; userId?: number; lockedTeamId?: nu
         setSaving(true);
 
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/playbook/${stratId}/copy`, {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/playbook/${stratId}/copy`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
