@@ -768,7 +768,7 @@ const TeamManagement: React.FC<{
                                                                 setSelectedTeamId(scrim.teamId); // Hardlock sector to scrim owner
                                                                 const count = getMapCount(scrim.format);
                                                                 const init: any = {};
-                                                                const rosterPlayers = currentTeam?.players.filter(p => p.id > 0 && !p.role?.toLowerCase().includes('coach')).map(p => ({
+                                                                const rosterPlayers = currentTeam?.players.filter(p => p.id > 0).map(p => ({
                                                                     name: p.name,
                                                                     playerId: p.id,
                                                                     kills: 0,
@@ -1286,7 +1286,7 @@ const TeamManagement: React.FC<{
                                                         className="bg-transparent text-white font-black uppercase tracking-tight outline-none w-full py-1 text-sm appearance-none cursor-pointer group-hover/row:text-amber-500 transition-colors"
                                                     >
                                                         <option value="" className="bg-[#020617] text-slate-500">IDENTIFY OPERATOR...</option>
-                                                        {currentTeam?.players?.filter(p => !p.role?.toLowerCase().includes('coach')).map(p => (
+                                                        {currentTeam?.players?.map(p => (
                                                             <option key={p.id} value={p.id} className="bg-[#020617] text-white">{p.name.toUpperCase()}</option>
                                                         ))}
                                                     </select>

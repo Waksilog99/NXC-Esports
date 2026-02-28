@@ -49,10 +49,9 @@ const ManagerDashboard: React.FC<{
     const handleRemovePlayer = async (teamId: number, playerId: number) => {
         if (!window.confirm('Are you sure you want to remove this operative from the active registry?')) return;
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/players/${playerId}`, {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/players/${playerId}?requesterId=${userId}`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ requesterId: userId })
+                headers: { 'Content-Type': 'application/json' }
             });
             const result = await res.json();
             if (result.success) {

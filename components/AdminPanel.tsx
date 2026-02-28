@@ -1168,7 +1168,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                                         onClick={async (e) => {
                                             e.stopPropagation();
                                             if (!window.confirm('Are you sure you want to remove this operative?')) return;
-                                            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${selectedSquadForModal.id}/players/${p.id}`, {
+                                            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${selectedSquadForModal.id}/players/${p.id}?requesterId=${user?.id}`, {
                                                 method: 'DELETE'
                                             });
                                             const result = await res.json();
