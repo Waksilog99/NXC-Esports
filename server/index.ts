@@ -1566,8 +1566,8 @@ app.post('/api/teams', async (req, res) => {
         if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
         const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
         const requester = requesterRows[0];
-        if (!requester || !['admin', 'ceo'].some(r => requester.role?.includes(r))) {
-            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin or CEO can initialize new units.' });
+        if (!requester || !['admin', 'ceo', 'manager'].some(r => requester.role?.includes(r))) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin, CEO, or Manager can initialize new units.' });
         }
         const newTeamRes = await db.insert(teams).values({
             name,
@@ -1591,8 +1591,8 @@ app.put('/api/teams/:id/manager', async (req, res) => {
         if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
         const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
         const requester = requesterRows[0];
-        if (!requester || !['admin', 'ceo'].some(r => requester.role?.includes(r))) {
-            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin or CEO can reassign unit command.' });
+        if (!requester || !['admin', 'ceo', 'manager'].some(r => requester.role?.includes(r))) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin, CEO, or Manager can reassign unit command.' });
         }
         await db.update(teams).set({ managerId: managerId ? Number(managerId) : null }).where(eq(teams.id, Number(id)));
         res.json({ success: true });
