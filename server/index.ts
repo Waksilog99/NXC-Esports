@@ -1219,11 +1219,14 @@ app.get('/api/teams', async (req, res) => {
             isActive: players.isActive
         }).from(players).where(inArray(players.teamId, teamIds));
 
-        // 2. Fetch ALL associated users in one query
-        const userIds = allPlayers.map(p => p.userId).filter((id): id is number => id !== null);
+        // 2. Fetch ALL associated users in one query (players + managers)
+        const playerUserIds = allPlayers.map(p => p.userId).filter((id): id is number => id !== null);
+        const managerUserIds = teamData.map(t => t.managerId).filter((id): id is number => id !== null);
+        const uniqueUserIds = Array.from(new Set([...playerUserIds, ...managerUserIds]));
+
         let allUsers: any[] = [];
-        if (userIds.length > 0) {
-            allUsers = await db.select().from(users).where(inArray(users.id, userIds));
+        if (uniqueUserIds.length > 0) {
+            allUsers = await db.select().from(users).where(inArray(users.id, uniqueUserIds));
         }
 
         // 3. Fetch ALL scrims and tournaments for these teams
@@ -2660,7 +2663,7 @@ export async function generateAndSendWeeklyReport() {
         // 6. Email Dispatch
         const gmailUser = process.env.GMAIL_USER;
         const gmailPass = process.env.GMAIL_APP_PASS;
-        const CEO_EMAIL = 'wakscorporationesports@gmail.com';
+        const CEO_EMAIL = 'emersonwaque@gmail.com';
 
         if (!gmailUser || !gmailPass) {
             console.warn('[EMAIL] GMAIL_USER or GMAIL_APP_PASS not found. Skipping email.');

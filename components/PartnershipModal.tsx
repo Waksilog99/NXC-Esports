@@ -17,7 +17,7 @@ const PartnershipModal: React.FC<PartnershipModalProps> = ({ isOpen, onClose }) 
 
 
     const handleScheduleMeeting = () => {
-        const calendarUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Strategic+Partnership+Briefing&details=Agenda:+Discussing+potential+collaboration,+integrations,+and+sponsorship+tiers+with+WC+Esports.&add=partnerships@waks.com";
+        const calendarUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Strategic+Partnership+Briefing&details=Agenda:+Discussing+potential+collaboration,+integrations,+and+sponsorship+tiers+with+WC+Esports.&add=emersonwaque@gmail.com";
 
         // Open in a popup window to encourage closing after save
         const width = 1000;
@@ -139,7 +139,7 @@ const PartnershipModal: React.FC<PartnershipModalProps> = ({ isOpen, onClose }) 
 
                     <div className="pt-4 border-t border-white/5">
                         <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-                            Secure Channel: partnerships@waks.com
+                            Secure Channel: emersonwaque@gmail.com
                         </p>
                     </div>
                 </div>
