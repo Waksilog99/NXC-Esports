@@ -13,7 +13,7 @@ interface Achievement {
 }
 
 const getPlacementPriority = (placement: string): number => {
-    const p = placement.toLowerCase();
+    const p = (placement || '').toLowerCase();
     if (p.includes('champion') || p.includes('1st') || p.includes('winner')) return 100;
     if (p.includes('2nd') || p.includes('runner')) return 80;
     if (p.includes('3rd') || p.includes('finalist')) return 60;

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import TeamManagement from './TeamManagement';
 import QuotaTracker from './QuotaTracker';
+import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
+import Playbook from './Playbook';
 
 interface PlayerConsoleProps {
     userId: number;
@@ -13,10 +15,12 @@ const PlayerConsole: React.FC<PlayerConsoleProps> = ({ userId, userRole, onBack 
     const [loading, setLoading] = useState(true);
 
     const [playerInfo, setPlayerInfo] = useState<any>(null);
-    const [activeTab, setActiveTab] = useState<'scrims' | 'tournaments'>('scrims');
+    const [activeTab, setActiveTab] = useState<'scrims' | 'tournaments' | 'playbook'>('scrims');
     const [currentSubView, setCurrentSubView] = useState<string>('calendar');
+    const [isStatsOpen, setIsStatsOpen] = useState(false);
 
     useEffect(() => {
+        if (!userId) return;
         // Fetch the player's team based on their userId
         fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players?userId=${userId}`)
             .then(res => res.json())
@@ -94,9 +98,28 @@ const PlayerConsole: React.FC<PlayerConsoleProps> = ({ userId, userRole, onBack 
                     >
                         Tournaments
                     </button>
+                    <button
+                        onClick={() => setActiveTab('playbook')}
+                        className={`px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.3em] transition-all ${activeTab === 'playbook'
+                            ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                            : 'text-slate-500 hover:text-emerald-400'
+                            }`}
+                    >
+                        Playbook
+                    </button>
                 </div>
 
-                <div className="px-10 py-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 backdrop-blur-3xl">
+                <button
+                    onClick={() => setIsStatsOpen(true)}
+                    className="flex items-center space-x-3 px-8 py-4 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-2xl border border-emerald-500/20 backdrop-blur-3xl transition-all group active:scale-95 shadow-lg"
+                >
+                    <svg className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em]">Tactical Statistics</span>
+                </button>
+
+                <div className="px-10 py-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 backdrop-blur-3xl hidden md:block">
                     <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-widest">Clearance: ACTIVE_OPERATIVE</p>
                 </div>
             </div>
@@ -110,16 +133,35 @@ const PlayerConsole: React.FC<PlayerConsoleProps> = ({ userId, userRole, onBack 
             )}
 
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <TeamManagement
-                    key={activeTab}
-                    userId={userId}
-                    userRole="player"
-                    lockedTeamId={playersTeamId}
-                    mode={activeTab === 'scrims' ? 'scrim' : 'tournament'}
-                    onViewChange={(v) => setCurrentSubView(v)}
-                    onBack={onBack}
-                />
+                {activeTab === 'playbook' ? (
+                    <Playbook
+                        userId={userId}
+                        userRole="player"
+                        lockedTeamId={playersTeamId}
+                    />
+                ) : (
+                    <TeamManagement
+                        key={activeTab}
+                        userId={userId}
+                        userRole="player"
+                        lockedTeamId={playersTeamId}
+                        mode={activeTab === 'scrims' ? 'scrim' : 'tournament'}
+                        onViewChange={(v) => setCurrentSubView(v)}
+                        onBack={onBack}
+                    />
+                )}
             </div>
+
+            {playerInfo && (
+                <PlayerStatsModal
+                    player={playerInfo}
+                    isOpen={isStatsOpen}
+                    onClose={() => setIsStatsOpen(false)}
+                    userRole={userRole}
+                    currentUserId={userId}
+                    showAdvancedIntel={true}
+                />
+            )}
         </div>
     );
 };

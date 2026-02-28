@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNotification } from '../hooks/useNotification';
-import { GAME_MAPS, GAME_CATEGORY } from './constants';
+import { VALORANT_AGENTS } from './constants';
+import { GAME_MAPS, GAME_CATEGORY, VALORANT_ROLES } from './constants';
 import Modal from './Modal';
 import QuotaManagementView from './QuotaManagementView';
+import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
+import { calculateKDA, getKDAColor, getAgentImage } from '../utils/tactical';
 
 interface Team {
     id: number;
@@ -30,6 +33,8 @@ interface PlayerStat {
     acs?: number;
     playerId?: number;
     isWin?: boolean;
+    agent?: string;
+    role?: string;
 }
 
 
@@ -48,18 +53,26 @@ const TeamManagement: React.FC<{
     const [scrims, setScrims] = useState<Scrim[]>([]);
     const { showNotification } = useNotification();
 
+    const [selectedPlayerForStats, setSelectedPlayerForStats] = useState<PlayerStats | null>(null);
+    const [isPlayerStatsModalOpen, setIsPlayerStatsModalOpen] = useState(false);
+
     const getMondayISO = (d: Date) => {
         const date = new Date(d);
         const day = date.getDay();
         const diff = date.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(date.setDate(diff));
         monday.setHours(0, 0, 0, 0);
-        return monday.toISOString().split('T')[0];
+
+        const y = monday.getFullYear();
+        const m = String(monday.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(monday.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dayStr}`;
     };
 
     const [selectedWeek, setSelectedWeek] = useState(getMondayISO(new Date()));
 
-    const currentTeam = teams.find(t => Number(t.id) === Number(selectedTeamId));
+    const currentTeam = teams.find(t => Number(t.id) === Number(selectedTeamId || lockedTeamId));
+    const isValorantFamily = currentTeam?.game?.toLowerCase().includes('valorant') || false;
 
     // Add Scrim Form State
     const [scrimDate, setScrimDate] = useState('');
@@ -88,15 +101,15 @@ const TeamManagement: React.FC<{
     const labelAction = isTournament ? 'Operation' : 'Engagement';
 
     const canSubmit = (scrim: Scrim) => {
-        const roles = userRole?.split(',') || [];
-        if (roles.some(r => ['manager', 'admin', 'ceo'].includes(r))) return true;
+        const roles = userRole?.split(',').map(r => r.trim().toLowerCase()) || [];
+        if (roles.some(r => ['manager', 'admin', 'ceo', 'coach'].includes(r))) return true;
         // Check if user is a player in the team owning the scrim
         return currentTeam?.players.some(p => p.userId === userId) || false;
     };
 
     const canEdit = () => {
-        const roles = userRole?.split(',') || [];
-        return roles.some(r => ['manager', 'admin', 'ceo'].includes(r));
+        const roles = userRole?.split(',').map(r => r.trim().toLowerCase()) || [];
+        return roles.some(r => ['manager', 'admin', 'ceo', 'coach'].includes(r));
     };
 
     const getMapCount = (format: string) => {
@@ -127,11 +140,9 @@ const TeamManagement: React.FC<{
     };
 
     useEffect(() => {
-        let url = `${import.meta.env.VITE_API_BASE_URL}/api/teams`;
+        let url = `${import.meta.env.VITE_API_BASE_URL}/api/teams?requesterId=${userId}`;
         if (lockedTeamId) {
-            url += `?id=${lockedTeamId}`;
-        } else if (userRole === 'manager' && userId) {
-            url += `?managerId=${userId}`;
+            url += `&id=${lockedTeamId}`;
         }
 
         fetch(url)
@@ -163,7 +174,7 @@ const TeamManagement: React.FC<{
 
     useEffect(() => {
         if (selectedTeamId) {
-            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}?teamId=${selectedTeamId}`)
+            fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}?teamId=${selectedTeamId}&requesterId=${userId}`)
                 .then(res => res.json())
                 .then(result => {
                     if (result.success) {
@@ -221,7 +232,8 @@ const TeamManagement: React.FC<{
                     opponent: scrimOpponent,
                     name: isTournament ? scrimOpponent : `Scrim vs ${scrimOpponent}`,
                     format: scrimFormat,
-                    maps: selectedMaps // Send selected maps (Array)
+                    maps: selectedMaps,
+                    requesterId: userId
                 })
             });
             const result = await res.json();
@@ -246,7 +258,7 @@ const TeamManagement: React.FC<{
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}/${id}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
+                body: JSON.stringify({ status, requesterId: userId })
             });
             const result = await res.json();
             if (result.success) {
@@ -267,8 +279,36 @@ const TeamManagement: React.FC<{
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/${apiBase}/${scrim.id}/stats`);
             const result = await res.json();
             if (result.success) {
-                // data.stats is the array of player stats
-                setScrimDetailModal({ ...scrim, stats: result.data.stats });
+                // Enrich flat stats with Agent/Role from results JSON if available
+                let enrichedStats = result.data.stats;
+                if (scrim.results) {
+                    try {
+                        const parsedResults = JSON.parse(scrim.results);
+                        if (Array.isArray(parsedResults)) {
+                            enrichedStats = result.data.stats.map((stat: any) => {
+                                // Find player in map results to grab agent/role
+                                let playerMatch: any = null;
+                                for (const mapData of parsedResults) {
+                                    playerMatch = (mapData.results || []).find((r: any) =>
+                                        r.playerId === stat.playerId || (r.id === stat.playerId)
+                                    );
+                                    if (playerMatch) break;
+                                }
+
+                                return {
+                                    ...stat,
+                                    agent: playerMatch?.agent || stat.agent,
+                                    role: playerMatch?.role || stat.role,
+                                    playerName: stat.name, // Ensure playerName is set if it came as name
+                                    playerImage: stat.image // Ensure playerImage is set
+                                };
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Aggregation error in fetchScrimDetails:", e);
+                    }
+                }
+                setScrimDetailModal({ ...scrim, stats: enrichedStats });
             } else {
                 showNotification({ message: result.error || 'Failed to load details', type: 'error' });
                 setScrimDetailModal({ ...scrim, stats: [] });
@@ -345,7 +385,7 @@ const TeamManagement: React.FC<{
                     ...currentTab,
                     results: {
                         ...currentResults,
-                        results: [...(currentResults.results || []), { name: 'Player', kills: 0, deaths: 0, assists: 0, acs: 0 }]
+                        results: [...(currentResults.results || []), { name: 'Player', kills: 0, deaths: 0, assists: 0, acs: 0, agent: '', role: '' }]
                     }
                 }
             };
@@ -429,11 +469,13 @@ const TeamManagement: React.FC<{
                 (p.kills === undefined || p.kills === null || String(p.kills).trim() === '') ||
                 (p.deaths === undefined || p.deaths === null || String(p.deaths).trim() === '') ||
                 (p.assists === undefined || p.assists === null || String(p.assists).trim() === '') ||
-                (p.acs === undefined || p.acs === null || String(p.acs).trim() === '')
+                (p.acs === undefined || p.acs === null || String(p.acs).trim() === '') ||
+                (isValorantFamily && (!p.agent || !p.role))
             );
             if (hasEmptyStats) {
+                const extra = isValorantFamily ? " and Agent/Role selections" : "";
                 showNotification({
-                    message: `TACTICAL ERROR: Incomplete Operator analytics detected in Theater Phase ${i}. Ensure K/D/A and ACS are logged for all personnel (zero-values are acceptable).`,
+                    message: `TACTICAL ERROR: Incomplete Operator analytics detected in Theater Phase ${i}. Ensure K/D/A, ACS${extra} are logged for all personnel (zero-values for stats are acceptable).`,
                     type: 'error'
                 });
                 return;
@@ -452,30 +494,25 @@ const TeamManagement: React.FC<{
             };
         });
 
-        // Also aggregate player stats for DB (scrimPlayerStats table)
-        const aggregatedStats: Record<number, any> = {};
-        finalResults.forEach(mapData => {
-            mapData.results.forEach((p: PlayerStat) => {
+        // Send all individual performances to preserve agent, role, and map context
+        const allPerformances: any[] = [];
+        finalResults.forEach(mResult => {
+            const mapName = scrim.maps ? (JSON.parse(scrim.maps)[mResult.map - 1] || `Map ${mResult.map}`) : `Map ${mResult.map}`;
+            mResult.results.forEach((p: PlayerStat) => {
                 if (p.playerId) {
-                    if (!aggregatedStats[p.playerId]) {
-                        aggregatedStats[p.playerId] = { playerId: p.playerId, kills: 0, deaths: 0, assists: 0, acs: 0, games: 0, wins: 0 };
-                    }
-                    aggregatedStats[p.playerId].kills += p.kills;
-                    aggregatedStats[p.playerId].deaths += p.deaths;
-                    aggregatedStats[p.playerId].assists += p.assists;
-                    aggregatedStats[p.playerId].acs += (p.acs || 0); // Sum ACS (will average later if needed, or store total)
-                    aggregatedStats[p.playerId].games += 1;
-                    if (mapData.score === 'WIN') aggregatedStats[p.playerId].wins += 1;
+                    allPerformances.push({
+                        playerId: p.playerId,
+                        kills: Number(p.kills),
+                        deaths: Number(p.deaths),
+                        assists: Number(p.assists),
+                        acs: Number(p.acs || 0),
+                        isWin: mResult.isVictory ? 1 : 0,
+                        agent: p.agent,
+                        role: p.role,
+                        map: mapName
+                    });
                 }
             });
-        });
-
-        // Average the ACS
-        Object.values(aggregatedStats).forEach(stat => {
-            if (stat.games > 0) {
-                stat.acs = Math.round(stat.acs / stat.games);
-                stat.isWin = stat.wins > (stat.games / 2); // Simple majority for "scrim win" logic if needed
-            }
         });
 
         try {
@@ -484,7 +521,8 @@ const TeamManagement: React.FC<{
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     results: finalResults,
-                    playerStats: Object.values(aggregatedStats)
+                    playerStats: allPerformances,
+                    requesterId: userId
                 })
             });
             const result = await res.json();
@@ -603,6 +641,12 @@ const TeamManagement: React.FC<{
 
             {view === 'list' && (
                 <div className="relative z-10 bg-white/[0.02] rounded-[24px] md:rounded-[30px] border border-white/5 shadow-inner overflow-hidden flex flex-col">
+                    <div className="px-6 py-6 md:px-8 border-b border-white/5 bg-white/[0.01] flex justify-between items-center">
+                        <div>
+                            <h3 className="text-xl md:text-2xl font-black text-white uppercase italic tracking-tighter">Tactical Engagement Log</h3>
+                            <p className="text-[8px] md:text-[10px] text-amber-500 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mt-1 italic">Sequential Operation History</p>
+                        </div>
+                    </div>
                     <div className="overflow-auto max-h-[600px] custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
                             <thead className="sticky top-0 z-20 bg-[#020617] shadow-sm">
@@ -628,7 +672,11 @@ const TeamManagement: React.FC<{
                                         return new Date(b.date).getTime() - new Date(a.date).getTime();
                                     })
                                     .map(scrim => (
-                                        <tr key={scrim.id} className={`group hover:bg-white/[0.03] transition-all duration-300 ${scrim.status !== 'pending' ? 'opacity-40 grayscale-[0.7] hover:opacity-60 transition-opacity' : ''}`}>
+                                        <tr
+                                            key={scrim.id}
+                                            onClick={() => scrim.status === 'completed' && fetchScrimDetails(scrim)}
+                                            className={`group hover:bg-white/[0.03] transition-all duration-300 ${scrim.status === 'completed' ? 'cursor-pointer active:scale-[0.99]' : ''} ${scrim.status !== 'pending' ? 'opacity-40 grayscale-[0.7] hover:opacity-60 transition-opacity' : ''}`}
+                                        >
                                             <td className="px-6 md:px-8 py-5 md:py-8 font-black text-white italic tracking-tighter text-base md:text-lg whitespace-nowrap">
                                                 <span className="text-amber-500/40 text-[8px] md:text-[10px] not-italic block mb-1 tracking-widest">{new Date(scrim.date).toLocaleDateString()}</span>
                                                 {new Date(scrim.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -712,13 +760,15 @@ const TeamManagement: React.FC<{
                                                                 setSelectedTeamId(scrim.teamId); // Hardlock sector to scrim owner
                                                                 const count = getMapCount(scrim.format);
                                                                 const init: any = {};
-                                                                const rosterPlayers = currentTeam?.players.filter(p => p.id > 0).map(p => ({
+                                                                const rosterPlayers = currentTeam?.players.filter(p => p.id > 0 && !p.role?.toLowerCase().includes('coach')).map(p => ({
                                                                     name: p.name,
                                                                     playerId: p.id,
                                                                     kills: 0,
                                                                     deaths: 0,
                                                                     assists: 0,
-                                                                    acs: 0
+                                                                    acs: 0,
+                                                                    agent: '',
+                                                                    role: ''
                                                                 })) || [];
                                                                 for (let i = 1; i <= count; i++) {
                                                                     init[i] = {
@@ -862,6 +912,7 @@ const TeamManagement: React.FC<{
                     canEdit={canEdit()}
                     selectedWeek={selectedWeek}
                     setSelectedWeek={setSelectedWeek}
+                    userId={userId}
                 />
             )}
 
@@ -1081,11 +1132,19 @@ const TeamManagement: React.FC<{
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    value={mapResults[activeMapTab]?.results?.score?.split('-')[0] || 0}
+                                                    value={
+                                                        (() => {
+                                                            const sc = mapResults[activeMapTab]?.results?.score;
+                                                            if (!sc) return 0;
+                                                            if (sc === 'WIN' || sc === 'LOSS') return 0;
+                                                            return sc.includes('-') ? sc.split('-')[0] : sc;
+                                                        })()
+                                                    }
                                                     onChange={e => {
                                                         const currentResults = mapResults[activeMapTab]?.results;
                                                         if (!currentResults) return;
-                                                        const opp = currentResults.score?.split('-')[1] || '0';
+                                                        const scoreStr = currentResults.score || '0-0';
+                                                        const opp = scoreStr.includes('-') ? scoreStr.split('-')[1] : '0';
                                                         const val = Math.max(0, parseInt(e.target.value) || 0);
                                                         setMapResults(prev => ({
                                                             ...prev,
@@ -1104,11 +1163,19 @@ const TeamManagement: React.FC<{
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    value={mapResults[activeMapTab]?.results?.score?.split('-')[1] || 0}
+                                                    value={
+                                                        (() => {
+                                                            const sc = mapResults[activeMapTab]?.results?.score;
+                                                            if (!sc) return 0;
+                                                            if (sc === 'WIN' || sc === 'LOSS') return 0;
+                                                            return sc.includes('-') ? sc.split('-')[1] : 0;
+                                                        })()
+                                                    }
                                                     onChange={e => {
                                                         const currentResults = mapResults[activeMapTab]?.results;
                                                         if (!currentResults) return;
-                                                        const our = currentResults.score?.split('-')[0] || '0';
+                                                        const scoreStr = currentResults.score || '0-0';
+                                                        const our = scoreStr.includes('-') ? scoreStr.split('-')[0] : '0';
                                                         const val = Math.max(0, parseInt(e.target.value) || 0);
                                                         setMapResults(prev => ({
                                                             ...prev,
@@ -1150,16 +1217,18 @@ const TeamManagement: React.FC<{
                             <div className="space-y-4 mb-10 overflow-x-auto custom-scrollbar">
                                 <div className="min-w-[700px]">
                                     <div className="grid grid-cols-12 gap-4 px-6 mb-4 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] md:tracking-[0.3em]">
-                                        <div className="col-span-4">Operator</div>
-                                        <div className="col-span-2 text-center">Kills</div>
-                                        <div className="col-span-2 text-center">Deaths</div>
-                                        <div className="col-span-2 text-center">Assists</div>
-                                        <div className="col-span-2 text-center text-amber-500/60">ACS</div>
+                                        <div className={isValorantFamily ? "col-span-3" : "col-span-4"}>Operator</div>
+                                        {isValorantFamily && <div className="col-span-2 text-center text-indigo-400">Agent</div>}
+                                        {isValorantFamily && <div className="col-span-2 text-center text-fuchsia-400">Role</div>}
+                                        <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-2"}`}>Kills</div>
+                                        <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-2"}`}>Deaths</div>
+                                        <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-2"}`}>Assists</div>
+                                        <div className={`text-center text-amber-500/60 "col-span-2"`}>ACS</div>
                                     </div>
                                     <div className="space-y-3">
                                         {mapResults[activeMapTab]?.results?.results?.map((stat, idx) => (
                                             <div key={idx} className="grid grid-cols-12 gap-4 items-center bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-all group/row">
-                                                <div className="col-span-4">
+                                                <div className={isValorantFamily ? "col-span-3" : "col-span-4"}>
                                                     <select
                                                         value={stat.playerId || ''}
                                                         onChange={e => {
@@ -1182,13 +1251,52 @@ const TeamManagement: React.FC<{
                                                         className="bg-transparent text-white font-black uppercase tracking-tight outline-none w-full py-1 text-sm appearance-none cursor-pointer group-hover/row:text-amber-500 transition-colors"
                                                     >
                                                         <option value="" className="bg-[#020617] text-slate-500">IDENTIFY OPERATOR...</option>
-                                                        {currentTeam?.players?.map(p => (
+                                                        {currentTeam?.players?.filter(p => !p.role?.toLowerCase().includes('coach')).map(p => (
                                                             <option key={p.id} value={p.id} className="bg-[#020617] text-white">{p.name.toUpperCase()}</option>
                                                         ))}
                                                     </select>
                                                     <div className="h-px bg-gradient-to-r from-amber-500/20 to-transparent w-full mt-1" />
                                                 </div>
-                                                <div className="col-span-2">
+                                                {isValorantFamily && (
+                                                    <div className="col-span-2 relative group-agent-sel">
+                                                        <div className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none z-10">
+                                                            {stat.agent && (
+                                                                <img
+                                                                    src={getAgentImage(stat.agent || '')}
+                                                                    className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(245,158,11,0.5)]"
+                                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <select value={stat.agent || ''} onChange={e => {
+                                                            const currentTab = mapResults[activeMapTab];
+                                                            const currentResults = currentTab?.results;
+                                                            if (!currentResults) return;
+                                                            const updatedResultsArr = [...currentResults.results];
+                                                            updatedResultsArr[idx] = { ...updatedResultsArr[idx], agent: e.target.value };
+                                                            setMapResults(prev => ({ ...prev, [activeMapTab]: { ...currentTab, results: { ...currentResults, results: updatedResultsArr } } }));
+                                                        }} className={`bg-black/40 border border-white/5 rounded-xl py-2 ${stat.agent ? 'pl-7 pr-1' : 'px-1'} text-center font-black text-indigo-400 focus:border-indigo-500/50 outline-none transition-all text-[9.5px] uppercase tracking-widest w-full cursor-pointer appearance-none`}>
+                                                            <option value="" className="bg-[#020617] text-slate-500">AGENT</option>
+                                                            {VALORANT_AGENTS.map(a => <option key={a} value={a} className="bg-[#020617] text-white">{a.toUpperCase()}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {isValorantFamily && (
+                                                    <div className="col-span-2">
+                                                        <select value={stat.role || ''} onChange={e => {
+                                                            const currentTab = mapResults[activeMapTab];
+                                                            const currentResults = currentTab?.results;
+                                                            if (!currentResults) return;
+                                                            const updatedResultsArr = [...currentResults.results];
+                                                            updatedResultsArr[idx] = { ...updatedResultsArr[idx], role: e.target.value };
+                                                            setMapResults(prev => ({ ...prev, [activeMapTab]: { ...currentTab, results: { ...currentResults, results: updatedResultsArr } } }));
+                                                        }} className="bg-black/40 border border-white/5 rounded-xl py-2 px-1 text-center font-black text-fuchsia-400 focus:border-fuchsia-500/50 outline-none transition-all text-[9px] uppercase tracking-widest w-full cursor-pointer appearance-none">
+                                                            <option value="" className="bg-[#020617] text-slate-500">ROLE</option>
+                                                            {VALORANT_ROLES.map(r => <option key={r} value={r} className="bg-[#020617] text-white">{r.toUpperCase()}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                <div className={isValorantFamily ? "col-span-1" : "col-span-2"}>
                                                     <input type="number" min="0" value={stat.kills} onChange={e => {
                                                         const currentTab = mapResults[activeMapTab];
                                                         const currentResults = currentTab?.results;
@@ -1196,9 +1304,9 @@ const TeamManagement: React.FC<{
                                                         const updatedResultsArr = [...currentResults.results];
                                                         updatedResultsArr[idx] = { ...updatedResultsArr[idx], kills: Math.max(0, Number(e.target.value)) };
                                                         setMapResults(prev => ({ ...prev, [activeMapTab]: { ...currentTab, results: { ...currentResults, results: updatedResultsArr } } }));
-                                                    }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-emerald-400 focus:border-emerald-500/50 outline-none transition-all" />
+                                                    }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-emerald-400 focus:border-emerald-500/50 outline-none transition-all px-0" />
                                                 </div>
-                                                <div className="col-span-2">
+                                                <div className={isValorantFamily ? "col-span-1" : "col-span-2"}>
                                                     <input type="number" min="0" value={stat.deaths} onChange={e => {
                                                         const currentTab = mapResults[activeMapTab];
                                                         const currentResults = currentTab?.results;
@@ -1206,9 +1314,9 @@ const TeamManagement: React.FC<{
                                                         const updatedResultsArr = [...currentResults.results];
                                                         updatedResultsArr[idx] = { ...updatedResultsArr[idx], deaths: Math.max(0, Number(e.target.value)) };
                                                         setMapResults(prev => ({ ...prev, [activeMapTab]: { ...currentTab, results: { ...currentResults, results: updatedResultsArr } } }));
-                                                    }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-red-400 focus:border-red-500/50 outline-none transition-all" />
+                                                    }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-red-400 focus:border-red-500/50 outline-none transition-all px-0" />
                                                 </div>
-                                                <div className="col-span-2">
+                                                <div className={isValorantFamily ? "col-span-1" : "col-span-2"}>
                                                     <input type="number" min="0" value={stat.assists} onChange={e => {
                                                         const currentTab = mapResults[activeMapTab];
                                                         const currentResults = currentTab?.results;
@@ -1216,9 +1324,9 @@ const TeamManagement: React.FC<{
                                                         const updatedResultsArr = [...currentResults.results];
                                                         updatedResultsArr[idx] = { ...updatedResultsArr[idx], assists: Math.max(0, Number(e.target.value)) };
                                                         setMapResults(prev => ({ ...prev, [activeMapTab]: { ...currentTab, results: { ...currentResults, results: updatedResultsArr } } }));
-                                                    }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-blue-400 focus:border-blue-500/50 outline-none transition-all" />
+                                                    }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-blue-400 focus:border-blue-500/50 outline-none transition-all px-0" />
                                                 </div>
-                                                <div className="col-span-2 relative flex items-center space-x-3">
+                                                <div className={`col-span-2 relative flex items-center space-x-1 md:space-x-3`}>
                                                     <input type="number" min="0" value={stat.acs || 0} onChange={e => {
                                                         const currentTab = mapResults[activeMapTab];
                                                         const currentResults = currentTab?.results;
@@ -1315,34 +1423,36 @@ const TeamManagement: React.FC<{
                 </div>}
             </Modal>
 
-            <Modal isOpen={!!scrimDetailModal} onClose={() => setScrimDetailModal(null)} zIndex={200} backdropClassName="bg-black/95 backdrop-blur-xl animate-in fade-in zoom-in duration-500" className="w-full max-w-6xl max-h-[90vh]">
-                {scrimDetailModal && <div className="bg-[#020617] w-full max-h-[90vh] overflow-y-auto rounded-[32px] md:rounded-[50px] shadow-[0_0_150px_rgba(0,0,0,0.8)] border border-white/10 flex flex-col relative group/detail custom-scrollbar">
-                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-amber-500/[0.03] blur-[150px] rounded-full pointer-events-none" />
+            <Modal isOpen={!!scrimDetailModal} onClose={() => setScrimDetailModal(null)} zIndex={2000} backdropClassName="bg-black/95 backdrop-blur-3xl animate-in fade-in zoom-in duration-500" className="w-full max-w-6xl p-4 md:p-8">
+                {scrimDetailModal && <div className="bg-[#020617]/90 backdrop-blur-3xl w-full max-h-[85vh] overflow-y-auto rounded-[40px] md:rounded-[60px] shadow-[0_0_150px_rgba(245,158,11,0.15)] border border-amber-500/20 flex flex-col relative group/detail custom-scrollbar">
+                    <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-amber-500/[0.05] blur-[180px] rounded-full pointer-events-none" />
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-40" />
 
-                    <div className="p-8 md:p-16 border-b border-white/5 flex flex-col md:flex-row justify-between items-start sticky top-0 bg-[#020617]/90 backdrop-blur-3xl z-30 rounded-t-[32px] md:rounded-t-[50px] gap-6">
+                    <div className="p-6 md:p-10 border-b border-white/5 flex flex-col md:flex-row justify-between items-start sticky top-0 bg-[#020617]/95 backdrop-blur-2xl z-30 rounded-t-[40px] md:rounded-t-[60px] gap-6">
                         <div className="space-y-2">
                             <div className="flex items-center space-x-4">
                                 <span className="text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.4em] md:tracking-[0.5em]">Tactical Review</span>
                                 <div className="h-px bg-amber-500/30 w-8 md:w-12" />
                             </div>
-                            <h2 className="text-3xl md:text-5xl font-black text-white italic tracking-tighter uppercase leading-tight">
+                            <h2 className="text-2xl md:text-5xl font-black text-white italic tracking-tighter uppercase leading-tight">
                                 vs <span className="text-amber-500">{scrimDetailModal.opponent}</span>
                             </h2>
-                            <div className="text-slate-500 font-bold flex flex-wrap items-center gap-3 md:gap-4 text-[10px] md:text-xs uppercase tracking-widest pt-1 md:pt-2">
-                                <span className="bg-white/5 px-3 py-1 rounded-lg border border-white/5 whitespace-nowrap">{new Date(scrimDetailModal.date).toLocaleString()}</span>
+                            <div className="text-slate-500 font-bold flex flex-wrap items-center gap-4 md:gap-6 text-xs md:text-sm uppercase tracking-[0.2em] pt-4">
+                                <span className="bg-white/5 px-4 py-1.5 rounded-xl border border-white/5 whitespace-nowrap">{new Date(scrimDetailModal.date).toLocaleString()}</span>
                                 <span className="hidden md:inline text-amber-500/40">•</span>
-                                <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-lg whitespace-nowrap">{scrimDetailModal.format}</span>
+                                <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-4 py-1.5 rounded-xl whitespace-nowrap">{scrimDetailModal.format}</span>
                             </div>
                         </div>
                         <button
                             onClick={() => setScrimDetailModal(null)}
-                            className="absolute md:relative top-6 md:top-0 right-6 md:right-0 w-12 h-12 md:w-16 md:h-16 bg-white/5 hover:bg-amber-500 hover:text-black text-white rounded-xl md:rounded-[24px] flex items-center justify-center transition-all duration-500 border border-white/10 group/close active:scale-95 shadow-2xl rotate-0 hover:rotate-90 z-40"
+                            className="absolute md:relative top-6 md:top-0 right-6 md:right-0 w-10 h-10 md:w-12 md:h-12 bg-white/5 hover:bg-amber-500 hover:text-black text-white rounded-xl md:rounded-2xl flex items-center justify-center transition-all duration-700 border border-white/10 group/close active:scale-90 shadow-2xl rotate-0 hover:rotate-90 z-40"
                         >
-                            <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
+
                     </div>
 
-                    <div className="p-8 md:p-16 space-y-12 md:space-y-16">
+                    <div className="p-6 md:p-10 space-y-10 md:space-y-12">
                         {/* Map Results */}
                         {scrimDetailModal.results && (() => {
                             try {
@@ -1392,45 +1502,78 @@ const TeamManagement: React.FC<{
                                 <table className="w-full text-left border-collapse min-w-[800px] md:min-w-full">
                                     <thead>
                                         <tr className="border-b border-white/5 text-[8px] md:text-[10px] uppercase font-black tracking-[0.3em] md:tracking-[0.4em] text-slate-500">
-                                            <th className="p-6 md:p-10 whitespace-nowrap">Operator identity</th>
-                                            <th className="p-6 md:p-10 text-center whitespace-nowrap">Neutralizations</th>
-                                            <th className="p-6 md:p-10 text-center whitespace-nowrap">Casualties</th>
-                                            <th className="p-6 md:p-10 text-center whitespace-nowrap">Support</th>
-                                            <th className="p-6 md:p-10 text-center whitespace-nowrap">Variance</th>
-                                            <th className="p-6 md:p-10 text-center text-amber-500 whitespace-nowrap">Combat Score</th>
+                                            <th className="p-4 md:p-6 whitespace-nowrap">Operator identity</th>
+                                            {isValorantFamily && <th className="p-4 md:p-6 text-center whitespace-nowrap text-indigo-400">Agent</th>}
+                                            {isValorantFamily && <th className="p-4 md:p-6 text-center whitespace-nowrap text-fuchsia-400">Role</th>}
+                                            <th className="p-4 md:p-6 text-center whitespace-nowrap">K / D / A</th>
+                                            <th className="p-4 md:p-6 text-center whitespace-nowrap">KDA Ratio</th>
+                                            <th className="p-4 md:p-6 text-center text-amber-500 whitespace-nowrap">ACS</th>
+
+
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
                                         {(scrimDetailModal as any).stats?.map((stat: any, idx: number) => (
-                                            <tr key={idx} className="group/stat hover:bg-white/[0.02] transition-colors">
-                                                <td className="p-6 md:p-10 whitespace-nowrap">
+                                            <tr key={idx} onClick={() => {
+                                                setSelectedPlayerForStats({
+                                                    id: stat.playerId,
+                                                    name: stat.playerName,
+                                                    role: stat.role,
+                                                    image: stat.playerImage,
+                                                    acs: stat.acs?.toString(),
+                                                    userId: stat.playerUserId,
+                                                    kda: calculateKDA(stat.kills, stat.assists, stat.deaths)
+                                                });
+                                                setIsPlayerStatsModalOpen(true);
+                                            }} className="group/stat hover:bg-white/[0.02] transition-colors cursor-pointer text-sm">
+                                                <td className="p-4 md:p-6 whitespace-nowrap">
+
                                                     <div className="flex items-center space-x-4 md:space-x-6">
-                                                        <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 overflow-hidden shadow-2xl group-hover/stat:border-amber-500/50 transition-colors relative">
+                                                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 border border-white/10 overflow-hidden shadow-2xl group-hover/stat:border-amber-500/50 transition-colors relative">
                                                             {stat.playerImage ? (
                                                                 <img src={stat.playerImage} className="w-full h-full object-cover group-hover/stat:scale-110 transition-transform duration-700" />
                                                             ) : (
                                                                 <div className="w-full h-full flex items-center justify-center text-slate-700 font-black">?</div>
                                                             )}
                                                         </div>
-                                                        <div className="space-y-0.5 md:space-y-1">
-                                                            <span className="text-lg md:text-xl font-black text-white italic uppercase tracking-tighter group-hover/stat:text-amber-500 transition-colors line-clamp-1">{stat.playerName || 'REDACTED'}</span>
+                                                        <div className="space-y-0.5">
+                                                            <span className="text-base md:text-lg font-black text-white italic uppercase tracking-tighter group-hover/stat:text-amber-500 transition-colors line-clamp-1">{stat.playerName || 'REDACTED'}</span>
+
                                                             <div className="text-[8px] md:text-[9px] text-slate-600 font-black uppercase tracking-widest line-clamp-1">Certified Combatant</div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="p-6 md:p-10 text-center font-black text-xl md:text-2xl text-white italic tracking-tighter tabular-nums">{stat.kills.toString().padStart(2, '0')}</td>
-                                                <td className="p-6 md:p-10 text-center font-black text-xl md:text-2xl text-slate-500 italic tracking-tighter tabular-nums">{stat.deaths.toString().padStart(2, '0')}</td>
-                                                <td className="p-6 md:p-10 text-center font-black text-xl md:text-2xl text-slate-500 italic tracking-tighter tabular-nums">{stat.assists.toString().padStart(2, '0')}</td>
-                                                <td className="p-6 md:p-10 text-center">
-                                                    <div className={`text-xl md:text-2xl font-black italic tracking-tighter tabular-nums ${stat.kills - stat.deaths >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                        {stat.kills - stat.deaths > 0 ? '+' : ''}{stat.kills - stat.deaths}
+                                                {isValorantFamily && (
+                                                    <td className="p-4 md:p-6 text-center font-black text-lg md:text-xl text-indigo-400 italic tracking-tighter uppercase">
+                                                        <div className="flex items-center justify-center gap-3">
+                                                            <img
+                                                                src={getAgentImage(stat.agent || '')}
+                                                                className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(79,70,229,0.3)] group-hover/stat:scale-110 transition-transform duration-500"
+                                                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                            />
+                                                            <span>{stat.agent || 'N/A'}</span>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {isValorantFamily && (
+                                                    <td className="p-4 md:p-6 text-center font-black text-lg md:text-xl text-fuchsia-400 italic tracking-tighter uppercase">{stat.role || 'N/A'}</td>
+                                                )}
+                                                <td className="p-4 md:p-6 text-center">
+                                                    <div className="text-lg md:text-xl font-black text-white italic tracking-tighter tabular-nums">
+                                                        {stat.kills}/{stat.deaths}/{stat.assists}
                                                     </div>
-                                                    <div className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-slate-700 mt-1">KD DELTA</div>
                                                 </td>
-                                                <td className="p-6 md:p-10 text-center">
-                                                    <span className="text-2xl md:text-3xl font-black italic tracking-tighter text-amber-500 tabular-nums shadow-amber-500/20">{stat.acs || '000'}</span>
-                                                    <div className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-amber-500/40 mt-1">PEAK EFFICIENCY</div>
+                                                <td className="p-4 md:p-6 text-center">
+                                                    <div className={`text-lg md:text-xl font-black italic tracking-tighter tabular-nums ${getKDAColor(calculateKDA(stat.kills, stat.assists, stat.deaths))}`}>
+                                                        {calculateKDA(stat.kills, stat.assists, stat.deaths)}
+                                                    </div>
+                                                    <div className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-slate-700 mt-1">KDA RATIO</div>
                                                 </td>
+                                                <td className="p-4 md:p-6 text-center">
+                                                    <span className="text-xl md:text-2xl font-black italic tracking-tighter text-amber-500 tabular-nums shadow-amber-500/20">{stat.acs || '000'}</span>
+                                                    <div className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-amber-500/40 mt-1">ACS</div>
+                                                </td>
+
                                             </tr>
                                         ))}
                                         {!(scrimDetailModal as any).stats && (
@@ -1460,35 +1603,46 @@ const TeamManagement: React.FC<{
                         </div>
                     </div>
 
-                    <div className="p-8 md:p-16 bg-[#020617] border-t border-white/5 flex justify-center sticky bottom-0 z-20 rounded-b-[32px] md:rounded-b-[50px]">
+                    <div className="p-6 md:p-8 bg-[#020617]/95 backdrop-blur-2xl border-t border-white/5 flex justify-center sticky bottom-0 z-20 rounded-b-[40px] md:rounded-b-[60px]">
                         <button
                             onClick={() => setScrimDetailModal(null)}
-                            className="w-full md:w-auto px-8 md:px-16 py-4 md:py-5 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-[8px] md:text-[10px] rounded-xl md:rounded-2xl transition-all border border-white/10 active:scale-95 shadow-2xl"
+                            className="w-full md:w-auto px-10 md:px-16 py-4 md:py-5 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black font-black uppercase tracking-[0.4em] md:tracking-[0.5em] text-[10px] md:text-[11px] rounded-2xl transition-all border border-amber-500/20 hover:border-amber-500 active:scale-95 shadow-[0_0_50px_rgba(245,158,11,0.1)] hover:shadow-[0_0_50px_rgba(245,158,11,0.3)]"
                         >
                             Close Command Interface
                         </button>
                     </div>
+
                 </div>}
             </Modal>
 
-            <Modal isOpen={!!selectedIntelImage} onClose={() => setSelectedIntelImage(null)} zIndex={300} backdropClassName="bg-black/95 backdrop-blur-2xl animate-in fade-in zoom-in duration-300" className="w-full h-full flex items-center justify-center">
-                {selectedIntelImage && <div className="relative w-full h-full flex items-center justify-center group/visualizer" onClick={() => setSelectedIntelImage(null)}>
+            <Modal isOpen={!!selectedIntelImage} onClose={() => setSelectedIntelImage(null)} zIndex={300} backdropClassName="bg-black/98 backdrop-blur-3xl animate-in fade-in zoom-in duration-500" className="w-full h-full flex items-center justify-center p-4 md:p-12">
+                {selectedIntelImage && <div className="relative max-w-7xl max-h-full flex items-center justify-center group/visualizer" onClick={() => setSelectedIntelImage(null)}>
+                    <div className="absolute -inset-4 bg-amber-500/10 rounded-[40px] blur-3xl opacity-0 group-hover/visualizer:opacity-100 transition-opacity duration-1000" />
                     <img
                         src={selectedIntelImage}
                         alt="Intel Visualizer"
-                        className="max-w-full max-h-full object-contain rounded-3xl shadow-[0_0_100px_rgba(251,191,36,0.15)] border border-white/10 transition-transform duration-700"
+                        className="max-w-full max-h-full object-contain rounded-[32px] md:rounded-[48px] shadow-[0_0_120px_rgba(245,158,11,0.2)] border-2 border-white/10 transition-all duration-700 group-hover/visualizer:border-amber-500/30 group-hover/visualizer:scale-[1.02]"
                     />
                     <button
                         onClick={(e) => { e.stopPropagation(); setSelectedIntelImage(null); }}
-                        className="absolute top-4 right-4 w-16 h-16 bg-white/5 hover:bg-red-500 text-white rounded-2xl flex items-center justify-center transition-all border border-white/10 active:scale-90"
+                        className="absolute -top-6 -right-6 w-16 h-16 bg-[#020617]/80 backdrop-blur-xl hover:bg-red-500 text-white rounded-[24px] flex items-center justify-center transition-all border border-white/10 active:scale-90 shadow-2xl group/close"
                     >
-                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        <svg className="w-8 h-8 group-hover/close:rotate-90 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl text-amber-500 font-black text-[10px] uppercase tracking-[0.4em] opacity-0 group-hover/visualizer:opacity-100 transition-opacity">
-                        High-Resolution Intelligence Stream
+                    <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-10 py-4 bg-[#020617]/80 backdrop-blur-2xl border border-amber-500/20 rounded-full text-amber-500 font-black text-[10px] md:text-xs uppercase tracking-[0.5em] opacity-0 group-hover/visualizer:opacity-100 transition-all duration-500 shadow-2xl">
+                        High-Resolution Tactical Stream
                     </div>
                 </div>}
             </Modal>
+
+            <PlayerStatsModal
+                player={selectedPlayerForStats}
+                isOpen={isPlayerStatsModalOpen}
+                onClose={() => setIsPlayerStatsModalOpen(false)}
+                userRole={userRole}
+                currentUserId={userId}
+                showAdvancedIntel={true}
+            />
         </div>
     );
 };

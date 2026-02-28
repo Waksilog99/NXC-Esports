@@ -165,7 +165,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/${userId}/role`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: newRole })
+                body: JSON.stringify({ role: newRole, requesterId: user?.id })
             });
             const result = await res.json();
             if (result.success) {
@@ -194,7 +194,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/manager`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ managerId: managerId === 'none' ? null : Number(managerId) })
+                body: JSON.stringify({ managerId: managerId === 'none' ? null : Number(managerId), requesterId: user?.id })
             });
             const result = await res.json();
             if (result.success) {
@@ -222,7 +222,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
         if (!confirm('This will seed 3 managers and 6 test teams. Proceed?')) return;
         setSeeding(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/seed/managers`, { method: 'POST' });
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/seed/managers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requesterId: user?.id })
+            });
             const result = await res.json();
             if (result.success) {
                 showNotification({
@@ -251,7 +255,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     const handleRemoveSponsor = async (id: number) => {
         if (!confirm('Are you sure you want to remove this partner? This action cannot be undone.')) return;
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${id}`, { method: 'DELETE' });
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requesterId: user?.id })
+            });
             const result = await res.json();
             if (result.success) {
                 setSponsors(sponsors.filter(s => s.id !== id));
@@ -279,7 +287,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tier: newTier })
+                body: JSON.stringify({ tier: newTier, requesterId: user?.id })
             });
 
             const result = await res.json();
@@ -336,20 +344,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     };
 
     const filteredUsers = users.filter(u =>
-        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (u.username?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (u.role && u.role.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const filteredTeamsList = teams.filter(t =>
-        t.name.toLowerCase().includes(squadSearchTerm.toLowerCase()) ||
-        t.game.toLowerCase().includes(squadSearchTerm.toLowerCase())
+        (t.name?.toLowerCase() || '').includes(squadSearchTerm.toLowerCase()) ||
+        (t.game?.toLowerCase() || '').includes(squadSearchTerm.toLowerCase())
     );
 
     const filteredManagers = users
         .filter(u => u.role === 'manager' || u.role === 'admin' || u.role === 'ceo')
-        .filter(m => m.name.toLowerCase().includes(managerSearchTerm.toLowerCase()));
+        .filter(m => (m.name?.toLowerCase() || '').includes(managerSearchTerm.toLowerCase()));
 
     const totalPages = Math.ceil(filteredManagers.length / MANAGERS_PER_PAGE);
     const currentManagers = filteredManagers.slice(
@@ -756,7 +764,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                         Add Achievement
                     </h3>
                     <div className="relative z-10">
-                        <AddAchievementForm />
+                        <AddAchievementForm requesterId={user?.id} />
                     </div>
                 </div>
 
@@ -776,7 +784,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                         Add Event
                     </h3>
                     <div className="relative z-10">
-                        <AddEventForm />
+                        <AddEventForm requesterId={user?.id} />
                     </div>
                 </div>
             </div>
@@ -798,7 +806,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                         Onboard Partner
                     </h3>
                     <div className="relative z-10">
-                        <AddSponsorForm users={users} />
+                        <AddSponsorForm users={users} requesterId={user?.id} />
                     </div>
                 </div>
 
@@ -881,7 +889,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                 <div className="absolute top-0 right-0 p-8">
                     <div className="w-24 h-24 bg-amber-500/5 blur-[80px] rounded-full" />
                 </div>
-                <TacticalIntelGraphs availableTeams={teams} />
+                <TacticalIntelGraphs availableTeams={teams} userRole={user?.role} />
             </div>
 
             {/* 6. Weekly Summary Reporting Hub - NEW */}

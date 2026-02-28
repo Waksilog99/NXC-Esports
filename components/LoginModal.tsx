@@ -19,6 +19,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
+    // Reset form state on modal open/close
+    React.useEffect(() => {
+        if (!isOpen) {
+            setFullname('');
+            setUsername('');
+            setEmail('');
+            setPassword('');
+            setError(null);
+            setIsLogin(true);
+        }
+    }, [isOpen]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
@@ -176,7 +188,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         <p className="text-center text-xs text-slate-500">
                             {isLogin ? "New to Waks Corporation? " : "Already have security clearance? "}
                             <button
-                                onClick={() => { setIsLogin(!isLogin); setError(null); }}
+                                onClick={() => {
+                                    setIsLogin(!isLogin);
+                                    setError(null);
+                                    // Clear fields when switching modes to avoid "inheritance"
+                                    setFullname('');
+                                    setUsername('');
+                                    setEmail('');
+                                    setPassword('');
+                                }}
                                 className="text-amber-600 dark:text-amber-500 hover:text-amber-500 dark:hover:text-amber-400 font-black transition-colors"
                             >
                                 {isLogin ? 'Sign Up' : 'Log In'}

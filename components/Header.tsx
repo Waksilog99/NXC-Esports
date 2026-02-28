@@ -23,6 +23,11 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
   const navClass = (view: string) => `transition-all duration-300 cursor-pointer relative py-2 ${currentView === view ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-200 font-bold'}`;
 
   const handleSubNavigate = (view: any, id: string) => {
+    // If we are already in the view, we might want to refresh the content
+    if (currentView === view) {
+      // Force a re-fetch or reset by temporarily switching and switching back or signaling
+      // For now, onNavigate(view) is called.
+    }
     onNavigate(view);
     setIsMobileMenuOpen(false);
     setShowCommandMenu(false);
@@ -135,10 +140,10 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
               </div>
             </div>
           )}
-          {user && (userRole?.split(',').some(r => ['manager', 'admin', 'ceo'].includes(r))) && (
+          {user && (userRole?.split(',').some(r => ['manager', 'admin', 'ceo', 'coach'].includes(r))) && (
             <a onClick={() => onNavigate('manager')} className={`${navClass('manager')} text-purple-400 flex items-center`}>
               <span className="w-1.5 h-1.5 bg-purple-500 rounded-full mr-2.5 shadow-[0_0_12px_#a855f7]" />
-              Manager
+              {userRole?.toLowerCase() === 'coach' ? 'Coach Corner' : 'Manager'}
             </a>
           )}
           {user && (userRole?.split(',').some(r => ['player'].includes(r))) && (
@@ -287,7 +292,7 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
                   </button>
                 ))}
 
-                {(user && userRole?.split(',').some(r => ['admin', 'ceo', 'manager'].includes(r))) && (
+                {(user && userRole?.split(',').some(r => ['admin', 'ceo', 'manager', 'coach'].includes(r))) && (
                   <div className="h-px bg-white/5 my-4 mx-2" />
                 )}
 
@@ -301,13 +306,13 @@ const Header: React.FC<HeaderProps> = ({ onLoginClick, onProfileClick, onSetting
                   </button>
                 )}
 
-                {user && (userRole?.split(',').some(r => ['manager', 'admin', 'ceo'].includes(r))) && (
+                {user && (userRole?.split(',').some(r => ['manager', 'admin', 'ceo', 'coach'].includes(r))) && (
                   <button
                     onClick={() => { onNavigate('manager'); setIsMobileMenuOpen(false); }}
                     className={`w-full text-left px-6 py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-sm transition-all flex items-center ${currentView === 'manager' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-purple-400/60 hover:bg-purple-500/5'}`}
                   >
                     <span className="w-1.5 h-1.5 bg-purple-500 rounded-full mr-3 shadow-[0_0_8px_#a855f7]" />
-                    Tactical Management
+                    {userRole?.toLowerCase() === 'coach' ? 'Coach Corner' : 'Tactical Management'}
                   </button>
                 )}
 

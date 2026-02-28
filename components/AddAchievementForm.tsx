@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GAME_TITLES } from './constants';
 
-const AddAchievementForm: React.FC = () => {
+const AddAchievementForm: React.FC<{ requesterId?: number }> = ({ requesterId }) => {
     const { showNotification } = useNotification();
     const [title, setTitle] = useState('');
     const [date, setDate] = useState('');
@@ -19,7 +19,7 @@ const AddAchievementForm: React.FC = () => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/achievements`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, date, description, placement, image, game })
+                body: JSON.stringify({ title, date, description, placement, image, game, requesterId })
             });
             const result = await res.json();
             if (result.success) {
@@ -82,16 +82,19 @@ const AddAchievementForm: React.FC = () => {
             </div>
             <div>
                 <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] md:tracking-[0.3em] mb-2 md:mb-3 md:ml-2">Combat Simulator</label>
-                <select
-                    value={game}
-                    onChange={e => setGame(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-sm font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all appearance-none cursor-pointer"
-                >
-                    <option value="" className="bg-white dark:bg-[#020617]">-- GLOBAL ARCHIVE --</option>
-                    {GAME_TITLES.map(title => (
-                        <option key={title} value={title} className="bg-white dark:bg-[#020617]">{title.toUpperCase()}</option>
-                    ))}
-                </select>
+                <div className="relative">
+                    <select
+                        value={game}
+                        onChange={e => setGame(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-sm font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all appearance-none cursor-pointer"
+                    >
+                        <option value="" className="bg-white dark:bg-[#020617]">-- GLOBAL ARCHIVE --</option>
+                        {GAME_TITLES.map(title => (
+                            <option key={title} value={title} className="bg-white dark:bg-[#020617]">{title.toUpperCase()}</option>
+                        ))}
+                    </select>
+                    <svg className="w-3 h-3 text-amber-500 absolute right-4 md:right-6 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                </div>
             </div>
             <div>
                 <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] md:tracking-[0.3em] mb-2 md:mb-3 md:ml-2">Mission Briefing</label>

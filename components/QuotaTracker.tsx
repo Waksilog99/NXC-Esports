@@ -65,7 +65,7 @@ const QuotaTracker: React.FC<{
     const [grindProofs, setGrindProofs] = useState<GrindProofItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
-    const isShootingGame = GAME_CATEGORY[game] === 'FPS' || GAME_CATEGORY[game] === 'BR';
+    const isShootingGame = GAME_CATEGORY[game] === 'FPS' || GAME_CATEGORY[game] === 'BR' || GAME_CATEGORY[game] === 'VALORANT';
 
     function getMondayISO(d: Date) {
         const date = new Date(d);
@@ -73,7 +73,11 @@ const QuotaTracker: React.FC<{
         const diff = date.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(date.setDate(diff));
         monday.setHours(0, 0, 0, 0);
-        return monday.toISOString().split('T')[0];
+
+        const y = monday.getFullYear();
+        const m = String(monday.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(monday.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dayStr}`;
     }
 
     const currentWeek = getMondayISO(new Date());

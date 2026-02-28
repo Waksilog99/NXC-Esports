@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:seed": "tsx server/seed.ts"
   },
   "dependencies": {
     "@google/genai": "^1.41.0",

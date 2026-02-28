@@ -17,7 +17,7 @@ const ManagerDashboard: React.FC<{
     userRole?: string,
     onNavigate?: (view: string) => void
 }> = ({ userId, userRole, onNavigate }) => {
-    const [view, setView] = useState<'menu' | 'create-team' | 'manage-roster' | 'log-achievement' | 'performance-tracker' | 'tournament-network'>('menu');
+    const [view, setView] = useState<'menu' | 'operative-matrix' | 'log-achievement' | 'performance-tracker' | 'tournament-network'>('menu');
     const [teams, setTeams] = useState<Team[]>([]);
     const { showNotification } = useNotification();
 
@@ -50,7 +50,9 @@ const ManagerDashboard: React.FC<{
         if (!window.confirm('Are you sure you want to remove this operative from the active registry?')) return;
         try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/players/${playerId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requesterId: userId })
             });
             const result = await res.json();
             if (result.success) {
@@ -59,7 +61,7 @@ const ManagerDashboard: React.FC<{
                     type: 'success'
                 });
                 // Refresh teams to update player list
-                const url = userRole === 'manager'
+                const url = (userRole === 'manager' || userRole === 'coach') && userId
                     ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
                     : `${import.meta.env.VITE_API_BASE_URL}/api/teams`;
                 const resTeams = await fetch(url);
@@ -83,14 +85,26 @@ const ManagerDashboard: React.FC<{
     };
 
     useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('.dropdown-container')) {
+                setShowSquadResults(false);
+                setShowPersonnelResults(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
         const fetchData = async () => {
             if (view === 'menu') return;
             setLoading(true);
             setError(null);
             try {
                 // Teams
-                if (view === 'manage-roster' || view === 'performance-tracker' || view === 'tournament-network') {
-                    const url = (userRole === 'manager' && userId)
+                if (view === 'operative-matrix' || view === 'performance-tracker' || view === 'tournament-network') {
+                    const url = ((userRole === 'manager' || userRole === 'coach') && userId)
                         ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
                         : `${import.meta.env.VITE_API_BASE_URL}/api/teams`;
                     const res = await fetch(url);
@@ -103,7 +117,7 @@ const ManagerDashboard: React.FC<{
                 }
 
                 // Users
-                if (view === 'manage-roster') {
+                if (view === 'operative-matrix') {
                     const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users`);
                     const result = await res.json();
                     // /api/users returns a plain array (no success wrapper)
@@ -131,7 +145,7 @@ const ManagerDashboard: React.FC<{
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: teamName, game: teamGame, description: teamDesc, managerId: userId })
+                body: JSON.stringify({ name: teamName, game: teamGame, description: teamDesc, managerId: userId, requesterId: userId })
             });
             const result = await res.json();
             if (result.success) {
@@ -169,7 +183,8 @@ const ManagerDashboard: React.FC<{
                     role: playerRole,
                     kda: "0.00",
                     winRate: "0%",
-                    acs: "0"
+                    acs: "0",
+                    requesterId: userId
                 })
             });
             const result = await res.json();
@@ -180,7 +195,8 @@ const ManagerDashboard: React.FC<{
                 });
                 setSelectedRosterUserId(''); setPlayerName(''); setPlayerRole('');
                 // Refresh teams for better UX
-                const resTeams = await fetch(userRole === 'manager' && userId
+                const isTacticalRole = ['manager', 'coach'].includes(userRole || '');
+                const resTeams = await fetch(isTacticalRole && userId
                     ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
                     : `${import.meta.env.VITE_API_BASE_URL}/api/teams`);
                 const resTeamsResult = await resTeams.json();
@@ -224,14 +240,21 @@ const ManagerDashboard: React.FC<{
                     )}
                     <div>
                         <h2 className="text-2xl md:text-4xl font-black text-[var(--text-color)] tracking-tighter uppercase italic leading-tight">
-                            {view === 'menu' ? 'Command Matrix' : view === 'create-team' ? 'Init Unit' : view === 'manage-roster' ? 'Operative Matrix' : view === 'performance-tracker' ? 'Tactical Intel' : view === 'tournament-network' ? 'Tournament Network' : 'Victory Log'}
+                            {view === 'menu'
+                                ? (userRole?.toLowerCase() === 'coach' ? 'Coach Corner' : 'Command Matrix')
+                                : view === 'operative-matrix' ? 'Operative Matrix Initialization'
+                                    : view === 'performance-tracker' ? 'Tactical Intel'
+                                        : view === 'tournament-network' ? 'Tournament Network'
+                                            : 'Victory Log'}
                         </h2>
                         <p className="text-[8px] md:text-[10px] text-amber-500 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mt-1 md:mt-2 md:ml-1">Secure Tactical Terminal</p>
                     </div>
                 </div>
                 <div className="flex items-center">
                     <div className="px-4 md:px-5 py-1.5 md:py-2 bg-purple-500/10 border border-purple-500/20 rounded-xl md:rounded-2xl">
-                        <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 whitespace-nowrap">Auth: Level 4 Manager</span>
+                        <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 whitespace-nowrap">
+                            Auth: Level 4 {userRole?.toLowerCase() === 'coach' ? 'Coach' : 'Manager'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -258,13 +281,13 @@ const ManagerDashboard: React.FC<{
             {view === 'menu' && !loading && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10">
                     {[
-                        { id: 'create-team', icon: 'M12 4v16m8-8H4', title: 'Unit Initialization', desc: 'Draft new rosters and assign captains.', color: 'purple' },
-                        { id: 'manage-roster', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', title: 'Operative Matrix', desc: 'Sync rosters and monitor active squads.', color: 'amber' },
+                        { id: 'operative-matrix', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', title: 'Operative Matrix Initialization', desc: 'Initialize rosters and assign tactical assets.', color: 'amber', restricted: true },
                         { id: 'tournament-network', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', title: 'Tournament Network', desc: 'Track and manage tournament operations.', color: 'indigo' },
+                        { id: 'playbook', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', title: 'Strategy Playbook', desc: 'Secure data repository for tactical plans.', color: 'fuchsia' },
                         { id: 'log-achievement', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z', title: 'Victory Protocol', desc: 'Record a new tournament win.', color: 'yellow' },
                         { id: 'performance-tracker', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', title: 'Tactical Analytics', desc: 'Track Win Rates, K/D, and Maps.', color: 'cyan' },
                         { id: 'scrim-ops', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', title: 'Scrim Network', desc: 'Schedule matches and analyze results.', color: 'emerald' }
-                    ].map((item) => (
+                    ].filter(item => !item.restricted || userRole !== 'coach').map((item) => (
                         <div
                             key={item.id}
                             onClick={() => {
@@ -273,6 +296,8 @@ const ManagerDashboard: React.FC<{
                                 } else if (item.id === 'tournament-network') {
                                     // Navigate to TeamManagement with tournament mode
                                     onNavigate && onNavigate('tournament-management');
+                                } else if (item.id === 'playbook') {
+                                    onNavigate && onNavigate('playbook');
                                 } else {
                                     setView(item.id as any);
                                 }
@@ -295,35 +320,263 @@ const ManagerDashboard: React.FC<{
 
             {view === 'performance-tracker' && (
                 <div className="space-y-12 animate-in fade-in duration-700">
-                    <TacticalIntelGraphs availableTeams={teams} />
+                    <TacticalIntelGraphs availableTeams={teams} userRole={userRole} />
                 </div>
             )}
 
-            {view === 'create-team' && (
-                <form onSubmit={handleCreateTeam} className="space-y-6 md:space-y-8 max-w-2xl mx-auto bg-white dark:bg-black/40 p-6 md:p-12 rounded-[32px] md:rounded-[48px] border border-slate-200 dark:border-white/5 animate-in zoom-in duration-500" style={{ boxShadow: 'var(--card-shadow)' }}>
-                    <div className="space-y-4 md:space-y-6">
-                        <div>
-                            <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] md:tracking-[0.3em] mb-2 md:mb-3 md:ml-2">Unit Designation</label>
-                            <input type="text" required value={teamName} onChange={e => setTeamName(e.target.value)} className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700" placeholder="e.g. VALORANT ALPHA" />
+            {view === 'operative-matrix' && (
+                <div className="space-y-12 animate-in fade-in duration-700">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                        {/* Unit Initialization Form */}
+                        <form onSubmit={handleCreateTeam} className="space-y-6 bg-white dark:bg-black/40 p-8 md:p-10 rounded-[32px] border border-slate-200 dark:border-white/5 relative overflow-hidden" style={{ boxShadow: 'var(--card-shadow)' }}>
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500/0 via-purple-500 to-purple-500/0" />
+                            <h3 className="text-xl font-black text-[var(--text-color)] mb-6 uppercase tracking-tight flex items-center">
+                                <span className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center mr-3 text-purple-500">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg>
+                                </span>
+                                Unit Initialization
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2 ml-2">Unit Designation</label>
+                                    <input type="text" required value={teamName} onChange={e => setTeamName(e.target.value)} className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-[10px] font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700" placeholder="e.g. VALORANT ALPHA" />
+                                </div>
+                                <div>
+                                    <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2 ml-2">Combat Simulator</label>
+                                    <div className="relative">
+                                        <select required value={teamGame} onChange={e => setTeamGame(e.target.value)} className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-[10px] font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all appearance-none cursor-pointer">
+                                            <option value="" className="bg-white dark:bg-[#020617]">-- SELECT TITLE --</option>
+                                            {GAME_TITLES.map(title => (
+                                                <option key={title} value={title} className="bg-white dark:bg-[#020617]">{title.toUpperCase()}</option>
+                                            ))}
+                                        </select>
+                                        <svg className="w-3 h-3 text-amber-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2 ml-2">Mission Parameters</label>
+                                    <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-[10px] font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700" rows={3} placeholder="DEFINE OBJECTIVES..." />
+                                </div>
+                            </div>
+                            <button type="submit" className="w-full py-4 mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white font-black uppercase tracking-[0.3em] text-[10px] rounded-xl transition-all shadow-xl shadow-purple-500/20 active:scale-95 border-t border-white/20">
+                                Authorize Deployment
+                            </button>
+                        </form>
+
+                        {/* Operative Matrix Form */}
+                        <form onSubmit={handleAddPlayer} className="space-y-6 bg-white dark:bg-black/40 p-8 md:p-10 rounded-[32px] border border-slate-200 dark:border-white/5 relative overflow-hidden" style={{ boxShadow: 'var(--card-shadow)' }}>
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/0 via-amber-500 to-amber-500/0" />
+                            <h3 className="text-xl font-black text-[var(--text-color)] mb-6 uppercase tracking-tight flex items-center">
+                                <span className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center mr-3 text-amber-500">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                </span>
+                                Roster Management
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2 ml-2">Strategic Squad</label>
+                                    <div className="relative dropdown-container">
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="SEARCH SQUAD..."
+                                                value={squadSearch}
+                                                onFocus={() => setShowSquadResults(true)}
+                                                onChange={e => {
+                                                    setSquadSearch(e.target.value);
+                                                    setShowSquadResults(true);
+                                                }}
+                                                className={`w-full bg-slate-50/50 dark:bg-[#020617]/40 border border-slate-200 dark:border-white/10 ${showSquadResults ? 'rounded-t-2xl' : 'rounded-xl'} px-4 py-3 text-[10px] font-black tracking-widest text-[var(--text-color)] focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700`}
+                                            />
+                                            <div
+                                                onClick={(e) => { e.stopPropagation(); setShowSquadResults(!showSquadResults); }}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer z-10"
+                                            >
+                                                <svg className={`w-3 h-3 text-amber-500 transition-transform duration-300 ${showSquadResults ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                                            </div>
+                                        </div>
+                                        {showSquadResults && (
+                                            <div className="absolute top-full left-0 w-full bg-white dark:bg-[#0d0d14] border border-t-0 border-slate-200 dark:border-white/10 rounded-b-xl z-[60] shadow-2xl max-h-40 overflow-y-auto custom-scrollbar">
+                                                {teams.filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase())).map(t => (
+                                                    <div
+                                                        key={t.id}
+                                                        onClick={() => {
+                                                            setSelectedTeam(t.id.toString());
+                                                            setSquadSearch(t.name);
+                                                            setShowSquadResults(false);
+                                                        }}
+                                                        className="px-4 py-3 hover:bg-amber-500/10 cursor-pointer text-[10px] font-black uppercase text-[var(--text-color)] dark:text-white border-b border-slate-100 dark:border-white/5 last:border-0"
+                                                    >
+                                                        {t.name}
+                                                    </div>
+                                                ))}
+                                                {teams.filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase())).length === 0 && (
+                                                    <div className="px-4 py-3 text-[8px] text-slate-500 font-bold uppercase italic">No Squads Found</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="relative dropdown-container">
+                                        <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2 ml-2">Personnel</label>
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="NAME..."
+                                                value={personnelSearch}
+                                                onFocus={() => setShowPersonnelResults(true)}
+                                                onChange={e => {
+                                                    setPersonnelSearch(e.target.value);
+                                                    setShowPersonnelResults(true);
+                                                }}
+                                                className={`w-full bg-slate-50/50 dark:bg-[#020617]/40 border border-slate-200 dark:border-white/10 ${showPersonnelResults ? 'rounded-t-2xl' : 'rounded-xl'} px-4 py-3 text-[10px] font-black tracking-widest text-[var(--text-color)] focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700`}
+                                            />
+                                            <div
+                                                onClick={(e) => { e.stopPropagation(); setShowPersonnelResults(!showPersonnelResults); }}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer z-10"
+                                            >
+                                                <svg className={`w-3 h-3 text-amber-500 transition-transform duration-300 ${showPersonnelResults ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                                            </div>
+                                        </div>
+                                        {showPersonnelResults && (
+                                            <div className="absolute top-full left-0 w-full bg-white dark:bg-[#0d0d14] border border-t-0 border-slate-200 dark:border-white/10 rounded-b-xl z-[60] shadow-2xl max-h-40 overflow-y-auto custom-scrollbar">
+                                                {usersList.filter(u =>
+                                                    u.username.toLowerCase().includes(personnelSearch.toLowerCase()) ||
+                                                    (u.fullname && u.fullname.toLowerCase().includes(personnelSearch.toLowerCase())) ||
+                                                    (u.ign && u.ign.toLowerCase().includes(personnelSearch.toLowerCase())) ||
+                                                    (u.role && u.role.toLowerCase().includes(personnelSearch.toLowerCase()))
+                                                ).map((u: any) => (
+                                                    <div
+                                                        key={u.id}
+                                                        onClick={() => {
+                                                            setSelectedRosterUserId(u.id.toString());
+                                                            setPlayerName(u.ign || u.username);
+                                                            setPersonnelSearch(u.username);
+                                                            setShowPersonnelResults(false);
+                                                        }}
+                                                        className="px-4 py-3 hover:bg-amber-500/10 cursor-pointer text-[10px] font-black uppercase text-[var(--text-color)] dark:text-white border-b border-slate-100 dark:border-white/5 last:border-0"
+                                                    >
+                                                        <div className="flex justify-between items-center">
+                                                            <span>{u.ign ? `${u.ign.toUpperCase()} (@${u.username.toUpperCase()})` : `@${u.username.toUpperCase()}`}</span>
+                                                            <span className="text-[7px] text-amber-500/70 ml-2">{u.role?.toUpperCase()}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2 ml-2">Tactical Role</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={playerRole}
+                                            onChange={e => setPlayerRole(e.target.value)}
+                                            placeholder="ROLE..."
+                                            className="w-full bg-slate-50/50 dark:bg-[#020617]/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-[10px] font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" className="w-full py-4 mt-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-[0.3em] text-[10px] rounded-xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 border-t border-white/20">
+                                Authorize Assignment
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Integrated Squad Intelligence Registry */}
+                    <div className="space-y-8 mt-12">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                            <div>
+                                <h3 className="text-2xl font-black text-[var(--text-color)] tracking-tight uppercase flex items-center">
+                                    <span className="bg-amber-500 text-black px-3 py-1 rounded-lg mr-4 text-sm font-black italic">DATABASE</span>
+                                    Squad Intelligence Registry
+                                </h3>
+                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mt-2 leading-relaxed">Cross-referenced unit data snapshot</p>
+                            </div>
+                            <div className="relative group w-full md:w-auto">
+                                <input
+                                    type="text"
+                                    placeholder="FILTER UNITS..."
+                                    value={squadSearch}
+                                    onChange={e => setSquadSearch(e.target.value)}
+                                    className="w-full md:w-64 pl-12 pr-6 py-3 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[var(--text-color)] focus:outline-none focus:border-amber-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700 shadow-xl"
+                                />
+                                <svg className="w-4 h-4 text-amber-500/60 absolute left-4 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] md:tracking-[0.3em] mb-2 md:mb-3 md:ml-2">Combat Simulator</label>
-                            <select required value={teamGame} onChange={e => setTeamGame(e.target.value)} className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all appearance-none cursor-pointer">
-                                <option value="" className="bg-white dark:bg-[#020617]">-- SELECT TITLE --</option>
-                                {GAME_TITLES.map(title => (
-                                    <option key={title} value={title} className="bg-white dark:bg-[#020617]">{title.toUpperCase()}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[8px] md:text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] md:tracking-[0.3em] mb-2 md:mb-3 md:ml-2">Mission Parameters</label>
-                            <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700" rows={4} placeholder="DEFINE OBJECTIVES..." />
+
+                        <div className="bg-white/40 dark:bg-black/40 backdrop-blur-3xl rounded-[32px] border border-slate-200 dark:border-white/5 overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)]">
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="sticky top-0 bg-white/80 dark:bg-[#0d0d14]/80 backdrop-blur-md z-10">
+                                        <tr className="border-b border-slate-200 dark:border-white/5">
+                                            <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Designation</th>
+                                            <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Simulator</th>
+                                            <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Operatives</th>
+                                            <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200 dark:divide-white/5">
+                                        {teams.filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase())).map((team) => (
+                                            <tr
+                                                key={team.id}
+                                                onClick={() => setSelectedSquadForModal(team)}
+                                                className="group hover:bg-slate-50/50 dark:hover:bg-white/5 transition-all cursor-pointer"
+                                            >
+                                                <td className="px-8 py-6">
+                                                    <div className="flex items-center space-x-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 font-black text-xs border border-amber-500/20 group-hover:scale-110 transition-transform">
+                                                            {team.name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-black text-[var(--text-color)] dark:text-white uppercase tracking-tight">{team.name}</p>
+                                                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Unit ID: {team.id}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <span className="px-3 py-1 bg-slate-100 dark:bg-white/10 rounded-full text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200 dark:border-white/10">
+                                                        {team.game}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="flex justify-center -space-x-3">
+                                                        {(team as any).players?.slice(0, 3).map((p: any, i: number) => (
+                                                            <img
+                                                                key={i}
+                                                                src={p.image || `https://ui-avatars.com/api/?name=${p.name}`}
+                                                                className="w-10 h-10 rounded-full border-2 border-white dark:border-[#0d0d14] object-cover ring-2 ring-amber-500/10"
+                                                                title={p.name}
+                                                                alt={p.name}
+                                                            />
+                                                        ))}
+                                                        {(team as any).players?.length > 3 && (
+                                                            <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-white dark:border-[#0d0d14] flex items-center justify-center text-[10px] font-black text-white ring-2 ring-amber-500/10">
+                                                                +{(team as any).players.length - 3}
+                                                            </div>
+                                                        )}
+                                                        {(!(team as any).players || (team as any).players?.length === 0) && (
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Empty</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <div className="flex items-center justify-end space-x-2">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Active</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                    <button type="submit" className="w-full py-4 md:py-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-[0.3em] md:tracking-[0.4em] text-[10px] md:text-xs rounded-xl md:rounded-2xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 border-t border-white/20">
-                        Authorize Deployment
-                    </button>
-                </form>
+                </div>
             )}
 
             {view === 'log-achievement' && (
@@ -340,278 +593,31 @@ const ManagerDashboard: React.FC<{
 
                     <div className="max-w-3xl mx-auto bg-white/40 dark:bg-black/40 backdrop-blur-3xl p-6 md:p-12 rounded-[32px] md:rounded-[48px] border border-slate-200 dark:border-white/5 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/0 via-amber-500 to-amber-500/0" />
-                        <AddAchievementForm />
-                    </div>
-                </div>
-            )}
-
-            {view === 'manage-roster' && (
-                <div className="space-y-12 animate-in fade-in duration-500">
-                    <form onSubmit={handleAddPlayer} className="space-y-6 md:space-y-8 max-w-2xl mx-auto bg-white dark:bg-black/40 p-6 md:p-12 rounded-[32px] md:rounded-[48px] border border-slate-200 dark:border-white/5 shadow-2xl relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/0 via-amber-500 to-amber-500/0" />
-                        <h2 className="text-2xl md:text-3xl font-black text-[var(--text-color)] text-center mb-6 md:mb-10 tracking-tight uppercase">Operative Matrix</h2>
-
-                        <div className="space-y-6">
-                            <div className="space-y-4">
-                                <label className="block text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1 ml-2">Strategic Squad</label>
-                                <div className="group">
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            placeholder="SEARCH SQUAD..."
-                                            value={squadSearch}
-                                            onChange={e => {
-                                                setSquadSearch(e.target.value);
-                                                setShowSquadResults(true);
-                                            }}
-                                            className={`w-full bg-slate-50/50 dark:bg-[#020617]/40 border border-slate-200 dark:border-white/10 ${((squadSearch && showSquadResults) || showSquadResults) ? 'rounded-t-2xl border-b-0' : 'rounded-2xl'} px-6 py-3 text-[10px] font-black tracking-widest text-[var(--text-color)] focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700`}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowSquadResults(!showSquadResults)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-500 hover:text-amber-500 transition-colors"
-                                        >
-                                            <svg className={`w-4 h-4 transform transition-transform ${showSquadResults ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
-                                        </button>
-                                    </div>
-                                    {showSquadResults && (
-                                        <select
-                                            required
-                                            value={selectedTeam}
-                                            onChange={e => {
-                                                const team = teams.find(t => t.id === Number(e.target.value));
-                                                setSelectedTeam(e.target.value);
-                                                setSquadSearch(team?.name || '');
-                                                setShowSquadResults(false);
-                                            }}
-                                            className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-b-2xl px-6 py-4 text-[var(--text-color)] dark:text-white font-black tracking-tight focus:outline-none focus:border-amber-500/50 appearance-none cursor-pointer"
-                                            size={Math.min(teams.filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase())).length + 1, 5)}
-                                        >
-                                            <option value="" className="bg-white dark:bg-[#020617]">-- CHOOSE UNIT --</option>
-                                            {teams
-                                                .filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase()))
-                                                .map(t => <option key={t.id} value={t.id} className="bg-white dark:bg-[#020617]">{t.name.toUpperCase()}</option>)}
-                                        </select>
-                                    )}
-                                </div>
-                            </div>
-
-                            {selectedTeam && (
-                                <div className="p-6 bg-slate-50 dark:bg-black/20 rounded-3xl border border-slate-200 dark:border-white/5 animate-in slide-in-from-top-4">
-                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Current Active Roster</label>
-                                    <div className="space-y-3">
-                                        {teams.find(t => t.id === Number(selectedTeam))?.players?.map((p: any) => (
-                                            <div key={p.id} className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
-                                                <div className="flex items-center space-x-3">
-                                                    <img src={p.image || `https://ui-avatars.com/api/?name=${p.name}`} className="w-8 h-8 rounded-full border border-amber-500/20" alt={p.name} />
-                                                    <span className="text-[11px] font-black text-[var(--text-color)] dark:text-white uppercase tracking-wider">{p.name}</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemovePlayer(Number(selectedTeam), p.id)}
-                                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                                                    title="Remove from roster"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
-                                                </button>
-                                            </div>
-                                        ))}
-                                        {(!teams.find(t => t.id === Number(selectedTeam))?.players || (teams.find(t => t.id === Number(selectedTeam))?.players?.length === 0)) && (
-                                            <p className="text-[10px] text-slate-500 font-bold text-center py-2 italic">No operatives currently assigned.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-4">
-                                <label className="block text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1 ml-2">Registered Personnel</label>
-                                <div className="group">
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            placeholder="SEARCH BY NAME/USERNAME..."
-                                            value={personnelSearch}
-                                            onChange={e => {
-                                                setPersonnelSearch(e.target.value);
-                                                setShowPersonnelResults(true);
-                                            }}
-                                            className={`w-full bg-slate-50/50 dark:bg-[#020617]/40 border border-slate-200 dark:border-white/10 ${((personnelSearch && showPersonnelResults) || showPersonnelResults) ? 'rounded-t-2xl border-b-0' : 'rounded-2xl'} px-6 py-3 text-[10px] font-black tracking-widest text-[var(--text-color)] focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700`}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPersonnelResults(!showPersonnelResults)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-500 hover:text-amber-500 transition-colors"
-                                        >
-                                            <svg className={`w-4 h-4 transform transition-transform ${showPersonnelResults ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
-                                        </button>
-                                    </div>
-                                    {showPersonnelResults && (
-                                        <select
-                                            required
-                                            value={selectedRosterUserId}
-                                            onChange={e => {
-                                                setSelectedRosterUserId(e.target.value);
-                                                const u = usersList.find((u: any) => u.id === Number(e.target.value));
-                                                if (u) {
-                                                    setPlayerName(u.ign || u.username);
-                                                    setPersonnelSearch(u.username);
-                                                    setShowPersonnelResults(false);
-                                                }
-                                            }}
-                                            className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-b-2xl px-6 py-4 text-[var(--text-color)] dark:text-white font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all appearance-none cursor-pointer"
-                                            size={Math.min(usersList.filter(u =>
-                                                u.username.toLowerCase().includes(personnelSearch.toLowerCase()) ||
-                                                (u.fullname && u.fullname.toLowerCase().includes(personnelSearch.toLowerCase())) ||
-                                                (u.ign && u.ign.toLowerCase().includes(personnelSearch.toLowerCase()))
-                                            ).length + 1, 5)}
-                                        >
-                                            <option value="" className="bg-white dark:bg-[#020617]">-- ACCESS DIRECTORY --</option>
-                                            {usersList
-                                                .filter(u =>
-                                                    u.username.toLowerCase().includes(personnelSearch.toLowerCase()) ||
-                                                    (u.fullname && u.fullname.toLowerCase().includes(personnelSearch.toLowerCase())) ||
-                                                    (u.ign && u.ign.toLowerCase().includes(personnelSearch.toLowerCase()))
-                                                )
-                                                .map((u: any) => (
-                                                    <option key={u.id} value={u.id} className="bg-white dark:bg-[#020617]">{u.ign ? `${u.ign.toUpperCase()} (@${u.username.toUpperCase()})` : `@${u.username.toUpperCase()}`}</option>
-                                                ))}
-                                        </select>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-3 ml-2">Codename Confirmation</label>
-                                <input type="text" readOnly value={playerName} className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl px-6 py-4 text-slate-500 font-black tracking-tight cursor-not-allowed uppercase" />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-3 ml-2">Tactical Role</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={playerRole}
-                                    onChange={e => setPlayerRole(e.target.value)}
-                                    placeholder="TYPE TACTICAL ROLE..."
-                                    className="w-full bg-slate-50 dark:bg-[#020617]/60 border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 text-[var(--text-color)] dark:text-white font-black tracking-tight focus:outline-none focus:border-amber-500/50 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700"
-                                />
-                            </div>
-                        </div>
-                        <button type="submit" className="w-full py-5 mt-10 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-[0.4em] text-xs rounded-2xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 border-t border-white/20">
-                            Authorize Assignment
-                        </button>
-                    </form>
-
-                    {/* Integrated Squad Intelligence Registry */}
-                    <div className="space-y-8 animate-in fade-in duration-700 mt-12 md:mt-20">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 md:mb-10 px-4 md:px-0">
-                            <div className="text-center md:text-left w-full md:w-auto">
-                                <h2 className="text-2xl md:text-3xl font-black text-[var(--text-color)] tracking-tight uppercase flex items-center justify-center md:justify-start">
-                                    <span className="bg-amber-500 text-black px-3 md:px-4 py-1 rounded-lg md:xl mr-4 text-lg md:text-xl font-black">NQ-01</span>
-                                    Squad Intelligence
-                                </h2>
-                                <p className="text-[8px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] md:tracking-[0.4em] mt-2 md:mt-3 leading-relaxed">Live Asset Deployment & Monitoring</p>
-                            </div>
-                            <div className="relative group w-full md:w-auto">
-                                <input
-                                    type="text"
-                                    placeholder="FILTER UNITS..."
-                                    value={squadSearch}
-                                    onChange={e => setSquadSearch(e.target.value)}
-                                    className="w-full md:w-64 pl-12 pr-6 py-3 md:py-4 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[var(--text-color)] focus:outline-none focus:border-amber-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-700 shadow-xl"
-                                />
-                                <svg className="w-4 h-4 text-amber-500/60 absolute left-4 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                            </div>
-                        </div>
-
-                        <div className="bg-white/40 dark:bg-black/40 backdrop-blur-3xl rounded-[24px] md:rounded-[48px] border border-slate-200 dark:border-white/5 overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)]">
-                            <div className="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="sticky top-0 bg-white/80 dark:bg-[#0d0d14]/80 backdrop-blur-md z-10">
-                                        <tr className="border-b border-slate-200 dark:border-white/5">
-                                            <th className="px-6 md:px-8 py-4 md:py-6 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Designation</th>
-                                            <th className="px-6 md:px-8 py-4 md:py-6 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Simulator</th>
-                                            <th className="px-6 md:px-8 py-4 md:py-6 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Operatives</th>
-                                            <th className="px-6 md:px-8 py-4 md:py-6 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-right whitespace-nowrap">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-200 dark:divide-white/5">
-                                        {teams.filter(t => t.name.toLowerCase().includes(squadSearch.toLowerCase())).map((team) => (
-                                            <tr
-                                                key={team.id}
-                                                onClick={() => setSelectedSquadForModal(team)}
-                                                className="group hover:bg-slate-50/50 dark:hover:bg-white/5 transition-all cursor-pointer"
-                                            >
-                                                <td className="px-6 md:px-8 py-4 md:py-6">
-                                                    <div className="flex items-center space-x-3 md:space-x-4">
-                                                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg md:xl bg-amber-500/10 flex items-center justify-center text-amber-500 font-black text-[10px] md:text-xs border border-amber-500/20 group-hover:scale-110 transition-transform">
-                                                            {team.name.charAt(0).toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[12px] md:text-sm font-black text-[var(--text-color)] dark:text-white uppercase tracking-tight whitespace-nowrap">{team.name}</p>
-                                                            <p className="text-[8px] md:text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Unit ID: {team.id}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 md:px-8 py-4 md:py-6">
-                                                    <span className="px-2 md:px-3 py-0.5 md:py-1 bg-slate-100 dark:bg-white/10 rounded-full text-[8px] md:text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200 dark:border-white/10 whitespace-nowrap">
-                                                        {team.game}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 md:px-8 py-4 md:py-6">
-                                                    <div className="flex justify-center -space-x-2 md:-space-x-3">
-                                                        {(team as any).players?.slice(0, 3).map((p: any, i: number) => (
-                                                            <img
-                                                                key={i}
-                                                                src={p.image || `https://ui-avatars.com/api/?name=${p.name}`}
-                                                                className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-white dark:border-[#0d0d14] object-cover ring-2 ring-amber-500/10"
-                                                                title={p.name}
-                                                                alt={p.name}
-                                                            />
-                                                        ))}
-                                                        {(team as any).players?.length > 3 && (
-                                                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-800 border-2 border-white dark:border-[#0d0d14] flex items-center justify-center text-[8px] md:text-[10px] font-black text-white ring-2 ring-amber-500/10">
-                                                                +{(team as any).players.length - 3}
-                                                            </div>
-                                                        )}
-                                                        {(!(team as any).players || (team as any).players?.length === 0) && (
-                                                            <span className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest italic whitespace-nowrap">Empty</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 md:px-8 py-4 md:py-6 text-right">
-                                                    <div className="flex items-center justify-end space-x-2 whitespace-nowrap">
-                                                        <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                                        <span className="text-[8px] md:text-[9px] font-black text-emerald-500 uppercase tracking-widest">Active</span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <AddAchievementForm requesterId={userId} />
                     </div>
                 </div>
             )}
 
 
             {/* Squad Detail Modal */}
-            <Modal isOpen={!!selectedSquadForModal} onClose={() => setSelectedSquadForModal(null)} zIndex={100} backdropClassName="bg-white/10 dark:bg-black/60 backdrop-blur-md animate-in fade-in duration-300" className="w-full max-w-4xl">
-                {selectedSquadForModal && <div className="relative w-full max-w-4xl bg-white/90 dark:bg-[#0d0d14]/90 backdrop-blur-2xl rounded-[48px] border border-slate-200 dark:border-white/10 shadow-[0_64px_128px_-32px_rgba(0,0,0,0.5)] overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+            <Modal isOpen={!!selectedSquadForModal} onClose={() => setSelectedSquadForModal(null)} zIndex={200} backdropClassName="bg-black/95 backdrop-blur-3xl animate-in fade-in duration-500" className="w-full max-w-4xl p-4 md:p-8">
+                {selectedSquadForModal && <div className="relative w-full bg-[#020617]/90 backdrop-blur-3xl rounded-[40px] md:rounded-[60px] border border-amber-500/20 shadow-[0_0_120px_rgba(245,158,11,0.15)] overflow-hidden animate-in zoom-in-95 duration-500">
+                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-amber-500/[0.03] blur-[150px] rounded-full pointer-events-none" />
                     {/* Modal Header */}
-                    <div className="p-6 md:p-10 border-b border-slate-200 dark:border-white/5 flex justify-between items-center relative">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/0 via-amber-500 to-amber-500/0" />
-                        <div className="text-left">
-                            <h2 className="text-xl md:text-3xl font-black text-[var(--text-color)] dark:text-white uppercase tracking-tight flex items-center gap-3 md:gap-4">
-                                <span className="bg-amber-500 text-black px-2 md:px-3 py-0.5 md:py-1 rounded-md md:lg text-sm md:text-lg leading-none">UNIT</span>
+                    <div className="p-8 md:p-14 border-b border-white/5 flex justify-between items-center relative">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-40" />
+                        <div className="text-left space-y-2">
+                            <h2 className="text-2xl md:text-5xl font-black text-white uppercase tracking-tighter italic leading-none flex items-center gap-4">
+                                <span className="bg-amber-500 text-black px-3 py-1 rounded-xl text-xs md:text-lg leading-none font-black not-italic tracking-normal">UNIT</span>
                                 {selectedSquadForModal.name}
                             </h2>
-                            <p className="text-[8px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] md:tracking-[0.4em] mt-2 md:mt-3 leading-relaxed">{selectedSquadForModal.game} // Operational Roster Overview</p>
+                            <p className="text-[9px] md:text-xs text-amber-500/50 font-black uppercase tracking-[0.4em] leading-relaxed ml-1">{selectedSquadForModal.game} // Operational Roster Overview</p>
                         </div>
                         <button
                             onClick={() => setSelectedSquadForModal(null)}
-                            className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-amber-500 hover:scale-110 transition-all border border-slate-200 dark:border-white/10 ml-4 shrink-0"
+                            className="w-12 h-12 md:w-16 md:h-16 rounded-[20px] md:rounded-[24px] bg-white/5 flex items-center justify-center text-white/50 hover:text-white hover:bg-amber-500 hover:text-black hover:rotate-90 transition-all duration-500 border border-white/10 shadow-2xl group/close"
                         >
-                            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                            <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
 
@@ -640,7 +646,7 @@ const ManagerDashboard: React.FC<{
                                             e.stopPropagation();
                                             await handleRemovePlayer(selectedSquadForModal.id, p.id);
                                             // Update local modal state after removal
-                                            const res = await fetch(userRole === 'manager' && userId
+                                            const res = await fetch((userRole === 'manager' || userRole === 'coach') && userId
                                                 ? `${import.meta.env.VITE_API_BASE_URL}/api/teams?managerId=${userId}`
                                                 : `${import.meta.env.VITE_API_BASE_URL}/api/teams`);
                                             const result = await res.json();
@@ -665,22 +671,22 @@ const ManagerDashboard: React.FC<{
                     </div>
 
                     {/* Modal Footer */}
-                    <div className="p-6 md:p-10 bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <div className="flex items-center gap-4">
-                            <span className="flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-amber-500" />
-                                Strength: {selectedSquadForModal.players?.length || 0} Ops
+                    <div className="p-8 md:p-12 bg-white/[0.02] backdrop-blur-2xl border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
+                        <div className="flex items-center gap-6">
+                            <span className="flex items-center gap-3">
+                                <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse" />
+                                <span className="text-white">Strength: {selectedSquadForModal.players?.length || 0} Ops</span>
                             </span>
-                            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                            <span className="w-1 h-1 rounded-full bg-slate-700" />
                             <span>Status: Combat Ready</span>
                         </div>
-                        <div className="text-amber-500/60 text-center md:text-right">
+                        <div className="text-amber-500/60 font-black tracking-[0.5em] italic">
                             Tactical Unit Deployment Dashboard
                         </div>
                     </div>
                 </div>}
             </Modal>
-        </div >
+        </div>
     );
 };
 

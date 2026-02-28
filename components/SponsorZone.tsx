@@ -148,7 +148,8 @@ const SponsorZone: React.FC = () => {
                 body: JSON.stringify({
                     ...formProduct,
                     price: Math.round(formProduct.price * 100), // convert to cents
-                    sponsorId: finalSponsorId
+                    sponsorId: finalSponsorId,
+                    requesterId: user?.id
                 })
             });
             const data = await res.json();
@@ -172,7 +173,7 @@ const SponsorZone: React.FC = () => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders/${orderId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
+                body: JSON.stringify({ status, requesterId: user?.id })
             });
             const data = await res.json();
             if (data.success) {
@@ -197,7 +198,7 @@ const SponsorZone: React.FC = () => {
                 const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors/${userSponsorId}/qr`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(sponsorQr)
+                    body: JSON.stringify({ ...sponsorQr, requesterId: user?.id })
                 });
                 if ((await res.json()).success) {
                     showNotification({ message: 'Sponsor QR Codes updated.', type: 'success' });
@@ -208,7 +209,8 @@ const SponsorZone: React.FC = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         waksQrEWallet: siteQr.waksQrEWallet,
-                        waksQrBank: siteQr.waksQrBank
+                        waksQrBank: siteQr.waksQrBank,
+                        requesterId: user?.id
                     })
                 });
                 if ((await res.json()).success) {
@@ -221,7 +223,8 @@ const SponsorZone: React.FC = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         qrEWallet: sponsorQr.qrEWallet,
-                        qrBank: sponsorQr.qrBank
+                        qrBank: sponsorQr.qrBank,
+                        requesterId: user?.id
                     })
                 });
                 if ((await res.json()).success) {
@@ -257,7 +260,7 @@ const SponsorZone: React.FC = () => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/stock`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stock })
+                body: JSON.stringify({ stock, requesterId: user?.id })
             });
             const data = await res.json();
             if (data.success) {
@@ -272,7 +275,9 @@ const SponsorZone: React.FC = () => {
         if (!confirm("Are you sure you want to decommission this asset? This action is irreversible.")) return;
         try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requesterId: user?.id })
             });
             const data = await res.json();
             if (data.success) {
@@ -701,6 +706,7 @@ const SponsorZone: React.FC = () => {
                                             <th className="px-4 py-4 min-w-[100px]">Order ID</th>
                                             <th className="px-4 py-4 min-w-[150px]">Recipient</th>
                                             <th className="px-4 py-4 min-w-[150px]">Product / Spec</th>
+                                            <th className="px-4 py-4 min-w-[80px]">Qty</th>
                                             <th className="px-4 py-4 min-w-[120px]">Payment Proof</th>
                                             <th className="px-4 py-4 min-w-[160px]">Status Control</th>
                                         </tr>
@@ -721,6 +727,9 @@ const SponsorZone: React.FC = () => {
                                                     <td className="px-4 py-4">
                                                         <div className="text-xs text-slate-300">Prod ID: {order.productId}</div>
                                                         <div className="truncate text-[10px] text-slate-500 max-w-[200px]" title={order.deliveryAddress}>{order.deliveryAddress}</div>
+                                                    </td>
+                                                    <td className="px-4 py-4 font-black text-amber-500 text-xs">
+                                                        x{(order as any).quantity || 1}
                                                     </td>
                                                     <td className="px-4 py-4">
                                                         <button

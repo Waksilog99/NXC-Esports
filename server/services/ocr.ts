@@ -5,9 +5,12 @@ interface OCRResult {
         kills: number;
         deaths: number;
         assists: number;
+        agent?: string;
         originalName?: string;
     }>;
 }
+
+const VALORANT_AGENTS = ['Astra', 'Brimstone', 'Clove', 'Harbor', 'Omen', 'Viper', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Yoru', 'Iso', 'Waylay', 'Breach', 'Fade', 'Gekko', 'KAY_O', 'Skye', 'Sova', 'Tejo', 'Chamber', 'Cypher', 'Deadlock', 'Killjoy', 'Sage', 'Vyse'];
 
 export const analyzeScoreboardWithOCR = async (base64Image: string, roster: any[]): Promise<OCRResult> => {
     try {
@@ -46,47 +49,36 @@ const parseOCRText = (text: string, roster: any[]): OCRResult => {
     if (lowerText.includes('victory') || lowerText.includes('win') || lowerText.includes('won')) isVictory = true;
 
     // 2. Parse Lines for Player Stats
-    // Strategy: Look for lines that contain a roster name AND numbers
-
     for (const player of roster) {
         const playerKey = player.name.toLowerCase();
 
         // Find line best matching this player
-        // Simple string match
         const matchingLine = lines.find(line => line.toLowerCase().includes(playerKey));
 
         if (matchingLine) {
             console.log(`[OCR] Found match for ${player.name}: "${matchingLine}"`);
+            const lowerLine = matchingLine.toLowerCase();
+
+            // Detect Agent
+            const detectedAgent = VALORANT_AGENTS.find(agent => lowerLine.includes(agent.toLowerCase()));
 
             // Extract numbers from this line
-            // Regex to find sequences of numbers. 
-            // Common formats: "Name 15 4 10" or "Name 15/4/10"
             const numbers = matchingLine.match(/\d+/g);
 
             if (numbers && numbers.length >= 3) {
-                // Heuristic: KDA is usually the first 3 big numbers, or sometimes K/D/A is explicit
-                // Let's assume K D A order if we find 3 numbers.
-                // Depending on the game (Valorant vs COD), order might vary, but K D A is standard.
-
-                // We take the first 3 numbers found on the line (excluding arguably small ones if they are rank? No, rank is complex)
-                // Let's just take the first 3 integers.
-
                 results.push({
                     name: player.name,
                     kills: Number(numbers[0]),
                     deaths: Number(numbers[1]),
                     assists: Number(numbers[2]),
-                    originalName: matchingLine.trim() // store context
+                    agent: detectedAgent,
+                    originalName: matchingLine.trim()
                 });
             } else {
-                // Found name but no stats - add with 0s so user can edit
-                results.push({ name: player.name, kills: 0, deaths: 0, assists: 0 });
+                results.push({ name: player.name, kills: 0, deaths: 0, assists: 0, agent: detectedAgent });
             }
         }
     }
-
-    // If no players found (OCR failed to read names), we return empty/partial
-    // The user will have to manual entry.
 
     return { isVictory, results };
 };

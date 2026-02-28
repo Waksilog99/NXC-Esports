@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { GAME_TITLES } from './constants';
 import Modal from './Modal';
+import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
+import { getTacticalRole } from '../utils/tactical';
 
 interface Player {
   id: number;
@@ -10,6 +12,7 @@ interface Player {
   winRate: string;
   acs: string;
   image: string;
+  userId?: number;
   level?: number;
   xp?: number;
 }
@@ -38,126 +41,10 @@ const AnimatedTitle = ({ text1, text2, className }: { text1: string, text2: stri
   );
 };
 
-// Player Stats Modal Component
-const PlayerStatsModal = ({ player, isOpen, onClose }: { player: Player | null; isOpen: boolean; onClose: () => void }) => {
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} zIndex={1000} backdropClassName="bg-black/60 backdrop-blur-sm" className="w-full max-w-2xl">
-      {player && <div className="relative w-full max-w-2xl bg-[#0f172a] dark:bg-[#020617] rounded-[40px] border border-amber-500/20 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent" />
 
-        {/* Header / Image Background */}
-        <div className="relative h-[540px] overflow-hidden border-b border-white/5 bg-[#020617]">
-          {/* Elite Backdrop */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
-            <span className="text-[180px] md:text-[220px] font-black text-white italic tracking-tighter uppercase leading-none">HISTORY</span>
-          </div>
 
-          <img src={player.image} alt={player.name} className="w-full h-full object-cover opacity-20 blur-md scale-110" />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#020617]/50 to-[#020617]" />
 
-          <div className="absolute inset-0 flex flex-col items-center justify-center space-y-6 pt-10">
-            <div className="space-y-4 text-center pointer-events-none">
-              <AnimatedTitle
-                text1="Hall of"
-                text2="Excellence"
-                className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic leading-[0.8]"
-              />
-              <div className="flex items-center justify-center w-full">
-                <div className="h-[1px] w-24 bg-amber-500/30"></div>
-                <p className="px-6 text-[9px] text-slate-500 font-black uppercase tracking-[0.5em] whitespace-nowrap">The Apex of Performance</p>
-                <div className="h-[1px] w-24 bg-amber-500/30"></div>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <span className="px-8 py-2 bg-amber-500 text-black text-[10px] font-black uppercase tracking-[0.3em] rounded-full shadow-[0_10px_20px_rgba(245,158,11,0.2)]">
-                Operative Profile
-              </span>
-            </div>
-
-            <div className="flex flex-col items-center space-y-6 pt-4 relative z-20">
-              <div className="relative group">
-                <div className="absolute -inset-2 bg-amber-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                <img
-                  src={player.image}
-                  alt={player.name}
-                  className="w-24 h-24 rounded-3xl border-2 border-amber-500/20 shadow-2xl object-cover bg-slate-800 relative z-10"
-                />
-              </div>
-              <div className="mb-2 text-center space-y-2">
-                <div className="flex items-center justify-center space-x-3 text-amber-500">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_15px_#fbbf24]" />
-                  <span className="text-[11px] font-black uppercase tracking-[0.4em]">{player.role}</span>
-                  <span className="text-[11px] text-slate-500 font-bold px-3 border-l border-white/10 uppercase">Rank {player.level || 1}</span>
-                </div>
-                <h3 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter italic leading-none">{player.name}</h3>
-
-                {/* Tactical EXP Bar */}
-                <div className="pt-2">
-                  <div className="w-56 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-600 via-amber-400 to-amber-500 shadow-[0_0_15px_#fbbf24]"
-                      style={{ width: `${((player.xp || 0) % 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between items-center w-56 mt-2">
-                    <span className="text-[7px] text-slate-600 font-black uppercase tracking-widest leading-none">Mission Progression</span>
-                    <span className="text-[7px] text-amber-500/80 font-black tracking-widest leading-none">{(player.xp || 0) % 100} / 100 XP</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 md:top-6 md:right-6 w-8 h-8 md:w-10 md:h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 transition-all border border-white/10 z-50"
-          >
-            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        {/* content */}
-        <div className="p-6 md:p-8 space-y-6 md:space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
-            <div className="bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5 text-center group hover:border-amber-500/30 transition-all">
-              <p className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2">K/D Ratio</p>
-              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter group-hover:text-amber-400 transition-colors">{player.kda}</p>
-              <p className="text-[7px] md:text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">Lethality Index</p>
-            </div>
-            <div className="bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5 text-center group hover:border-purple-500/30 transition-all">
-              <p className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2">ACS</p>
-              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter group-hover:text-purple-400 transition-colors">{player.acs}</p>
-              <p className="text-[7px] md:text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">Combat Score</p>
-            </div>
-            <div className="bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5 text-center group hover:border-emerald-500/30 transition-all">
-              <p className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2">Win Rate</p>
-              <p className="text-2xl md:text-3xl font-black text-white tracking-tighter group-hover:text-emerald-400 transition-colors">{player.winRate}</p>
-              <p className="text-[7px] md:text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">Victory Vector</p>
-            </div>
-          </div>
-
-          <div className="p-5 md:p-6 bg-amber-500/5 rounded-2xl md:rounded-3xl border border-amber-500/10">
-            <div className="flex items-start space-x-4">
-              <div className="p-2.5 md:p-3 bg-amber-500/10 rounded-xl text-amber-500">
-                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              </div>
-              <div>
-                <h4 className="text-[10px] md:text-sm font-black text-amber-500 uppercase tracking-widest mb-1">Performance Analysis</h4>
-                <p className="text-[10px] md:text-xs text-slate-400 font-medium leading-relaxed">
-                  Operative <span className="text-white font-bold">{player.name}</span> is performing at optimal efficiency.
-                  Combat metrics indicate strong <span className="text-white">{player.role}</span> capabilities with a {player.winRate} mission success rate.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>}
-    </Modal>
-  );
-};
-
-const Roster: React.FC = () => {
+const Roster: React.FC<{ userRole?: string; userId?: number }> = ({ userRole, userId }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -197,7 +84,7 @@ const Roster: React.FC = () => {
     if (searchQuery) {
       result = result.map(team => ({
         ...team,
-        players: team.players.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        players: team.players.filter(p => (p.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()))
       })).filter(team => team.players.length > 0);
     }
     return result;
@@ -206,7 +93,23 @@ const Roster: React.FC = () => {
   return (
     <div className="space-y-16 animate-in fade-in zoom-in duration-700 max-w-[1600px] mx-auto">
       {/* Modal */}
-      <PlayerStatsModal player={selectedPlayer} isOpen={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+      {(() => {
+        const roles = userRole?.split(',').map(r => r.trim().toLowerCase()) || [];
+        const isManagement = roles.some(r => ['manager', 'coach', 'admin', 'ceo'].includes(r));
+        const isSelf = selectedPlayer && userId === selectedPlayer.userId;
+        const canSeeAdvanced = isManagement || isSelf;
+
+        return (
+          <PlayerStatsModal
+            player={selectedPlayer}
+            isOpen={!!selectedPlayer}
+            onClose={() => setSelectedPlayer(null)}
+            userRole={userRole}
+            currentUserId={userId}
+            showAdvancedIntel={canSeeAdvanced}
+          />
+        );
+      })()}
 
       {/* Header & Filters */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-12 border-b border-gray-200 dark:border-white/5 pb-16 px-6 md:px-0">
@@ -338,43 +241,45 @@ const Roster: React.FC = () => {
                       <div className="space-y-1 transform translate-y-6 group-hover:translate-y-0 transition-transform duration-500">
                         <div className="flex items-center space-x-2">
                           <div className="w-2 h-[2px] bg-amber-500 shadow-[0_0_10px_#fbbf24]" />
-                          <p className="text-[8px] md:text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.3em] md:tracking-[0.4em] leading-none">{player.role}</p>
+                          <p className="text-[8px] md:text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.3em] md:tracking-[0.4em] leading-none">Tactical Role // {getTacticalRole(player.role)}</p>
                         </div>
                         <h3 className="text-2xl md:text-4xl font-black italic text-white tracking-tighter group-hover:text-amber-500 transition-colors uppercase leading-none">{player.name}</h3>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-200 dark:border-white/5 opacity-0 group-hover:opacity-100 transition-all duration-500 delay-100">
-                        <div className="text-center space-y-1">
-                          <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">K/D</p>
-                          <p className="text-sm font-black text-[var(--text-color)] italic tracking-tighter">{player.kda || '0.00'}</p>
-                          <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-amber-500 shadow-[0_0_10px_#fbbf24] transition-all duration-1000"
-                              style={{ width: `${Math.min((parseFloat(player.kda || '0') / 4) * 100, 100)}%` }}
-                            />
+                      {!(player.role?.toLowerCase().includes('coach')) && (
+                        <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-200 dark:border-white/5 opacity-0 group-hover:opacity-100 transition-all duration-500 delay-100">
+                          <div className="text-center space-y-1">
+                            <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">K/D</p>
+                            <p className="text-sm font-black text-[var(--text-color)] italic tracking-tighter">{player.kda || '0.00'}</p>
+                            <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-amber-500 shadow-[0_0_10px_#fbbf24] transition-all duration-1000"
+                                style={{ width: `${Math.min((parseFloat(player.kda || '0') / 4) * 100, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-center space-y-1">
+                            <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">ACS</p>
+                            <p className="text-sm font-black text-[var(--text-color)] italic tracking-tighter">{player.acs || '0'}</p>
+                            <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7] transition-all duration-1000"
+                                style={{ width: `${Math.min((parseInt(player.acs || '0') / 400) * 100, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-center space-y-1">
+                            <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">Win Rate</p>
+                            <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 italic tracking-tighter">{player.winRate || '0.0%'}</p>
+                            <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000"
+                                style={{ width: player.winRate || '0%' }}
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div className="text-center space-y-1">
-                          <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">ACS</p>
-                          <p className="text-sm font-black text-[var(--text-color)] italic tracking-tighter">{player.acs || '0'}</p>
-                          <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7] transition-all duration-1000"
-                              style={{ width: `${Math.min((parseInt(player.acs || '0') / 400) * 100, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="text-center space-y-1">
-                          <p className="text-[8px] text-slate-500 dark:text-slate-600 font-black uppercase tracking-[0.3em]">Win Rate</p>
-                          <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 italic tracking-tighter">{player.winRate || '0.0%'}</p>
-                          <div className="h-0.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981] transition-all duration-1000"
-                              style={{ width: player.winRate || '0%' }}
-                            />
-                          </div>
-                        </div>
-                      </div>
+                      )}
                     </div>
 
                     <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-700">

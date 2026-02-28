@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GAME_TITLES } from './constants';
 
-const AddEventForm: React.FC = () => {
+const AddEventForm: React.FC<{ requesterId?: number }> = ({ requesterId }) => {
     const { showNotification } = useNotification();
     const [title, setTitle] = useState('');
     const [game, setGame] = useState('');
@@ -19,7 +19,7 @@ const AddEventForm: React.FC = () => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/events`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, game, date, location, description, image })
+                body: JSON.stringify({ title, game, date, location, description, image, requesterId })
             });
             if (res.ok) {
                 showNotification({

@@ -159,13 +159,14 @@ const QuotaManagementView: React.FC<{
     canEdit: boolean;
     selectedWeek: string;
     setSelectedWeek: (week: string) => void;
-}> = ({ teamId, game, canEdit, selectedWeek, setSelectedWeek }) => {
+    userId: number;
+}> = ({ teamId, game, canEdit, selectedWeek, setSelectedWeek, userId }) => {
     const { showNotification } = useNotification();
     const [loading, setLoading] = useState(true);
     const [baseQuota, setBaseQuota] = useState<RosterQuota | null>(null);
     const [players, setPlayers] = useState<TeamMember[]>([]);
     const [selectedPlayerForProof, setSelectedPlayerForProof] = useState<TeamMember | null>(null);
-    const [editingPlayerQuota, setEditingPlayerQuota] = useState<number | null>(null); // playerId
+    const [editingPlayerQuota, setEditingPlayerQuota] = useState<{ id: number, name: string, aim: number, grind: number } | null>(null);
 
     // Form states for base targets
     const [editBaseAim, setEditBaseAim] = useState(0);
@@ -176,12 +177,16 @@ const QuotaManagementView: React.FC<{
     const [isEditingStandard, setIsEditingStandard] = useState(false);
     const [isEditingReduced, setIsEditingReduced] = useState(false);
     const [isSavingBase, setIsSavingBase] = useState(false);
-    const isShootingGame = GAME_CATEGORY[game] === 'FPS' || GAME_CATEGORY[game] === 'BR';
+    const isShootingGame = GAME_CATEGORY[game] === 'FPS' || GAME_CATEGORY[game] === 'BR' || GAME_CATEGORY[game] === 'VALORANT';
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/quotas?week=${selectedWeek}`);
+            if (!teamId) return;
+
+            const cleanWeek = selectedWeek ? selectedWeek.split(':')[0] : '';
+            const url = `${import.meta.env.VITE_API_BASE_URL}/api/teams/${teamId}/quotas${cleanWeek ? `?week=${cleanWeek}` : ''}`;
+            const res = await fetch(url);
             const result = await res.json();
 
             if (result.success) {
@@ -211,7 +216,8 @@ const QuotaManagementView: React.FC<{
                 body: JSON.stringify({
                     weekStart: selectedWeek,
                     aimStatus: routine === 'aim' ? status : undefined,
-                    grindStatus: routine === 'grind' ? status : undefined
+                    grindStatus: routine === 'grind' ? status : undefined,
+                    requesterId: userId
                 })
             });
             const result = await res.json();
@@ -245,7 +251,8 @@ const QuotaManagementView: React.FC<{
                     baseAimKills: editBaseAim,
                     baseGrindRG: editBaseGrind,
                     reducedAimKills: editReducedAim,
-                    reducedGrindRG: editReducedGrind
+                    reducedGrindRG: editReducedGrind,
+                    requesterId: userId
                 })
             });
             const result = await res.json();
@@ -264,13 +271,44 @@ const QuotaManagementView: React.FC<{
         }
     };
 
+    const handleSetCustomQuota = async (playerId: number, aim: number, grind: number) => {
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players/${playerId}/quota/custom`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    weekStart: selectedWeek,
+                    assignedBaseAim: aim,
+                    assignedBaseGrind: grind,
+                    requesterId: userId
+                })
+            });
+            const result = await res.json();
+
+            if (result.success) {
+                showNotification({ message: 'Tactical override deployed successfully.', type: 'success' });
+                setEditingPlayerQuota(null);
+                fetchData();
+            } else {
+                showNotification({ message: result.error || 'Override failed to deploy.', type: 'error' });
+            }
+        } catch (error) {
+            console.error("Error setting custom quota:", error);
+            showNotification({ message: 'Network error during deployment.', type: 'error' });
+        }
+    };
+
     const getLocalMondayISO = (d: Date) => {
         const date = new Date(d);
         const day = date.getDay();
         const diff = date.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(date.setDate(diff));
         monday.setHours(0, 0, 0, 0);
-        return monday.toISOString().split('T')[0];
+
+        const y = monday.getFullYear();
+        const m = String(monday.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(monday.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dayStr}`;
     };
 
     const weekOptions = [];
@@ -475,166 +513,136 @@ const QuotaManagementView: React.FC<{
             )}
 
             {/* Personnel Compliance Table */}
+            {/* Personnel Compliance Table */}
             <div className="bg-white/[0.02] rounded-[40px] border border-white/5 overflow-hidden shadow-soft">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="border-b border-white/5 text-[9px] uppercase font-black tracking-[0.3em] text-amber-500/60">
-                            <th className="p-8">Personnel Identification</th>
-                            {isShootingGame && <th className="p-8 text-center">Aim Routine</th>}
-                            <th className="p-8 text-center">Grind Routine</th>
-                            <th className="p-8 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {players.map(player => (
-                            <tr key={player.id} className="group hover:bg-white/[0.03] transition-colors">
-                                <td className="p-8" onClick={() => setSelectedPlayerForProof(player)}>
-                                    <div className="flex items-center space-x-4">
-                                        <img src={player.image || `https://ui-avatars.com/api/?name=${player.name}&background=random`} className="w-12 h-12 rounded-xl object-cover border border-white/10 group-hover:border-amber-500/30 transition-colors" />
-                                        <div>
-                                            <div className="text-lg font-black text-white italic uppercase tracking-tighter group-hover:text-amber-500 transition-colors">{player.name}</div>
-                                            <div className="text-[8px] text-slate-600 font-bold uppercase tracking-widest italic">Registered Combatant</div>
+                <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse min-w-[800px] md:min-w-0">
+                        <thead>
+                            <tr className="border-b border-white/5 text-[9px] uppercase font-black tracking-[0.3em] text-amber-500/60">
+                                <th className="p-8">Personnel Identification</th>
+                                {isShootingGame && <th className="p-8 text-center">Aim Routine</th>}
+                                <th className="p-8 text-center">Grind Routine</th>
+                                <th className="p-8 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {players.map(player => (
+                                <tr key={player.id} className="group hover:bg-white/[0.03] transition-colors">
+                                    <td className="p-8" onClick={() => setSelectedPlayerForProof(player)}>
+                                        <div className="flex items-center space-x-4">
+                                            <img src={(player as any).image || `https://ui-avatars.com/api/?name=${player.name}&background=random`} className="w-12 h-12 rounded-xl object-cover border border-white/10 group-hover:border-amber-500/30 transition-colors" />
+                                            <div>
+                                                <div className="text-lg font-black text-white italic uppercase tracking-tighter group-hover:text-amber-500 transition-colors">{player.name}</div>
+                                                <div className="text-[8px] text-slate-600 font-bold uppercase tracking-widest italic">Registered Combatant</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                {isShootingGame && (
+                                    </td>
+                                    {isShootingGame && (
+                                        <td className="p-8 text-center">
+                                            <div className="space-y-1">
+                                                <div className="text-xl font-black text-white italic tracking-tighter tabular-nums">
+                                                    {player.progress.totalAimKills} / {player.progress.aimStatus === 'approved' ? player.progress.totalAimKills : ((player.progress.assignedBaseAim || baseQuota?.baseAimKills || 0) + player.progress.punishmentKills + player.progress.carryOverKills)}
+                                                </div>
+                                                <div className="flex justify-center items-center space-x-2">
+                                                    {player.progress.punishmentKills > 0 && <span className="text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md font-black">+{player.progress.punishmentKills} PENALTY</span>}
+                                                    {player.progress.carryOverKills > 0 && <span className="text-[8px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded-md font-black">+{player.progress.carryOverKills} REMAINING</span>}
+                                                </div>
+                                            </div>
+                                            {player.progress.aimStatus === 'completed' && canEdit && (
+                                                <div className="flex justify-center space-x-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'aim', 'rejected'); }}
+                                                        className="p-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
+                                                        title="Reject Aim"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'aim', 'approved'); }}
+                                                        className="p-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all"
+                                                        title="Approve Aim"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {player.progress.aimStatus === 'approved' && (
+                                                <div className="text-[8px] text-emerald-500 font-black uppercase mt-2 tracking-tighter italic">✓ Aim Verified</div>
+                                            )}
+                                        </td>
+                                    )}
                                     <td className="p-8 text-center">
                                         <div className="space-y-1">
                                             <div className="text-xl font-black text-white italic tracking-tighter tabular-nums">
-                                                {player.progress.totalAimKills} / {player.progress.aimStatus === 'approved' ? player.progress.totalAimKills : ((player.progress.assignedBaseAim || baseQuota?.baseAimKills || 0) + player.progress.punishmentKills + player.progress.carryOverKills)}
+                                                {player.progress.totalGrindRG} / {player.progress.grindStatus === 'approved' ? player.progress.totalGrindRG : ((player.progress.assignedBaseGrind || baseQuota?.baseGrindRG || 0) + player.progress.punishmentRG + player.progress.carryOverRG)}
                                             </div>
                                             <div className="flex justify-center items-center space-x-2">
-                                                {player.progress.punishmentKills > 0 && <span className="text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md font-black">+{player.progress.punishmentKills} PENALTY</span>}
-                                                {player.progress.carryOverKills > 0 && <span className="text-[8px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded-md font-black">+{player.progress.carryOverKills} REMAINING</span>}
+                                                {player.progress.punishmentRG > 0 && <span className="text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md font-black">+{player.progress.punishmentRG} PENALTY</span>}
+                                                {player.progress.carryOverRG > 0 && <span className="text-[8px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded-md font-black">+{player.progress.carryOverRG} REMAINING</span>}
                                             </div>
                                         </div>
-                                        {player.progress.aimStatus === 'completed' && canEdit && (
+                                        {player.progress.grindStatus === 'completed' && canEdit && (
                                             <div className="flex justify-center space-x-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'aim', 'rejected'); }}
+                                                    onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'grind', 'rejected'); }}
                                                     className="p-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
-                                                    title="Reject Aim"
+                                                    title="Reject Grind"
                                                 >
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
                                                 </button>
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'aim', 'approved'); }}
+                                                    onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'grind', 'approved'); }}
                                                     className="p-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all"
-                                                    title="Approve Aim"
+                                                    title="Approve Grind"
                                                 >
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
                                                 </button>
                                             </div>
                                         )}
-                                        {player.progress.aimStatus === 'approved' && (
-                                            <div className="text-[8px] text-emerald-500 font-black uppercase mt-2 tracking-tighter italic">✓ Aim Verified</div>
+                                        {player.progress.grindStatus === 'approved' && (
+                                            <div className="text-[8px] text-emerald-500 font-black uppercase mt-2 tracking-tighter italic">✓ Grind Verified</div>
                                         )}
                                     </td>
-                                )}
-                                <td className="p-8 text-center">
-                                    <div className="space-y-1">
-                                        <div className="text-xl font-black text-white italic tracking-tighter tabular-nums">
-                                            {player.progress.totalGrindRG} / {player.progress.grindStatus === 'approved' ? player.progress.totalGrindRG : ((player.progress.assignedBaseGrind || baseQuota?.baseGrindRG || 0) + player.progress.punishmentRG + player.progress.carryOverRG)}
-                                        </div>
-                                        <div className="flex justify-center items-center space-x-2">
-                                            {player.progress.punishmentRG > 0 && <span className="text-[8px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md font-black">+{player.progress.punishmentRG} PENALTY</span>}
-                                            {player.progress.carryOverRG > 0 && <span className="text-[8px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded-md font-black">+{player.progress.carryOverRG} REMAINING</span>}
-                                        </div>
-                                    </div>
-                                    {player.progress.grindStatus === 'completed' && canEdit && (
-                                        <div className="flex justify-center space-x-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'grind', 'rejected'); }}
-                                                className="p-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
-                                                title="Reject Grind"
-                                            >
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleReview(player.id, 'grind', 'approved'); }}
-                                                className="p-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-all"
-                                                title="Approve Grind"
-                                            >
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                                            </button>
-                                        </div>
-                                    )}
-                                    {player.progress.grindStatus === 'approved' && (
-                                        <div className="text-[8px] text-emerald-500 font-black uppercase mt-2 tracking-tighter italic">✓ Grind Verified</div>
-                                    )}
-                                </td>
-                                <td className="p-8" onClick={() => setSelectedPlayerForProof(player)}>
-                                    <div className="flex flex-col items-end space-y-2">
-                                        <span className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${(player.progress.aimStatus === 'completed' || player.progress.aimStatus === 'approved') && (player.progress.grindStatus === 'completed' || player.progress.grindStatus === 'approved')
-                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
-                                            : (player.progress.aimStatus === 'rejected' || player.progress.grindStatus === 'rejected')
-                                                ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                                                : (player.progress.aimStatus === 'failed' || player.progress.grindStatus === 'failed')
+                                    <td className="p-8" onClick={() => setSelectedPlayerForProof(player)}>
+                                        <div className="flex flex-col items-end space-y-2">
+                                            <span className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${(player.progress.aimStatus === 'completed' || player.progress.aimStatus === 'approved') && (player.progress.grindStatus === 'completed' || player.progress.grindStatus === 'approved')
+                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
+                                                : (player.progress.aimStatus === 'rejected' || player.progress.grindStatus === 'rejected')
                                                     ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                                                    : 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse'
-                                            }`}>
-                                            {(player.progress.aimStatus === 'approved' && player.progress.grindStatus === 'approved') ? 'COMMAND VERIFIED' : (player.progress.aimStatus === 'rejected' || player.progress.grindStatus === 'rejected') ? 'TELEMETRY REJECTED' : (player.progress.aimStatus === 'completed' && player.progress.grindStatus === 'completed') ? 'IDENTIFIED CLEAR' : 'UNDER REVIEW'}
-                                        </span>
-                                        <button className="text-[8px] text-amber-500 font-black uppercase tracking-[0.2em] hover:text-white transition-colors">
-                                            VIEW INTEL ACCESS
-                                        </button>
-                                    </div>
-                                </td>
-                                <td className="p-8 text-right">
-                                    {canEdit ? (
-                                        editingPlayerQuota === player.id ? (
-                                            <div className="flex flex-col space-y-2">
+                                                    : (player.progress.aimStatus === 'failed' || player.progress.grindStatus === 'failed')
+                                                        ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                                                        : 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse'
+                                                }`}>
+                                                {(player.progress.aimStatus === 'approved' && player.progress.grindStatus === 'approved') ? 'COMMAND VERIFIED' : (player.progress.aimStatus === 'rejected' || player.progress.grindStatus === 'rejected') ? 'TELEMETRY REJECTED' : (player.progress.aimStatus === 'completed' && player.progress.grindStatus === 'completed') ? 'IDENTIFIED CLEAR' : 'UNDER REVIEW'}
+                                            </span>
+                                            <button className="text-[8px] text-amber-500 font-black uppercase tracking-[0.2em] hover:text-white transition-colors">
+                                                VIEW INTEL ACCESS
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td className="p-8 text-right">
+                                        {canEdit ? (
+                                            <div className="flex justify-end items-center space-x-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button
-                                                    onClick={async () => {
-                                                        const targetAim = baseQuota?.reducedAimKills || (isShootingGame ? 300 : 0);
-                                                        const targetGrind = baseQuota?.reducedGrindRG || 10;
-
-                                                        try {
-                                                            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/players/${player.id}/quota/custom`, {
-                                                                method: 'POST',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({
-                                                                    weekStart: selectedWeek,
-                                                                    assignedBaseAim: targetAim,
-                                                                    assignedBaseGrind: targetGrind
-                                                                })
-                                                            });
-                                                            const result = await res.json();
-                                                            if (result.success) {
-                                                                showNotification({ message: 'Reduced quota applied successfully.', type: 'success' });
-                                                                setEditingPlayerQuota(null);
-                                                                fetchData();
-                                                            } else {
-                                                                showNotification({ message: result.error || 'Failed to apply custom quota.', type: 'error' });
-                                                            }
-                                                        } catch (err) {
-                                                            console.error("Error applying custom quota:", err);
-                                                            showNotification({ message: 'Network error while applying custom quota.', type: 'error' });
-                                                        }
-                                                    }}
-                                                    className="w-full px-6 py-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-2xl font-black uppercase tracking-widest hover:bg-amber-500/20 transition-all text-[10px]"
+                                                    onClick={(e) => { e.stopPropagation(); setEditingPlayerQuota({ id: player.id, name: player.name, aim: (player.progress.assignedBaseAim || baseQuota?.baseAimKills || 0), grind: (player.progress.assignedBaseGrind || baseQuota?.baseGrindRG || 0) }); }}
+                                                    className="p-3 bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-500/40 rounded-xl transition-all"
+                                                    title="Tactical Override"
                                                 >
-                                                    Apply Reduced Quota
+                                                    <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                                 </button>
-                                                <button onClick={() => setEditingPlayerQuota(null)} className="text-[9px] text-slate-500 font-black uppercase hover:text-white transition-colors">Abort Override</button>
                                             </div>
                                         ) : (
-                                            <button
-                                                onClick={() => {
-                                                    setEditingPlayerQuota(player.id);
-                                                }}
-                                                className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 text-slate-400 hover:text-white transition-all shadow-lg"
-                                                title="Set Weekly Overwrite"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                            </button>
-                                        )
-                                    ) : null}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                                            <div className="flex justify-end items-center space-x-2 text-slate-700">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m0-6V9m4.938 4h1.062a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2h1.062M9 11V9a3 3 0 016 0v2" /></svg>
+                                                <span className="text-[8px] font-black uppercase tracking-widest">Read Only</span>
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
                 {players.length === 0 && (
                     <div className="p-24 text-center opacity-30">
                         <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em]">No Personnel Identified in this Sector</p>
@@ -654,6 +662,71 @@ const QuotaManagementView: React.FC<{
                     }
                 }}
             />
+
+            {/* Tactical Override Modal */}
+            <Modal
+                isOpen={!!editingPlayerQuota}
+                onClose={() => setEditingPlayerQuota(null)}
+                zIndex={100}
+                backdropClassName="bg-black/80 backdrop-blur-md"
+            >
+                <div className="relative w-full max-w-lg bg-[#020617] border border-amber-500/20 rounded-[40px] shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-300">
+                    <div className="flex justify-between items-start mb-10">
+                        <div>
+                            <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">Tactical Override</h3>
+                            <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.4em] mt-2">Unit: {editingPlayerQuota?.name}</p>
+                        </div>
+                        <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                            <svg className="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </div>
+                    </div>
+
+                    <div className="space-y-8">
+                        {isShootingGame && (
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1 italic">Override Aim Target (Kills)</label>
+                                <input
+                                    type="number"
+                                    value={editingPlayerQuota?.aim || 0}
+                                    onChange={(e) => setEditingPlayerQuota(prev => prev ? { ...prev, aim: parseInt(e.target.value) || 0 } : null)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-black text-2xl tracking-tight focus:outline-none focus:border-amber-500/50 transition-all tabular-nums"
+                                />
+                            </div>
+                        )}
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1 italic">Override Grind Target (RG)</label>
+                            <input
+                                type="number"
+                                value={editingPlayerQuota?.grind || 0}
+                                onChange={(e) => setEditingPlayerQuota(prev => prev ? { ...prev, grind: parseInt(e.target.value) || 0 } : null)}
+                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-black text-2xl tracking-tight focus:outline-none focus:border-amber-500/50 transition-all tabular-nums"
+                            />
+                        </div>
+
+                        <div className="pt-6 border-t border-white/5 space-y-4">
+                            <div className="p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex items-start space-x-3">
+                                <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                <p className="text-[9px] text-amber-500/80 font-bold uppercase tracking-widest leading-relaxed">Warning: Operational overrides are restricted to one deployment per weekly cycle. This action cannot be reversed.</p>
+                            </div>
+
+                            <div className="flex space-x-4">
+                                <button
+                                    onClick={() => setEditingPlayerQuota(null)}
+                                    className="flex-grow px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all border border-white/10"
+                                >
+                                    Abort
+                                </button>
+                                <button
+                                    onClick={() => editingPlayerQuota && handleSetCustomQuota(editingPlayerQuota.id, editingPlayerQuota.aim, editingPlayerQuota.grind)}
+                                    className="flex-[2] px-8 py-4 bg-amber-600 hover:bg-amber-500 text-white font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 border-t border-white/20"
+                                >
+                                    Confirm Deployment
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

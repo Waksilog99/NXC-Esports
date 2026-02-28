@@ -45,11 +45,11 @@ const Modal: React.FC<ModalProps> = ({
     return ReactDOM.createPortal(
         <div
             style={{ zIndex }}
-            className={`fixed inset-0 flex items-center justify-center p-4 ${backdropClassName}`}
+            className={`fixed inset-0 flex items-center justify-center p-4 backdrop-blur-md bg-black/60 transition-all duration-300 animate-in fade-in ${backdropClassName}`}
             onClick={handleBackdropClick}
         >
             <div
-                className={className}
+                className={`relative z-50 animate-in zoom-in-95 duration-300 ${className}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {children}

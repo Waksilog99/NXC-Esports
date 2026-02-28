@@ -195,7 +195,8 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
             gamesPlayed: games,
             achievements,
             avatar,
-            ign: profile.ign
+            ign: profile.ign,
+            requesterId: user?.id
         };
 
         setIsSaving(true);

@@ -26,9 +26,13 @@ export const GAME_TITLES = [
     "Valorant Mobile"
 ];
 
+export const VALORANT_MAPS = ["Ascent", "Bind", "Breeze", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset", "Abyss", "Corrode"];
+export const VALORANT_AGENTS = ['Astra', 'Brimstone', 'Clove', 'Harbor', 'Omen', 'Viper', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Yoru', 'Iso', 'Waylay', 'Veto', 'Breach', 'Fade', 'Gekko', 'KAY_O', 'Skye', 'Sova', 'Tejo', 'Chamber', 'Cypher', 'Deadlock', 'Killjoy', 'Sage', 'Vyse'];
+export const VALORANT_ROLES = ["Controller", "Duelist", "Initiator", "Sentinel"];
+
 export const GAME_MAPS: Record<string, string[]> = {
-    "Valorant": ["Ascent", "Bind", "Breeze", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset", "Abyss"],
-    "Valorant Mobile": ["Ascent", "Bind", "Haven", "Icebox", "Split"],
+    "Valorant": VALORANT_MAPS,
+    "Valorant Mobile": VALORANT_MAPS,
     "Counter-Strike 2": ["Ancient", "Anubis", "Dust2", "Inferno", "Mirage", "Nuke", "Overpass", "Vertigo", "Thera", "Mills", "Cache", "Train"],
     "CS2": ["Ancient", "Anubis", "Dust2", "Inferno", "Mirage", "Nuke", "Overpass", "Vertigo", "Thera", "Mills", "Cache", "Train"],
     "CS:GO": ["Ancient", "Anubis", "Dust2", "Inferno", "Mirage", "Nuke", "Overpass", "Vertigo", "Thera", "Mills", "Cache", "Train"],
@@ -55,8 +59,9 @@ export const GAME_MAPS: Record<string, string[]> = {
 };
 
 export const GAME_ROLES: Record<string, string[]> = {
+    "VALORANT": ["Controller", "Duelist", "Initiator", "Sentinel"],
     "MOBA": ["Jungler", "Roamer", "Mid Lane", "Gold Lane", "EXP Lane", "Support", "ADC", "Tank", "Carry"],
-    "FPS": ["Duelist", "Controller", "Initiator", "Sentinel", "Entry", "Support", "Sniper", "IGL", "Lurker", "Flex"],
+    "FPS": ["Entry", "Support", "Sniper", "IGL", "Lurker", "Rifler"],
     "BR": ["Fragger", "Support", "Lead", "Scout", "Anchor"],
     "FIGHTING": ["Main", "Sub"],
     "SPORTS": ["Forward", "Midfield", "Defense", "Keeper"]
@@ -85,8 +90,8 @@ export const GAME_CATEGORY: Record<string, string> = {
     "Street Fighter 6": "FIGHTING",
     "Teamfight Tactics": "MOBA", // Auto-battler
     "Tekken 8": "FIGHTING",
-    "Valorant": "FPS",
-    "Valorant Mobile": "FPS",
+    "Valorant": "VALORANT",
+    "Valorant Mobile": "VALORANT",
     "CS2": "FPS",
     "CS:GO": "FPS"
 };

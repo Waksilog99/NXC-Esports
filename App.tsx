@@ -12,6 +12,7 @@ import Achievements from './components/Achievements';
 import Events from './components/Events';
 import Sponsors from './components/Sponsors';
 import TeamManagement from './components/TeamManagement';
+import Playbook from './components/Playbook';
 import PlayerConsole from './components/PlayerConsole';
 import SponsorZone from './components/SponsorZone';
 import StoreModal from './components/StoreModal';
@@ -30,15 +31,19 @@ const App: React.FC = () => {
   const [dbUserId, setDbUserId] = useState<number | undefined>(undefined);
   const [sponsorTier, setSponsorTier] = useState<string | undefined>(undefined);
   const [isRoleLoading, setIsRoleLoading] = useState(false);
-  const [currentView, setCurrentView] = useState<'home' | 'profile' | 'settings' | 'roster' | 'achievements' | 'events' | 'sponsors' | 'admin' | 'manager' | 'team-management' | 'tournament-management' | 'sponsor-zone'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'profile' | 'settings' | 'roster' | 'achievements' | 'events' | 'sponsors' | 'admin' | 'manager' | 'team-management' | 'tournament-management' | 'sponsor-zone' | 'playbook' | 'operations'>(() => {
+    // Persistent view initialization
+    const savedView = localStorage.getItem('nxc-view');
+    const validViews = ['home', 'profile', 'settings', 'roster', 'achievements', 'events', 'sponsors', 'admin', 'manager', 'team-management', 'tournament-management', 'sponsor-zone', 'playbook', 'operations'];
+    return (savedView && validViews.includes(savedView)) ? (savedView as any) : 'home';
+  });
   const [previousView, setPreviousView] = useState<typeof currentView>('home');
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined);
 
   const handleNavigate = (view: typeof currentView, userId?: number) => {
-    // Only track history if we are moving TO a "sub-view" like profile or settings
-    // Or just track everything that isn't the same as current
     if (view !== currentView) {
       setPreviousView(currentView);
+      localStorage.setItem('nxc-view', view);
     }
     setSelectedUserId(userId);
     setCurrentView(view);
@@ -48,13 +53,24 @@ const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [currentView]);
 
-  // Global Escape key handler for back navigation
+  // Global Escape key handler for back navigation and modal closing
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // If we are in a sub-view, go back to previous or home
-        const subViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'operations', 'sponsor-zone'];
+        // 1. Close Modals first if open
+        if (isStoreOpen) {
+          setIsStoreOpen(false);
+          return;
+        }
+        if (isLoginOpen) {
+          setIsLoginOpen(false);
+          return;
+        }
+
+        // 2. If we are in a sub-view, go back to previous or home
+        const subViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'operations', 'sponsor-zone', 'playbook'];
         if (subViews.includes(currentView)) {
+          e.preventDefault();
           console.log(`[ESC] Navigating back from ${currentView}`);
           const backTo = (previousView === currentView || !previousView) ? 'home' : previousView;
           handleNavigate(backTo);
@@ -64,7 +80,21 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentView, previousView]);
+  }, [currentView, previousView, isStoreOpen, isLoginOpen]);
+
+  // Back to top visibility
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const fetchRole = async () => {
@@ -125,20 +155,30 @@ const App: React.FC = () => {
 
   // Redirect to home when logged out from restricted views
   useEffect(() => {
-    const protectedViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'sponsor-zone'];
-    if (!loading && !user && protectedViews.includes(currentView)) {
-      handleNavigate('home');
-      setIsLoginOpen(true); // Auto-open login modal after logout/account deletion
+    const protectedViews = ['profile', 'settings', 'admin', 'manager', 'team-management', 'tournament-management', 'sponsor-zone', 'playbook', 'operations'];
+    if (!loading && !isRoleLoading) {
+      if (protectedViews.includes(currentView)) {
+        if (!user) {
+          handleNavigate('home');
+          setIsLoginOpen(true);
+        } else if (!isAuthorized(currentView as any)) {
+          // If logged in but unauthorized for the persisted view
+          handleNavigate('home');
+        }
+      }
     }
-  }, [user, loading, currentView]);
+  }, [user, loading, isRoleLoading, currentView]);
 
   const isAuthorized = (view: string) => {
-    const roles = userRole?.split(',') || [];
-    if (view === 'admin') return roles.includes('admin') || roles.includes('ceo');
-    if (view === 'manager') return roles.includes('manager') || roles.includes('coach') || roles.includes('admin') || roles.includes('ceo');
-    if (view === 'team-management' || view === 'tournament-management') return roles.includes('manager') || roles.includes('coach') || roles.includes('admin') || roles.includes('ceo');
-    if (view === 'operations') return roles.includes('player') || roles.includes('manager') || roles.includes('coach') || roles.includes('admin') || roles.includes('ceo');
-    if (view === 'sponsor-zone') return roles.includes('sponsor') || roles.includes('admin') || roles.includes('ceo');
+    const roles = userRole?.split(',').map(r => r.trim().toLowerCase()) || [];
+    const hasRole = (roleList: string[]) => roles.some(r => roleList && roleList.includes(r));
+    const isSponsor = roles.some(r => r && r.includes('sponsor'));
+
+    if (view === 'admin') return hasRole(['admin', 'ceo']);
+    if (view === 'manager') return hasRole(['manager', 'coach', 'admin', 'ceo']);
+    if (view === 'team-management' || view === 'tournament-management') return hasRole(['manager', 'coach', 'admin', 'ceo']);
+    if (view === 'operations') return hasRole(['player', 'manager', 'coach', 'admin', 'ceo']);
+    if (view === 'sponsor-zone') return isSponsor || hasRole(['admin', 'ceo']);
     return true;
   };
 
@@ -250,8 +290,16 @@ const App: React.FC = () => {
 
                 {currentView === 'roster' && (
                   <section id="roster" className="scroll-mt-32">
-                    <Roster />
+                    <Roster userRole={userRole} userId={dbUserId} />
                   </section>
+                )}
+
+                {currentView === 'playbook' && (
+                  !isAuthorized('manager') ? <AccessDenied /> : (
+                    <section className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                      <Playbook userRole={userRole} userId={dbUserId} onBack={() => handleNavigate('manager')} />
+                    </section>
+                  )
                 )}
 
                 {currentView === 'achievements' && <Achievements />}
@@ -300,27 +348,41 @@ const App: React.FC = () => {
             </footer>
           </main>
 
-          {/* Floating Store Button */}
-          {isStoreBtnVisible && !isStoreOpen && (
-            <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-2 animate-in slide-in-from-right-8 fade-in duration-500">
+          {/* Floating Actions Container */}
+          <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-3 pointer-events-none">
+            {/* Back to Top Button */}
+            {showScrollTop && (
               <button
-                onClick={() => setIsStoreBtnVisible(false)}
-                className="bg-black/80 text-slate-400 hover:text-white p-1 rounded-full border border-white/10 hover:border-white/30 transition-colors backdrop-blur-md self-end mb-1"
-                title="Hide Store Button"
+                onClick={scrollToTop}
+                className="pointer-events-auto p-3 bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl text-amber-500 hover:bg-white/20 transition-all shadow-xl animate-in slide-in-from-bottom-4 duration-300"
+                title="Back to Top"
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7" /></svg>
               </button>
-              <button
-                onClick={() => setIsStoreOpen(true)}
-                className="group relative flex items-center justify-center p-4 bg-gradient-to-r from-purple-600 to-amber-500 rounded-full shadow-[0_10px_30px_rgba(168,85,247,0.4)] hover:shadow-[0_10px_40px_rgba(251,191,36,0.6)] hover:scale-105 active:scale-95 transition-all outline-none"
-              >
-                <div className="absolute inset-0 rounded-full bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </button>
-            </div>
-          )}
+            )}
+
+            {/* Floating Store Button */}
+            {isStoreBtnVisible && !isStoreOpen && (
+              <div className="flex flex-col items-end gap-2 animate-in slide-in-from-right-8 fade-in duration-500 pointer-events-auto">
+                <button
+                  onClick={() => setIsStoreBtnVisible(false)}
+                  className="bg-black/80 text-slate-400 hover:text-white p-1 rounded-full border border-white/10 hover:border-white/30 transition-colors backdrop-blur-md self-end mb-1"
+                  title="Hide Store Button"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                <button
+                  onClick={() => setIsStoreOpen(true)}
+                  className="group relative flex items-center justify-center p-4 bg-gradient-to-r from-purple-600 to-amber-500 rounded-full shadow-[0_10px_30px_rgba(168,85,247,0.4)] hover:shadow-[0_10px_40px_rgba(251,191,36,0.6)] hover:scale-105 active:scale-95 transition-all outline-none"
+                >
+                  <div className="absolute inset-0 rounded-full bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
 
           <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
           <StoreModal

@@ -60,8 +60,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
     setIsLoadingScrim(true);
     try {
       // ── Parallelized API Fetching ──────────────────────────────────────────
-      const statsUrl = teamId ? `${API}/api/reports/weekly?teamId=${teamId}` : `${API}/api/reports/weekly`;
-      const rawUrl = teamId ? `${API}/api/scrims?teamId=${teamId}` : `${API}/api/scrims`;
+      const statsUrl = teamId ? `${API}/api/reports/weekly?teamId=${teamId}&requesterId=${userId}` : `${API}/api/reports/weekly?requesterId=${userId}`;
+      const rawUrl = teamId ? `${API}/api/scrims?teamId=${teamId}&requesterId=${userId}` : `${API}/api/scrims?requesterId=${userId}`;
 
       const [statsRes, rawRes] = await Promise.all([
         fetch(statsUrl),
@@ -97,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
   const loadTourStats = async (teamId?: number) => {
     setIsLoadingTour(true);
     try {
-      const url = teamId ? `${API}/api/tournaments?teamId=${teamId}` : `${API}/api/tournaments`;
+      const url = teamId ? `${API}/api/tournaments?teamId=${teamId}&requesterId=${userId}` : `${API}/api/tournaments?requesterId=${userId}`;
       const r = await fetch(url);
       const result = await r.json();
       const list: any[] = result.success ? result.data : (Array.isArray(result) ? result : []);
@@ -128,7 +128,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
     const initDashboard = async () => {
       loadScrimStats(); // Handles its own state
       try {
-        const r = await fetch(`${API}/api/teams`);
+        const r = await fetch(`${API}/api/teams?requesterId=${userId}`);
         const result = await r.json();
         if (result.success && result.data?.length > 0) {
           setTeamOptions(result.data.map((t: any) => ({ id: t.id, name: t.name, game: t.game })));

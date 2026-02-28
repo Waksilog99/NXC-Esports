@@ -39,7 +39,7 @@ const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose }) => {
             setError(null);
             try {
                 const [orderRes, prodRes] = await Promise.all([
-                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders?userId=${user.id}`),
+                    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/orders?userId=${user.id}&requesterId=${user.id}`),
                     fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`)
                 ]);
 
@@ -47,8 +47,7 @@ const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose }) => {
                 const prodData = await prodRes.json();
 
                 if (orderData.success) {
-                    const userOrders = orderData.data.filter((o: any) => o.userId === user.id);
-                    setOrders(userOrders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+                    setOrders(orderData.data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
                 }
 
                 if (prodData.success) {
@@ -164,12 +163,15 @@ const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose }) => {
                                                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusStyle(order.status)} shrink-0`}>
                                                         {order.status}
                                                     </span>
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                                                        QTY: {(order as any).quantity || 1}
+                                                    </span>
                                                     {order.status === 'For Payment Verification' && (
                                                         <span className="text-[9px] font-black text-amber-500/60 uppercase tracking-tighter animate-pulse">Waiting for Command verification</span>
                                                     )}
                                                 </div>
                                                 <div className="text-slate-400 font-bold text-sm tracking-tight">
-                                                    ₱{(product ? product.price / 100 : 0).toFixed(2)}
+                                                    ₱{(product ? (product.price * ((order as any).quantity || 1)) / 100 : 0).toFixed(2)}
                                                 </div>
                                             </div>
                                         </div>

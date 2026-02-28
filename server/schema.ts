@@ -37,6 +37,9 @@ export const scrimPlayerStats = pgTable('scrim_player_stats', {
     assists: integer('assists').default(0),
     acs: integer('acs').default(0),
     isWin: integer('is_win').default(0),
+    agent: text('agent'),
+    role: text('role'),
+    map: text('map'),
 });
 
 export const achievements = pgTable('achievements', {
@@ -143,6 +146,9 @@ export const tournamentPlayerStats = pgTable('tournament_player_stats', {
     assists: integer('assists').default(0),
     acs: integer('acs').default(0),
     isWin: integer('is_win').default(0),
+    agent: text('agent'),
+    role: text('role'),
+    map: text('map'),
 });
 
 export const weeklyReports = pgTable('weekly_reports', {
@@ -180,6 +186,7 @@ export const playerQuotaProgress = pgTable('player_quota_progress', {
     punishmentRG: integer('punishment_rg').default(0),
     carryOverKills: integer('carry_over_kills').default(0),
     carryOverRG: integer('carry_over_rg').default(0),
+    isCustomQuotaApplied: boolean('is_custom_quota_applied').default(false),
     updatedAt: timestamp('updated_at').defaultNow(),
 });
 
@@ -199,6 +206,7 @@ export const orders = pgTable('orders', {
     id: serial('id').primaryKey(),
     userId: integer('user_id').references(() => users.id),
     productId: integer('product_id').references(() => products.id),
+    quantity: integer('quantity').notNull().default(1),
     recipientName: text('recipient_name').notNull(),
     deliveryAddress: text('delivery_address').notNull(),
     contactNumber: text('contact_number').notNull(),
@@ -208,3 +216,22 @@ export const orders = pgTable('orders', {
     createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const playbookStrategies = pgTable('playbook_strategies', {
+    id: serial('id').primaryKey(),
+    teamId: integer('team_id').references(() => teams.id),
+    title: text('title').notNull(),
+    game: text('game'),
+    map: text('map'),
+    category: text('category'),
+    side: text('side'), // 'attack', 'defense', 'both'
+    priority: text('priority').default('medium'), // 'high', 'medium', 'low'
+    role: text('role'),
+    content: text('content'), // Rich text HTML
+    notes: text('notes'),
+    images: text('images'), // JSON array of base64 strings or URLs
+    references: text('references'), // JSON array of { title: string, url: string }
+    videoUrl: text('video_url'),
+    authorId: integer('author_id').references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+});

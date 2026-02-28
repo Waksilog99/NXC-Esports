@@ -16,20 +16,23 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
-import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress, products, orders, siteSettings } from './schema.js';
-import { eq, inArray, and, sql, desc } from 'drizzle-orm';
+import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress, products, orders, siteSettings, playbookStrategies } from './schema.js';
+import { eq, inArray, and, or, sql, desc, notIlike } from 'drizzle-orm';
 import crypto from 'crypto';
 import fs from 'fs';
 import { finished } from 'stream/promises';
 
 const GAME_CATEGORY = {
-    'Valorant': 'FPS',
+    'Valorant': 'VALORANT',
+    'Valorant Mobile': 'VALORANT',
     'CS2': 'FPS',
     'CS:GO': 'FPS',
     'Apex Legends': 'BR',
     'League of Legends': 'MOBA',
     'Dota 2': 'MOBA',
-    'Mobile Legends': 'MOBA'
+    'Mobile Legends': 'MOBA',
+    'Mobile Legends: Bang Bang': 'MOBA',
+    'Honor of Kings': 'MOBA'
 } as const;
 
 const app = express();
@@ -258,11 +261,25 @@ app.get('/api/users', async (req, res) => {
             .from(users)
             .leftJoin(players, eq(users.id, players.userId));
 
-        const dataWithRoleLevels = allUsers.map(u => ({
-            ...u,
-            level: determineLevel(u.role, u.level)
-        }));
-        res.json(dataWithRoleLevels);
+        // Deduplicate users (due to left join with players)
+        const userMap = new Map();
+        allUsers.forEach(u => {
+            if (!userMap.has(u.id)) {
+                userMap.set(u.id, {
+                    ...u,
+                    level: determineLevel(u.role, u.level)
+                });
+            } else {
+                // Keep the highest level if multiple records exist
+                const existing = userMap.get(u.id);
+                const currentLevel = determineLevel(u.role, u.level);
+                if (currentLevel > existing.level) {
+                    userMap.set(u.id, { ...u, level: currentLevel });
+                }
+            }
+        });
+
+        res.json(Array.from(userMap.values()));
     } catch (error: any) {
         console.error("Error in GET /api/users:", error.stack || error);
         res.status(500).json({ success: false, error: 'Failed to fetch users', details: IS_PROD ? 'Check server logs' : error.message });
@@ -638,20 +655,54 @@ app.get('/api/scrims', async (req, res) => {
 
 app.get('/api/scrims/:id/stats', async (req, res) => {
     const scrimId = Number(req.params.id);
+    const requesterId = req.query.requesterId ? Number(req.query.requesterId) : undefined;
+
     try {
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+            requester = requesterRows[0];
+        }
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        const scrimDataRows = await db.select().from(scrims).where(eq(scrims.id, scrimId));
+        const scrimData = scrimDataRows[0];
+        if (!scrimData) return res.status(404).json({ success: false, error: 'Scrim not found' });
+
+        // Authorization check if not admin
+        if (!isAdmin && requesterId) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, scrimData.teamId!));
+            const isMember = await db.select().from(players).where(and(eq(players.teamId, scrimData.teamId!), eq(players.userId, requesterId)));
+            if (teamRows[0]?.managerId !== requesterId && isMember.length === 0) {
+                return res.status(403).json({ success: false, error: 'Access Denied' });
+            }
+        }
+
         const stats = await db.select({
-            ...scrimPlayerStats,
+            id: scrimPlayerStats.id,
+            scrimId: scrimPlayerStats.scrimId,
+            playerId: scrimPlayerStats.playerId,
+            kills: scrimPlayerStats.kills,
+            deaths: scrimPlayerStats.deaths,
+            assists: scrimPlayerStats.assists,
+            acs: scrimPlayerStats.acs,
+            isWin: scrimPlayerStats.isWin,
+            agent: scrimPlayerStats.agent,
+            role: scrimPlayerStats.role,
+            map: scrimPlayerStats.map,
             playerName: players.name,
-            playerImage: players.image
+            playerImage: players.image,
+            playerRole: players.role,
+            playerUserId: players.userId
         })
             .from(scrimPlayerStats)
             .leftJoin(players, eq(scrimPlayerStats.playerId, players.id))
             .where(eq(scrimPlayerStats.scrimId, scrimId));
 
-        const scrimDataRows = await db.select().from(scrims).where(eq(scrims.id, scrimId));
-        const scrimData = scrimDataRows[0];
+        // Filter out stats for coaches/managers just in case
+        const filteredStats = stats.filter(s => !s.playerRole?.toLowerCase().includes('coach'));
 
-        res.json({ success: true, data: { scrim: scrimData, stats } });
+        res.json({ success: true, data: { scrim: scrimData, stats: filteredStats } });
     } catch (error: any) {
         console.error("Error fetching scrim stats:", error);
         res.status(500).json({ success: false, error: 'Failed to fetch stats', details: error.message });
@@ -670,6 +721,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
         let scrimLosses = 0;
         const scrimRecentForm: string[] = [];
         const scrimMapStats: Record<string, { played: number, wins: number, losses: number }> = {};
+        const scrimAgentStats: Record<string, { wins: number, total: number }> = {};
         let scrimTopPlayers: any[] = [];
 
         if (scrimIds.length > 0) {
@@ -694,7 +746,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 
             const scrimAllStats = await db.select({
                 ...scrimPlayerStats,
-                playerName: players.name
+                playerName: players.name,
+                playerUserId: players.userId
             })
                 .from(scrimPlayerStats)
                 .leftJoin(players, eq(scrimPlayerStats.playerId, players.id))
@@ -703,8 +756,18 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             const scrimPlayerAgg: Record<number, any> = {};
             scrimAllStats.forEach(stat => {
                 if (!stat.playerId) return;
+
+                // Track agent stats for team
+                if (stat.agent) {
+                    if (!scrimAgentStats[stat.agent]) scrimAgentStats[stat.agent] = { wins: 0, total: 0 };
+                    scrimAgentStats[stat.agent].total++;
+                    if (stat.isWin === 1) {
+                        scrimAgentStats[stat.agent].wins++;
+                    }
+                }
+
                 if (!scrimPlayerAgg[stat.playerId]) {
-                    scrimPlayerAgg[stat.playerId] = { name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
+                    scrimPlayerAgg[stat.playerId] = { id: stat.playerId, userId: stat.playerUserId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
                 }
                 scrimPlayerAgg[stat.playerId].kills += stat.kills || 0;
                 scrimPlayerAgg[stat.playerId].deaths += stat.deaths || 0;
@@ -714,7 +777,9 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             });
 
             scrimTopPlayers = Object.values(scrimPlayerAgg).map(p => ({
+                id: p.id,
                 name: p.name,
+                userId: p.userId,
                 kd: p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills,
                 avgAcs: Math.round(p.acs / p.games),
                 games: p.games
@@ -730,6 +795,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
         let tourneyLosses = 0;
         const tourneyRecentForm: string[] = [];
         let tourneyTopPlayers: any[] = [];
+        const tourneyAgentStats: Record<string, { wins: number, total: number }> = {};
 
         if (tourneyIds.length > 0) {
             completedTourneys.forEach(t => {
@@ -748,7 +814,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 
             const tourneyAllStats = await db.select({
                 ...tournamentPlayerStats,
-                playerName: players.name
+                playerName: players.name,
+                playerUserId: players.userId
             })
                 .from(tournamentPlayerStats)
                 .leftJoin(players, eq(tournamentPlayerStats.playerId, players.id))
@@ -757,8 +824,18 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             const tourneyPlayerAgg: Record<number, any> = {};
             tourneyAllStats.forEach(stat => {
                 if (!stat.playerId) return;
+
+                // Track agent stats for team
+                if (stat.agent) {
+                    if (!tourneyAgentStats[stat.agent]) tourneyAgentStats[stat.agent] = { wins: 0, total: 0 };
+                    tourneyAgentStats[stat.agent].total++;
+                    if (stat.isWin === 1) {
+                        tourneyAgentStats[stat.agent].wins++;
+                    }
+                }
+
                 if (!tourneyPlayerAgg[stat.playerId]) {
-                    tourneyPlayerAgg[stat.playerId] = { name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
+                    tourneyPlayerAgg[stat.playerId] = { id: stat.playerId, userId: stat.playerUserId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
                 }
                 tourneyPlayerAgg[stat.playerId].kills += stat.kills || 0;
                 tourneyPlayerAgg[stat.playerId].deaths += stat.deaths || 0;
@@ -768,7 +845,9 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             });
 
             tourneyTopPlayers = Object.values(tourneyPlayerAgg).map(p => ({
+                id: p.id,
                 name: p.name,
+                userId: p.userId,
                 kd: p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills,
                 avgAcs: Math.round(p.acs / p.games),
                 games: p.games
@@ -785,6 +864,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                     losses: scrimLosses,
                     recentForm: scrimRecentForm.slice(-5),
                     mapStats: scrimMapStats,
+                    agentStats: scrimAgentStats,
                     topPlayers: scrimTopPlayers
                 },
                 tournament: {
@@ -793,6 +873,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                     wins: tourneyWins,
                     losses: tourneyLosses,
                     recentForm: tourneyRecentForm.slice(-5),
+                    agentStats: tourneyAgentStats,
                     topPlayers: tourneyTopPlayers
                 },
                 topPlayers: scrimTopPlayers.slice(0, 5)
@@ -809,8 +890,22 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 // ── Sponsor QR Management ───────────────────────────────────────────────────
 app.put('/api/sponsors/:id/qr', async (req, res) => {
     const { id } = req.params;
-    const { qrEWallet, qrBank } = req.body;
+    const { qrEWallet, qrBank, requesterId } = req.body;
     try {
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+
+        const requester = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const role = requester[0]?.role || '';
+        const isAuth = role.includes('admin') || role.includes('ceo');
+
+        // If not admin/ceo, must be the linked sponsor
+        if (!isAuth) {
+            const sponsor = await db.select().from(sponsors).where(eq(sponsors.id, Number(id)));
+            if (sponsor[0]?.userId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You cannot modify this partner asset.' });
+            }
+        }
+
         const updated = await db.update(sponsors).set({ qrEWallet, qrBank }).where(eq(sponsors.id, Number(id))).returning();
         res.json({ success: true, data: updated[0] });
     } catch (error: any) {
@@ -834,9 +929,16 @@ app.get('/api/site-settings', async (req, res) => {
 });
 
 app.put('/api/site-settings', async (req, res) => {
-    const { waksQrEWallet, waksQrBank } = req.body;
+    const { waksQrEWallet, waksQrBank, requesterId } = req.body;
     try {
-        // Check if settings exist
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+
+        const requester = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const role = requester[0]?.role || '';
+        if (!role.includes('admin') && !role.includes('ceo')) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only executive command can modify site-wide settings.' });
+        }
+
         const settings = await db.select().from(siteSettings);
         let result;
         if (settings.length === 0) {
@@ -1064,16 +1166,36 @@ app.post('/api/seed/massive', async (req, res) => {
 
 // teams & players
 app.get('/api/teams', async (req, res) => {
-    const managerId = req.query.managerId ? Number(req.query.managerId) : undefined;
+    const requesterId = req.query.requesterId ? Number(req.query.requesterId) : (req.query.managerId ? Number(req.query.managerId) : undefined);
     const teamId = req.query.id ? Number(req.query.id) : undefined;
+
     try {
-        let query = db.select().from(teams);
-        if (managerId) {
-            query = query.where(eq(teams.managerId, managerId)) as any;
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, requesterId));
+            requester = requesterRows[0];
         }
+
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+
+        let query = db.select().from(teams);
+
+        // Authorization & Filtering
+        if (!isAdmin && requesterId) {
+            // Non-admins only see teams they manage or play/coach in
+            query = query.where(
+                or(
+                    eq(teams.managerId, requesterId),
+                    sql`EXISTS (SELECT 1 FROM ${players} WHERE ${players.teamId} = ${teams.id} AND ${players.userId} = ${requesterId})`
+                )
+            ) as any;
+        }
+
         if (teamId) {
             query = query.where(eq(teams.id, teamId)) as any;
         }
+
         const teamData = await query;
         if (teamData.length === 0) {
             return res.json({ success: true, data: [] });
@@ -1104,15 +1226,25 @@ app.get('/api/teams', async (req, res) => {
             allUsers = await db.select().from(users).where(inArray(users.id, userIds));
         }
 
-        // 3. Fetch ALL scrims for these teams
+        // 3. Fetch ALL scrims and tournaments for these teams
         const allScrims = await db.select().from(scrims).where(inArray(scrims.teamId, teamIds));
-        const completedScrimIds = allScrims.filter(s => s.status === 'completed').map(s => s.id);
+        const allTournaments = await db.select().from(tournaments).where(inArray(tournaments.teamId, teamIds));
 
-        // 4. Fetch ALL player stats for these completed scrims
-        let allStats: any[] = [];
+        const completedScrimIds = allScrims.filter(s => s.status === 'completed').map(s => s.id);
+        const completedTourneyIds = allTournaments.filter(t => t.status === 'completed').map(t => t.id);
+
+        // 4. Fetch ALL player stats for completed scrims and tournaments
+        let allSStats: any[] = [];
         if (completedScrimIds.length > 0) {
-            allStats = await db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.scrimId, completedScrimIds));
+            allSStats = await db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.scrimId, completedScrimIds));
         }
+
+        let allTStats: any[] = [];
+        if (completedTourneyIds.length > 0) {
+            allTStats = await db.select().from(tournamentPlayerStats).where(inArray(tournamentPlayerStats.tournamentId, completedTourneyIds));
+        }
+
+        const consolidatedStats = [...allSStats, ...allTStats];
 
         // Create mappings for O(1) lookups
         const userMap = new Map(allUsers.map(u => [u.id, u]));
@@ -1123,8 +1255,8 @@ app.get('/api/teams', async (req, res) => {
             if (teamArr) teamArr.push(p);
         });
 
-        const playerStatsMap = new Map<number, typeof allStats>();
-        allStats.forEach(s => {
+        const playerStatsMap = new Map<number, typeof consolidatedStats>();
+        consolidatedStats.forEach(s => {
             if (!playerStatsMap.has(s.playerId)) playerStatsMap.set(s.playerId, []);
             playerStatsMap.get(s.playerId)!.push(s);
         });
@@ -1204,11 +1336,27 @@ app.get('/api/teams', async (req, res) => {
     }
 });
 
+app.get('/api/teams/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const [team] = await db.select().from(teams).where(eq(teams.id, id));
+        if (!team) return res.status(404).json({ success: false, error: "Unit not found" });
+
+        const teamPlayers = await db.select().from(players).where(eq(players.teamId, id));
+        res.json({ success: true, data: { ...team, players: teamPlayers } });
+    } catch (error) {
+        console.error("Error in GET /api/teams/:id:", error);
+        res.status(500).json({ success: false, error: "Database error" });
+    }
+});
+
 app.get('/api/players', async (req, res) => {
     const { userId } = req.query;
     try {
         let data;
-        if (userId) {
+        const uId = userId && userId !== 'undefined' ? Number(userId) : NaN;
+
+        if (!isNaN(uId)) {
             data = await db.select({
                 id: players.id,
                 teamId: players.teamId,
@@ -1226,7 +1374,7 @@ app.get('/api/players', async (req, res) => {
             })
                 .from(players)
                 .leftJoin(teams, eq(players.teamId, teams.id))
-                .where(eq(players.userId, Number(userId)));
+                .where(eq(players.userId, uId));
         } else {
             data = await db.select({
                 id: players.id,
@@ -1253,11 +1401,174 @@ app.get('/api/players', async (req, res) => {
     }
 });
 
+app.get('/api/players/:id/stats/breakdown', async (req, res) => {
+    const playerId = Number(req.params.id);
+    try {
+        // 1. Fetch Scrim Stats
+        const scrimStats = await db.select({
+            id: scrimPlayerStats.id,
+            scrimId: scrims.id,
+            matchId: scrims.id, // Alias for frontend
+            type: sql<string>`'scrim'`, // Constant type
+            kills: scrimPlayerStats.kills,
+            deaths: scrimPlayerStats.deaths,
+            assists: scrimPlayerStats.assists,
+            acs: scrimPlayerStats.acs,
+            isWin: scrimPlayerStats.isWin,
+            agent: scrimPlayerStats.agent,
+            map: scrimPlayerStats.map,
+            opponent: scrims.opponent,
+            date: scrims.date
+        })
+            .from(scrimPlayerStats)
+            .innerJoin(scrims, eq(scrimPlayerStats.scrimId, scrims.id))
+            .where(eq(scrimPlayerStats.playerId, playerId));
+
+        // 2. Fetch Tournament Stats
+        const tourneyStats = await db.select({
+            id: tournamentPlayerStats.id,
+            tournamentId: tournaments.id,
+            matchId: tournaments.id, // Alias for frontend
+            type: sql<string>`'tournament'`, // Constant type
+            kills: tournamentPlayerStats.kills,
+            deaths: tournamentPlayerStats.deaths,
+            assists: tournamentPlayerStats.assists,
+            acs: tournamentPlayerStats.acs,
+            isWin: tournamentPlayerStats.isWin,
+            agent: tournamentPlayerStats.agent,
+            map: tournamentPlayerStats.map,
+            opponent: tournaments.name,
+            date: tournaments.date
+        })
+            .from(tournamentPlayerStats)
+            .innerJoin(tournaments, eq(tournamentPlayerStats.tournamentId, tournaments.id))
+            .where(eq(tournamentPlayerStats.playerId, playerId));
+
+        const allStats = [...scrimStats, ...tourneyStats];
+
+        if (allStats.length === 0) {
+            return res.json({ success: true, data: { agentStats: [], roleStats: [], mapStats: [], trendData: [] } });
+        }
+
+        // Trend data: sort matches by date
+        const trendData = allStats
+            .map((s: any) => ({
+                date: s.date,
+                acs: s.acs || 0
+            }))
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const agentToRole: Record<string, string> = {
+            'Jett': 'Duelist', 'Phoenix': 'Duelist', 'Neon': 'Duelist', 'Raze': 'Duelist', 'Reyna': 'Duelist', 'Yoru': 'Duelist', 'Iso': 'Duelist',
+            'Sage': 'Sentinel', 'Cypher': 'Sentinel', 'Killjoy': 'Sentinel', 'Chamber': 'Sentinel', 'Deadlock': 'Sentinel', 'Vyse': 'Sentinel', 'Waylay': 'Sentinel', 'Veto': 'Sentinel',
+            'Brimstone': 'Controller', 'Viper': 'Controller', 'Omen': 'Controller', 'Astra': 'Controller', 'Harbor': 'Controller', 'Clove': 'Controller',
+            'Sova': 'Initiator', 'Breach': 'Initiator', 'Skye': 'Initiator', 'KAY_O': 'Initiator', 'KAY/O': 'Initiator', 'Fade': 'Initiator', 'Gekko': 'Initiator', 'Tejo': 'Initiator'
+        };
+
+        const normalizedRoles: Record<string, string> = {};
+        Object.entries(agentToRole).forEach(([agent, role]) => {
+            normalizedRoles[agent.toLowerCase().trim()] = role;
+        });
+
+        const agentMap: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number, totalAcs: number }> = {};
+        const roleMap: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number, totalAcs: number }> = {};
+        const mapResMap: Record<string, { games: number, wins: number, totalAcs: number }> = {};
+        allStats.forEach((s: any) => {
+            // Map Stats
+            const mapName = s.map || 'Unknown';
+            if (!mapResMap[mapName]) mapResMap[mapName] = { games: 0, wins: 0, totalAcs: 0 };
+            mapResMap[mapName].games++;
+            if (s.isWin === 1) mapResMap[mapName].wins++;
+            mapResMap[mapName].totalAcs += (s.acs || 0);
+
+            // Agent Stats
+            const agent = (s.agent || 'Unknown').trim();
+            if (!agentMap[agent]) agentMap[agent] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0, totalAcs: 0 };
+            agentMap[agent].games++;
+            if (s.isWin === 1) agentMap[agent].wins++;
+            agentMap[agent].kills += (s.kills || 0);
+            agentMap[agent].deaths += (s.deaths || 0);
+            agentMap[agent].assists += (s.assists || 0);
+            agentMap[agent].totalAcs += (s.acs || 0);
+
+            // Role Stats
+            const role = s.role || normalizedRoles[agent.toLowerCase()] || 'Unassigned';
+            if (!roleMap[role]) roleMap[role] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0, totalAcs: 0 };
+            roleMap[role].games++;
+            if (s.isWin === 1) roleMap[role].wins++;
+            roleMap[role].kills += (s.kills || 0);
+            roleMap[role].deaths += (s.deaths || 0);
+            roleMap[role].assists += (s.assists || 0);
+            roleMap[role].totalAcs += (s.acs || 0);
+
+            // Inject role into stat for frontend filtering
+            s.role = role;
+        });
+
+        // Ensure Specific Assets are represented if data exists or even as 0-placeholders for new content
+        const mandatoryAgents = ['Veto'];
+        const mandatoryMaps = ['Abyss', 'Corrode'];
+
+        mandatoryAgents.forEach(a => {
+            if (!agentMap[a]) agentMap[a] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0, totalAcs: 0 };
+        });
+        mandatoryMaps.forEach(m => {
+            if (!mapResMap[m]) mapResMap[m] = { games: 0, wins: 0, totalAcs: 0 };
+        });
+
+        const agentStats = Object.keys(agentMap).map(name => {
+            const data = agentMap[name];
+            return {
+                name,
+                games: data.games,
+                winRate: data.games > 0 ? Math.round((data.wins / data.games) * 100) : 0,
+                kd: ((data.kills + (data.assists || 0)) / (data.deaths || 1)).toFixed(2),
+                acs: data.games > 0 ? Math.round(data.totalAcs / data.games) : 0
+            };
+        }).sort((a, b) => b.games - a.games);
+
+        const roleStats = Object.keys(roleMap).map(name => {
+            const data = roleMap[name];
+            return {
+                name,
+                games: data.games,
+                winRate: data.games > 0 ? Math.round((data.wins / data.games) * 100) : 0,
+                kd: ((data.kills + (data.assists || 0)) / (data.deaths || 1)).toFixed(2),
+                acs: data.games > 0 ? Math.round(data.totalAcs / data.games) : 0
+            };
+        }).sort((a, b) => b.games - a.games);
+
+        const mapStats = Object.keys(mapResMap).map(name => {
+            const data = mapResMap[name];
+            return {
+                name,
+                games: data.games,
+                winRate: data.games > 0 ? Math.round((data.wins / data.games) * 100) : 0,
+                acs: data.games > 0 ? Math.round(data.totalAcs / data.games) : 0
+            };
+        }).sort((a, b) => b.games - a.games);
+
+        res.json({ success: true, data: { agentStats, roleStats, mapStats, trendData, history: allStats } });
+
+    } catch (error: any) {
+        console.error("Error fetching breakdown:", error);
+        res.status(500).json({ success: false, error: 'Failed to fetch breakdown' });
+    }
+});
+
 // Manager Routes (POST)
 app.post('/api/teams', async (req, res) => {
-    const { name, game, description, managerId } = req.body;
+    const { name, game, description, managerId, requesterId } = req.body;
     if (!name || !game) return res.status(400).json({ success: false, error: 'Missing team name or game' });
+
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        if (!requester || !['admin', 'ceo'].some(r => requester.role?.includes(r))) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin or CEO can initialize new units.' });
+        }
         const newTeamRes = await db.insert(teams).values({
             name,
             game,
@@ -1274,8 +1585,15 @@ app.post('/api/teams', async (req, res) => {
 
 app.put('/api/teams/:id/manager', async (req, res) => {
     const { id } = req.params;
-    const { managerId } = req.body;
+    const { managerId, requesterId } = req.body;
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        if (!requester || !['admin', 'ceo'].some(r => requester.role?.includes(r))) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin or CEO can reassign unit command.' });
+        }
         await db.update(teams).set({ managerId: managerId ? Number(managerId) : null }).where(eq(teams.id, Number(id)));
         res.json({ success: true });
     } catch (error: any) {
@@ -1400,10 +1718,57 @@ app.get('/api/reports/weekly', async (req, res) => {
         const today = new Date();
         const { start: startOfWeek, end: endOfWeek } = getSundaySaturdayRange(today);
         const filterTeamId = req.query.teamId ? Number(req.query.teamId) : undefined;
+        const requesterId = req.query.requesterId ? Number(req.query.requesterId) : undefined;
+
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+            requester = requesterRows[0];
+        }
+
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        let scrimsQuery = db.select().from(scrims);
+        let toursQuery = db.select().from(tournaments);
+
+        if (filterTeamId) {
+            // If specific team requested, verify access if not admin
+            if (!isAdmin && requesterId) {
+                const teamRows = await db.select().from(teams).where(eq(teams.id, filterTeamId));
+                const team = teamRows[0];
+                const isMember = await db.select().from(players).where(and(eq(players.teamId, filterTeamId), eq(players.userId, requesterId)));
+
+                if (team?.managerId !== requesterId && isMember.length === 0) {
+                    return res.json({ success: true, data: { summary: {}, allTime: {}, teamSummaries: {} } });
+                }
+            }
+            scrimsQuery = scrimsQuery.where(eq(scrims.teamId, filterTeamId)) as any;
+            toursQuery = toursQuery.where(eq(tournaments.teamId, filterTeamId)) as any;
+        } else if (!isAdmin && requesterId) {
+            // Global view for non-admins: filter for teams they are part of
+            const accessFilter = sql`EXISTS (
+                SELECT 1 FROM ${teams} 
+                WHERE ${teams.id} = team_id 
+                AND (${teams.managerId} = ${requesterId} 
+                     OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.teamId} = ${teams.id} AND ${players.userId} = ${requesterId}))
+            )`;
+
+            // Note: drizzle-orm handle table aliasing, so we need to be careful with raw SQL if tables aren't aliased correctly.
+            // But since these are simple separate queries, it should be fine.
+            scrimsQuery = scrimsQuery.where(
+                sql`EXISTS (SELECT 1 FROM ${teams} WHERE ${teams.id} = ${scrims.teamId} AND (${teams.managerId} = ${requesterId} OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.teamId} = ${teams.id} AND ${players.userId} = ${requesterId})))`
+            ) as any;
+            toursQuery = toursQuery.where(
+                sql`EXISTS (SELECT 1 FROM ${teams} WHERE ${teams.id} = ${tournaments.teamId} AND (${teams.managerId} = ${requesterId} OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.teamId} = ${teams.id} AND ${players.userId} = ${requesterId})))`
+            ) as any;
+        } else if (!isAdmin && !requesterId) {
+            // Safety: if not admin and no requesterId, return empty
+            return res.json({ success: true, data: { summary: {}, allTime: {}, teamSummaries: {} } });
+        }
 
         let [allScrims, allTournaments] = await Promise.all([
-            filterTeamId ? db.select().from(scrims).where(eq(scrims.teamId, filterTeamId)) : db.select().from(scrims),
-            filterTeamId ? db.select().from(tournaments).where(eq(tournaments.teamId, filterTeamId)) : db.select().from(tournaments)
+            scrimsQuery,
+            toursQuery
         ]);
 
         // Filter to current week (only for weekly mode, but keep all records for deckStats)
@@ -1517,36 +1882,64 @@ app.get('/api/reports/weekly', async (req, res) => {
 /**
  * Returns the ISO date string (YYYY-MM-DD) for the Monday of the week containing the given date.
  */
+// Helper to get Monday of a week as YYYY-MM-DD (local time safe)
 function getMondayISO(d: Date) {
     const date = new Date(d);
     const day = date.getDay();
+    // Monday is 1, Sunday is 0. If Sunday, go back 6 days, otherwise go back to Monday.
     const diff = date.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(date.setDate(diff));
     monday.setHours(0, 0, 0, 0);
-    return monday.toISOString().split('T')[0];
+
+    // Use local components to avoid toISOString() timezone shift
+    const y = monday.getFullYear();
+    const m = String(monday.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(monday.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dayStr}`;
 }
 
 // Get Team Quotas & Player Progress for a given week
 app.get('/api/teams/:id/quotas', async (req, res) => {
     try {
         const teamId = Number(req.params.id);
-        const weekStart = req.query.week as string || getMondayISO(new Date());
+        let weekParam = req.query.week as string;
+        if (weekParam && weekParam.includes(':')) {
+            weekParam = weekParam.split(':')[0];
+        }
+        const weekStart = weekParam || getMondayISO(new Date());
+
+        // Basic validation for weekStart format (YYYY-MM-DD or similar)
+        if (!weekStart || !/^\d{4}-\d{2}-\d{2}/.test(weekStart)) {
+            console.error("Invalid week format provided:", weekStart);
+            // Attempt to recover if it's just a malformed string or fallback to today's Monday
+            return res.status(400).json({ success: false, error: 'Invalid week format. Expected YYYY-MM-DD.' });
+        }
+
+        const dateCheck = new Date(weekStart);
+        if (isNaN(dateCheck.getTime())) {
+            return res.status(400).json({ success: false, error: 'Invalid date provided.' });
+        }
 
         // 1. Fetch Roster Quota Settings
         const teamRows = await db.select().from(teams).where(eq(teams.id, teamId));
         const team = teamRows[0];
         if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
-        const isShooting = team?.game && (GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'FPS' || GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'BR');
+        const isShooting = team?.game && (GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'FPS' || GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'BR' || GAME_CATEGORY[team.game as keyof typeof GAME_CATEGORY] === 'VALORANT');
 
         const baseQuotaRows = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId));
         let baseQuota = baseQuotaRows[0];
         if (!baseQuota) {
-            baseQuota = { teamId, baseAimKills: 0, baseGrindRG: 0, id: 0, reducedAimKills: 0, reducedGrindRG: 0, updatedAt: 0 };
+            baseQuota = { teamId, baseAimKills: 0, baseGrindRG: 0, id: 0, reducedAimKills: 0, reducedGrindRG: 0, updatedAt: new Date() };
         }
 
-        // 2. Fetch Team Players
-        const teamPlayers = await db.select().from(players).where(eq(players.teamId, teamId));
+        // 2. Fetch Team Players (Excluding Coaches)
+        const teamPlayers = await db.select().from(players).where(
+            and(
+                eq(players.teamId, teamId),
+                notIlike(players.role, '%coach%')
+            )
+        );
 
         // 3. Aggregate Progress
         const playersWithQuotas = await Promise.all(teamPlayers.map(async (player) => {
@@ -1557,8 +1950,11 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
             // Auto-initialize progress if missing for the requested week
             if (!progress) {
                 const prevDate = new Date(weekStart);
+                if (isNaN(prevDate.getTime())) {
+                    throw new Error(`Critical Date Error: Unable to parse weekStart ${weekStart}`);
+                }
                 prevDate.setDate(prevDate.getDate() - 7);
-                const prevWeekStart = prevDate.toISOString().split('T')[0];
+                const prevWeekStart = getMondayISO(prevDate); // Use the safe helper
 
                 const prevProgressRows = await db.select().from(playerQuotaProgress)
                     .where(and(eq(playerQuotaProgress.playerId, player.id), eq(playerQuotaProgress.weekStart, prevWeekStart)));
@@ -1634,7 +2030,25 @@ app.get('/api/teams/:id/quotas', async (req, res) => {
 app.post('/api/teams/:id/settings/quota', async (req, res) => {
     try {
         const teamId = Number(req.params.id);
-        const { baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG } = req.body;
+        const { baseAimKills, baseGrindRG, reducedAimKills, reducedGrindRG, requesterId } = req.body;
+
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for protocol modification.' });
+        }
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, teamId));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
 
         const existingRows = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId));
         const existing = existingRows[0];
@@ -1690,7 +2104,29 @@ app.post('/api/players/:id/quota/update', async (req, res) => {
 app.post('/api/players/:id/quota/review', async (req, res) => {
     try {
         const playerId = Number(req.params.id);
-        const { weekStart, aimStatus, grindStatus } = req.body;
+        const { weekStart, aimStatus, grindStatus, requesterId } = req.body;
+
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for performance review.' });
+        }
+
+        const playerRows = await db.select().from(players).where(eq(players.id, playerId));
+        const player = playerRows[0];
+        if (!player) return res.status(404).json({ success: false, error: 'Operative not found.' });
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, player.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
 
         const progressRows = await db.select().from(playerQuotaProgress)
             .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)));
@@ -1717,7 +2153,29 @@ app.post('/api/players/:id/quota/review', async (req, res) => {
 app.post('/api/players/:id/quota/custom', async (req, res) => {
     try {
         const playerId = Number(req.params.id);
-        const { weekStart, assignedBaseAim, assignedBaseGrind } = req.body;
+        const { weekStart, assignedBaseAim, assignedBaseGrind, requesterId } = req.body;
+
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for quota override.' });
+        }
+
+        const playerRows = await db.select().from(players).where(eq(players.id, playerId));
+        const player = playerRows[0];
+        if (!player) return res.status(404).json({ success: false, error: 'Operative not found.' });
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, player.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
 
         const progressRows = await db.select().from(playerQuotaProgress)
             .where(and(eq(playerQuotaProgress.playerId, playerId), eq(playerQuotaProgress.weekStart, weekStart)));
@@ -1725,10 +2183,16 @@ app.post('/api/players/:id/quota/custom', async (req, res) => {
 
         if (!progress) return res.status(404).json({ success: false, error: "Quota record not found for this week" });
 
+        // Check if already modified this week
+        if (progress.isCustomQuotaApplied) {
+            return res.status(400).json({ success: false, error: "Access Denied: Units are only permitted one tactical quota adjustment per weekly cycle." });
+        }
+
         await db.update(playerQuotaProgress)
             .set({
                 assignedBaseAim: Number(assignedBaseAim),
                 assignedBaseGrind: Number(assignedBaseGrind),
+                isCustomQuotaApplied: true,
                 updatedAt: new Date()
             })
             .where(eq(playerQuotaProgress.id, progress.id));
@@ -2332,7 +2796,26 @@ app.post('/api/seed/managers', async (req, res) => {
 
 app.post('/api/teams/:id/players', async (req, res) => {
     const { id } = req.params;
-    const { name, role, kda, winRate, userId } = req.body;
+    const { name, role, kda, winRate, userId, requesterId } = req.body;
+
+    // Authorization check
+    if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+    const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+    const requester = requesterRows[0];
+    const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+    const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+    if (!isAdmin && !isManager) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for asset assignment.' });
+    }
+
+    // If manager, check if they manage THIS team
+    if (isManager && !isAdmin) {
+        const teamRows = await db.select().from(teams).where(eq(teams.id, Number(id)));
+        if (teamRows[0]?.managerId !== Number(requesterId)) {
+            return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+        }
+    }
 
     // If userId provided, verify user exists
     let targetUserId = userId ? Number(userId) : null;
@@ -2370,7 +2853,26 @@ app.post('/api/teams/:id/players', async (req, res) => {
 
 app.delete('/api/teams/:teamId/players/:playerId', async (req, res) => {
     const { teamId, playerId } = req.params;
+    const requesterId = req.query.requesterId ? Number(req.query.requesterId) : null;
+
+    if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+
     try {
+        const requesterRows = await db.select().from(users).where(eq(users.id, requesterId));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for asset decommissioning.' });
+        }
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+            if (teamRows[0]?.managerId !== requesterId) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         const playerRows = await db.select().from(players).where(eq(players.id, Number(playerId)));
         const p = playerRows[0];
         if (p && p.userId) {
@@ -2399,22 +2901,77 @@ app.delete('/api/teams/:teamId/players/:playerId', async (req, res) => {
 
 // Scrim Routes
 app.get('/api/scrims', async (req, res) => {
-    const { teamId } = req.query;
-    if (!teamId) return res.status(400).json({ success: false, error: 'Missing teamId' });
+    const { teamId, requesterId } = req.query;
     try {
-        const teamScrims = await db.select().from(scrims).where(eq(scrims.teamId, Number(teamId)));
-        // Enrich with stats if needed, or fetch separately
-        res.json({ success: true, data: teamScrims });
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+            requester = requesterRows[0];
+        }
+
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        let q = db.select().from(scrims);
+
+        if (teamId) {
+            // If teamId is provided, verify access unless admin
+            if (!isAdmin && requesterId) {
+                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+                const team = teamRows[0];
+                const isMember = await db.select().from(players).where(and(eq(players.teamId, Number(teamId)), eq(players.userId, Number(requesterId))));
+
+                if (team?.managerId !== Number(requesterId) && isMember.length === 0) {
+                    return res.json({ success: true, data: [] }); // No access
+                }
+            }
+            q.where(eq(scrims.teamId, Number(teamId)));
+        } else if (!isAdmin && requesterId) {
+            // Global view for non-admins: filter scrims for teams they are part of
+            q.where(
+                sql`EXISTS (
+                    SELECT 1 FROM ${teams} 
+                    WHERE ${teams.id} = ${scrims.teamId} 
+                    AND (${teams.managerId} = ${Number(requesterId)} 
+                         OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.teamId} = ${teams.id} AND ${players.userId} = ${Number(requesterId)}))
+                )`
+            );
+        } else if (!isAdmin && !requesterId) {
+            // No requesterId and not admin? Return nothing for safety
+            return res.json({ success: true, data: [] });
+        }
+
+        const data = await q;
+        res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/scrims:", error);
         res.status(500).json({ success: false, error: 'Failed to fetch scrims', details: error.message });
     }
 });
 
+// Consolidated with earlier route
+
 app.post('/api/scrims', async (req, res) => {
-    const { teamId, date, opponent, format, maps } = req.body;
+    const { teamId, date, opponent, format, maps, requesterId } = req.body;
     if (!teamId || !date || !opponent || !format) return res.status(400).json({ success: false, error: 'Missing fields' });
+
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for scheduling operations.' });
+        }
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         const newScrimRows = await db.insert(scrims).values({
             teamId: Number(teamId),
             date, opponent, format, status: 'pending',
@@ -2461,8 +3018,29 @@ app.post('/api/scrims', async (req, res) => {
 
 app.put('/api/scrims/:id/status', async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body; // pending, completed, cancelled
+    const { status, requesterId } = req.body; // pending, completed, cancelled
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for status modification.' });
+        }
+
+        const scrimRows = await db.select().from(scrims).where(eq(scrims.id, Number(id)));
+        const scrim = scrimRows[0];
+        if (!scrim) return res.status(404).json({ success: false, error: 'Scrim not found.' });
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, scrim.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         const updatedRows = await db.update(scrims).set({ status }).where(eq(scrims.id, Number(id))).returning();
         const updated = updatedRows[0];
         res.json({ success: true, data: updated });
@@ -2474,10 +3052,45 @@ app.put('/api/scrims/:id/status', async (req, res) => {
 
 // Tournament Routes
 app.get('/api/tournaments', async (req, res) => {
-    const { teamId } = req.query;
+    const { teamId, requesterId } = req.query;
     try {
-        const q = db.select().from(tournaments);
-        if (teamId) q.where(eq(tournaments.teamId, Number(teamId)));
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+            requester = requesterRows[0];
+        }
+
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        let q = db.select().from(tournaments);
+
+        if (teamId) {
+            // If teamId is provided, verify access unless admin
+            if (!isAdmin && requesterId) {
+                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+                const team = teamRows[0];
+                const isMember = await db.select().from(players).where(and(eq(players.teamId, Number(teamId)), eq(players.userId, Number(requesterId))));
+
+                if (team?.managerId !== Number(requesterId) && isMember.length === 0) {
+                    return res.json({ success: true, data: [] }); // No access
+                }
+            }
+            q.where(eq(tournaments.teamId, Number(teamId)));
+        } else if (!isAdmin && requesterId) {
+            // Global view for non-admins: filter tournaments for teams they are part of
+            q.where(
+                sql`EXISTS (
+                    SELECT 1 FROM ${teams} 
+                    WHERE ${teams.id} = ${tournaments.teamId} 
+                    AND (${teams.managerId} = ${Number(requesterId)} 
+                         OR EXISTS (SELECT 1 FROM ${players} WHERE ${players.teamId} = ${teams.id} AND ${players.userId} = ${Number(requesterId)}))
+                )`
+            );
+        } else if (!isAdmin && !requesterId) {
+            // No requesterId and not admin? Return nothing for safety
+            return res.json({ success: true, data: [] });
+        }
+
         const data = await q;
         res.json({ success: true, data });
     } catch (error: any) {
@@ -2486,11 +3099,109 @@ app.get('/api/tournaments', async (req, res) => {
     }
 });
 
-app.get('/api/tournaments/:id/stats', async (req, res) => {
-    const { id } = req.params;
+
+app.get('/api/scrims/:id/stats', async (req, res) => {
+    const scrimId = Number(req.params.id);
+    const requesterId = req.query.requesterId ? Number(req.query.requesterId) : undefined;
     try {
-        const stats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id)));
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+            requester = requesterRows[0];
+        }
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        const scrimDataRows = await db.select().from(scrims).where(eq(scrims.id, scrimId));
+        const scrimData = scrimDataRows[0];
+        if (!scrimData) return res.status(404).json({ success: false, error: 'Scrim not found' });
+
+        // Authorization check if not admin
+        if (!isAdmin && requesterId) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, scrimData.teamId!));
+            const isMember = await db.select().from(players).where(and(eq(players.teamId, scrimData.teamId!), eq(players.userId, requesterId)));
+            if (teamRows[0]?.managerId !== requesterId && isMember.length === 0) {
+                return res.status(403).json({ success: false, error: 'Access Denied' });
+            }
+        }
+
+        const stats = await db.select({
+            id: scrimPlayerStats.id,
+            scrimId: scrimPlayerStats.scrimId,
+            playerId: scrimPlayerStats.playerId,
+            kills: scrimPlayerStats.kills,
+            deaths: scrimPlayerStats.deaths,
+            assists: scrimPlayerStats.assists,
+            acs: scrimPlayerStats.acs,
+            isWin: scrimPlayerStats.isWin,
+            agent: scrimPlayerStats.agent,
+            role: scrimPlayerStats.role,
+            map: scrimPlayerStats.map,
+            playerName: players.name,
+            playerImage: players.image,
+            playerRole: players.role,
+            playerUserId: players.userId
+        })
+            .from(scrimPlayerStats)
+            .leftJoin(players, eq(scrimPlayerStats.playerId, players.id))
+            .where(eq(scrimPlayerStats.scrimId, scrimId));
+
         res.json({ success: true, data: { stats } });
+    } catch (error: any) {
+        console.error("Error in GET /api/scrims/:id/stats:", error);
+        res.status(500).json({ success: false, error: 'Failed to fetch scrim stats' });
+    }
+});
+
+app.get('/api/tournaments/:id/stats', async (req, res) => {
+    const tourId = Number(req.params.id);
+    const requesterId = req.query.requesterId ? Number(req.query.requesterId) : undefined;
+
+    try {
+        let requester = null;
+        if (requesterId) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+            requester = requesterRows[0];
+        }
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        const tourDataRows = await db.select().from(tournaments).where(eq(tournaments.id, tourId));
+        const tourData = tourDataRows[0];
+        if (!tourData) return res.status(404).json({ success: false, error: 'Tournament not found' });
+
+        // Authorization check if not admin
+        if (!isAdmin && requesterId) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, tourData.teamId!));
+            const isMember = await db.select().from(players).where(and(eq(players.teamId, tourData.teamId!), eq(players.userId, requesterId)));
+            if (teamRows[0]?.managerId !== requesterId && isMember.length === 0) {
+                return res.status(403).json({ success: false, error: 'Access Denied' });
+            }
+        }
+
+        const stats = await db.select({
+            id: tournamentPlayerStats.id,
+            tournamentId: tournamentPlayerStats.tournamentId,
+            playerId: tournamentPlayerStats.playerId,
+            kills: tournamentPlayerStats.kills,
+            deaths: tournamentPlayerStats.deaths,
+            assists: tournamentPlayerStats.assists,
+            acs: tournamentPlayerStats.acs,
+            isWin: tournamentPlayerStats.isWin,
+            agent: tournamentPlayerStats.agent,
+            role: tournamentPlayerStats.role,
+            map: tournamentPlayerStats.map,
+            playerName: players.name,
+            playerImage: players.image,
+            playerRole: players.role,
+            playerUserId: players.userId
+        })
+            .from(tournamentPlayerStats)
+            .leftJoin(players, eq(tournamentPlayerStats.playerId, players.id))
+            .where(eq(tournamentPlayerStats.tournamentId, tourId));
+
+        // Filter out stats for coaches/managers just in case
+        const filteredStats = stats.filter(s => !s.playerRole?.toLowerCase().includes('coach'));
+
+        res.json({ success: true, data: { stats: filteredStats } });
     } catch (error: any) {
         console.error("Error in GET /api/tournaments/:id/stats:", error);
         res.status(500).json({ success: false, error: 'Failed to fetch tournament stats', details: IS_PROD ? undefined : error.message });
@@ -2498,9 +3209,27 @@ app.get('/api/tournaments/:id/stats', async (req, res) => {
 });
 
 app.post('/api/tournaments', async (req, res) => {
-    const { teamId, date, name, opponent, format, maps } = req.body;
+    const { teamId, date, name, opponent, format, maps, requesterId } = req.body;
     if (!teamId || !date || !name || !format) return res.status(400).json({ success: false, error: 'Missing fields' });
+
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for tournament logging.' });
+        }
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         const newTournamentRows = await db.insert(tournaments).values({
             teamId: Number(teamId),
             date, name, opponent, format, status: 'pending',
@@ -2547,8 +3276,29 @@ app.post('/api/tournaments', async (req, res) => {
 
 app.put('/api/tournaments/:id/status', async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, requesterId } = req.body;
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for status updates.' });
+        }
+
+        const tourRows = await db.select().from(tournaments).where(eq(tournaments.id, Number(id)));
+        const tour = tourRows[0];
+        if (!tour) return res.status(404).json({ success: false, error: 'Tournament not found.' });
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, tour.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         const updatedRows = await db.update(tournaments).set({ status }).where(eq(tournaments.id, Number(id))).returning();
         const updated = updatedRows[0];
         res.json({ success: true, data: updated });
@@ -2560,9 +3310,30 @@ app.put('/api/tournaments/:id/status', async (req, res) => {
 
 app.post('/api/tournaments/:id/results', async (req, res) => {
     const { id } = req.params;
-    const { results, playerStats } = req.body;
+    const { results, playerStats, requesterId } = req.body;
 
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for data archiving.' });
+        }
+
+        const tourRows = await db.select().from(tournaments).where(eq(tournaments.id, Number(id)));
+        const tour = tourRows[0];
+        if (!tour) return res.status(404).json({ success: false, error: 'Tournament not found.' });
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, tour.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         await db.update(tournaments).set({
             status: 'completed',
             results: JSON.stringify(results)
@@ -2573,6 +3344,14 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
 
             for (const stat of playerStats) {
                 if (stat.playerId) {
+                    // Refinement: Enforce exclusion of coaches/managers from stats in backend
+                    const coachCheckRows = await db.select().from(players).where(eq(players.id, stat.playerId));
+                    const player = coachCheckRows[0];
+                    if (player?.role?.toLowerCase().includes('coach')) {
+                        console.log(`[DEBUG] Skipping stats for coach: ${player.name}`);
+                        continue;
+                    }
+
                     await db.insert(tournamentPlayerStats).values({
                         tournamentId: Number(id),
                         playerId: stat.playerId,
@@ -2580,8 +3359,44 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
                         deaths: Number(stat.deaths),
                         assists: Number(stat.assists),
                         acs: Number(stat.acs || 0),
-                        isWin: stat.isWin ? 1 : 0
+                        isWin: stat.isWin ? (typeof stat.isWin === 'number' ? stat.isWin : 1) : 0,
+                        agent: stat.agent,
+                        role: stat.role,
+                        map: stat.map
                     });
+
+                    // 3. Trigger Aggregation
+                    const allStats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id)));
+                    const scrimStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId));
+                    const tourStats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.playerId, stat.playerId));
+                    const combined = [...tourStats, ...scrimStats];
+
+                    let totalK = 0, totalD = 0, totalA = 0, totalAcs = 0, winsArr = 0;
+                    combined.forEach((s: any) => {
+                        totalK += s.kills;
+                        totalD += s.deaths;
+                        totalA += s.assists;
+                        totalAcs += (s.acs || 0);
+                        if (s.isWin) winsArr++;
+                    });
+
+                    const kda = totalD === 0 ? totalK + totalA : (totalK + totalA) / totalD;
+                    const winRate = combined.length > 0 ? (winsArr / combined.length) * 100 : 0;
+                    const avgAcs = combined.length > 0 ? Math.round(totalAcs / combined.length) : 0;
+
+                    const currentPlayerRows = await db.select().from(players).where(eq(players.id, stat.playerId));
+                    const currentPlayer = currentPlayerRows[0];
+                    let newXp = (currentPlayer?.xp || 0) + 50; // More XP for tournament
+                    let newLevel = Math.floor(newXp / 100) + 1;
+                    if (newLevel > 1000) newLevel = 1000;
+
+                    await db.update(players).set({
+                        kda: kda.toFixed(2),
+                        winRate: `${winRate.toFixed(1)}%`,
+                        acs: avgAcs.toString(),
+                        xp: newXp,
+                        level: newLevel
+                    }).where(eq(players.id, stat.playerId));
                 }
             }
         }
@@ -2630,9 +3445,30 @@ app.post('/api/scrims/analyze', async (req, res) => {
 
 app.post('/api/scrims/:id/results', async (req, res) => {
     const { id } = req.params;
-    const { results, playerStats } = req.body; // results: string (urls), playerStats: array
+    const { results, playerStats, requesterId } = req.body; // results: string (urls), playerStats: array
 
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin && !isManager) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance for combat data archiving.' });
+        }
+
+        const scrimRows = await db.select().from(scrims).where(eq(scrims.id, Number(id)));
+        const scrim = scrimRows[0];
+        if (!scrim) return res.status(404).json({ success: false, error: 'Scrim not found.' });
+
+        if (isManager && !isAdmin) {
+            const teamRows = await db.select().from(teams).where(eq(teams.id, scrim.teamId!));
+            if (teamRows[0]?.managerId !== Number(requesterId)) {
+                return res.status(403).json({ success: false, error: 'Access Denied: You do not have command authority over this unit.' });
+            }
+        }
         // 1. Update Scrim
         await db.update(scrims).set({
             status: 'completed',
@@ -2646,20 +3482,33 @@ app.post('/api/scrims/:id/results', async (req, res) => {
 
             for (const stat of playerStats) {
                 if (stat.playerId) {
+                    // Refinement: Enforce exclusion of coaches/managers from stats in backend
+                    const coachCheckRows = await db.select().from(players).where(eq(players.id, stat.playerId));
+                    const player = coachCheckRows[0];
+                    if (player?.role?.toLowerCase().includes('coach')) {
+                        console.log(`[DEBUG] Skipping stats for coach: ${player.name}`);
+                        continue;
+                    }
+
                     await db.insert(scrimPlayerStats).values({
                         scrimId: Number(id),
                         playerId: stat.playerId,
                         kills: Number(stat.kills),
                         deaths: Number(stat.deaths),
                         assists: Number(stat.assists),
-                        isWin: stat.isWin ? 1 : 0
+                        acs: Number(stat.acs || 0),
+                        isWin: stat.isWin ? (typeof stat.isWin === 'number' ? stat.isWin : 1) : 0,
+                        agent: stat.agent,
+                        role: stat.role,
+                        map: stat.map
                     });
 
-                    // 3. Trigger Aggregation
-                    const allStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId));
+                    // 3. Trigger Aggregation & Award XP
+                    const allScrimStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId));
+                    const allTourStats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.playerId, stat.playerId));
 
                     let totalK = 0, totalD = 0, totalA = 0, totalAcs = 0, wins = 0;
-                    allStats.forEach((s: any) => {
+                    allScrimStats.forEach((s: any) => {
                         totalK += s.kills;
                         totalD += s.deaths;
                         totalA += s.assists;
@@ -2667,21 +3516,30 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                         if (s.isWin) wins++;
                     });
 
-                    const kda = totalD === 0 ? totalK + totalA : (totalK + totalA) / totalD;
-                    const winRate = allStats.length > 0 ? (wins / allStats.length) * 100 : 0;
-                    const avgAcs = allStats.length > 0 ? Math.round(totalAcs / allStats.length) : 0;
+                    // Add tournament stats to the aggregate for KDA/ACS/Winrate
+                    allTourStats.forEach((s: any) => {
+                        totalK += s.kills;
+                        totalD += s.deaths;
+                        totalA += s.assists;
+                        totalAcs += (s.acs || 0);
+                        if (s.isWin) wins++;
+                    });
 
-                    const playerRows = await db.select().from(players).where(eq(players.id, stat.playerId));
-                    const currentPlayer = playerRows[0];
-                    let newXp = (currentPlayer?.xp || 0) + 20;
-                    let newLevel = Math.floor(newXp / 100) + 1;
+                    const totalMatches = allScrimStats.length + allTourStats.length;
+                    const kda = totalD === 0 ? totalK + totalA : (totalK + totalA) / totalD;
+                    const winRate = totalMatches > 0 ? (wins / totalMatches) * 100 : 0;
+                    const avgAcs = totalMatches > 0 ? Math.round(totalAcs / totalMatches) : 0;
+
+                    // XP Calculation (Resilient to re-submissions)
+                    const totalXP = totalMatches * 20;
+                    let newLevel = Math.floor(totalXP / 100) + 1;
                     if (newLevel > 1000) newLevel = 1000;
 
                     await db.update(players).set({
                         kda: kda.toFixed(2),
                         winRate: `${winRate.toFixed(1)}%`,
                         acs: avgAcs.toString(),
-                        xp: newXp,
+                        xp: totalXP,
                         level: newLevel
                     }).where(eq(players.id, stat.playerId));
                 }
@@ -2754,9 +3612,223 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
+// ── PLAYBOOK API ─────────────────────────────────────────────────────────────
+app.get('/api/teams/:id/playbook', async (req, res) => {
+    try {
+        const teamId = Number(req.params.id);
+        const rId = req.query.requesterId;
+        const requesterId = (rId && rId !== 'undefined') ? Number(rId) : null;
+
+        if (isNaN(teamId)) return res.status(400).json({ success: false, error: 'Invalid Team Identification.' });
+
+        // Security check: If requesterId is provided and NOT management, they must be in that team
+        if (requesterId && !isNaN(requesterId)) {
+            const requesterRows = await db.select().from(users).where(eq(users.id, requesterId));
+            const requester = requesterRows[0];
+            const role = requester?.role?.toLowerCase() || '';
+            const isManagement = role.includes('admin') || role.includes('ceo') || role.includes('manager') || role.includes('coach');
+
+            if (!isManagement) {
+                const playerRows = await db.select().from(players).where(and(eq(players.userId, requesterId), eq(players.teamId, teamId)));
+                if (playerRows.length === 0) {
+                    return res.status(403).json({ success: false, error: 'Access Denied: Team Playbook restricted to assigned operatives.' });
+                }
+            }
+        } else if (rId && rId !== 'undefined') {
+            return res.status(400).json({ success: false, error: 'Malformed requester signature.' });
+        }
+
+        const strats = await db.select().from(playbookStrategies).where(eq(playbookStrategies.teamId, teamId)).orderBy(desc(playbookStrategies.createdAt));
+        res.json({ success: true, data: strats });
+    } catch (error: any) {
+        console.error("GET /api/teams/:id/playbook Error:", error.message);
+        res.status(500).json({ success: false, error: 'Playbook retrieval failed: Protocol error.' });
+    }
+});
+
+app.post('/api/teams/:id/playbook', async (req, res) => {
+    try {
+        const teamId = Number(req.params.id);
+        const { title, game, map, side, role, content, videoUrl, authorId, requesterId } = req.body;
+
+        if (isNaN(teamId) || !title || !content || !requesterId) {
+            return res.status(400).json({ success: false, error: 'Missing required tactical parameters.' });
+        }
+
+        // Auth Check
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const requesterRole = requester?.role?.toLowerCase() || '';
+        const isAuth = requesterRole.includes('admin') || requesterRole.includes('ceo') || requesterRole.includes('manager') || requesterRole.includes('coach');
+
+        if (!isAuth) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Strategy creation requires command clearance.' });
+        }
+
+        const inserted = await db.insert(playbookStrategies).values({
+            teamId,
+            title,
+            game,
+            map,
+            side,
+            role,
+            content,
+            videoUrl,
+            authorId: Number(authorId),
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }).returning();
+
+        res.json({ success: true, data: inserted[0] });
+    } catch (error: any) {
+        console.error("POST /api/playbook Error:", error.message);
+        res.status(500).json({ success: false, error: 'Strategy deployment failed.' });
+    }
+});
+
+app.put('/api/playbook/:stratId', async (req, res) => {
+    try {
+        const stratId = Number(req.params.stratId);
+        const { title, game, map, side, role, content, videoUrl, requesterId } = req.body;
+
+        if (isNaN(stratId) || !requesterId) {
+            return res.status(400).json({ success: false, error: 'Invalid tactical request.' });
+        }
+
+        // Auth Check
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const requesterRole = requester?.role?.toLowerCase() || '';
+        const isAuth = requesterRole.includes('admin') || requesterRole.includes('ceo') || requesterRole.includes('manager') || requesterRole.includes('coach');
+
+        if (!isAuth) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Modification requires command clearance.' });
+        }
+
+        const updated = await db.update(playbookStrategies).set({
+            title,
+            game,
+            map,
+            side,
+            role,
+            content,
+            videoUrl,
+            updatedAt: new Date()
+        }).where(eq(playbookStrategies.id, stratId)).returning();
+
+        if (updated.length === 0) return res.status(404).json({ success: false, error: 'Strategy not found in tactical cache.' });
+
+        res.json({ success: true, data: updated[0] });
+    } catch (error: any) {
+        console.error("PUT /api/playbook Error:", error.message);
+        res.status(500).json({ success: false, error: 'Strategy update aborted.' });
+    }
+});
+
+app.delete('/api/playbook/:stratId', async (req, res) => {
+    try {
+        const stratId = Number(req.params.stratId);
+        const { requesterId } = req.body;
+
+        if (isNaN(stratId) || !requesterId) {
+            return res.status(400).json({ success: false, error: 'Purge request rejected: Missing authorization.' });
+        }
+
+        // Auth Check
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const requesterRole = requester?.role?.toLowerCase() || '';
+        const isAuth = requesterRole.includes('admin') || requesterRole.includes('ceo') || requesterRole.includes('manager') || requesterRole.includes('coach');
+
+        if (!isAuth) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Purge sequence requires Level 4 clearance.' });
+        }
+
+        const deleted = await db.delete(playbookStrategies).where(eq(playbookStrategies.id, stratId)).returning();
+
+        if (deleted.length === 0) return res.status(404).json({ success: false, error: 'Strategy not found.' });
+
+        res.json({ success: true, message: 'Strategy purged from secure storage.' });
+    } catch (error: any) {
+        console.error("DELETE /api/playbook Error:", error.message);
+        res.status(500).json({ success: false, error: 'Purge failure: Database lock or protocol error.' });
+    }
+});
+
+app.post('/api/playbook/:stratId/copy', async (req, res) => {
+    try {
+        const stratId = Number(req.params.stratId);
+        const { targetTeamId, requesterId } = req.body;
+
+        if (isNaN(stratId) || !targetTeamId || isNaN(Number(requesterId))) {
+            return res.status(400).json({ success: false, error: 'Duplication request rejected: Invalid tactical parameters.' });
+        }
+
+        // 1. Fetch original strat
+        const originalRows = await db.select().from(playbookStrategies).where(eq(playbookStrategies.id, stratId));
+        const original = originalRows[0];
+
+        if (!original) {
+            return res.status(404).json({ success: false, error: 'Source strategy not found in tactical cache.' });
+        }
+
+        // 2. Authorization
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const role = requester?.role?.toLowerCase() || '';
+        const isAuth = role.includes('admin') || role.includes('ceo') || role.includes('manager') || role.includes('coach');
+
+        if (!isAuth) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Asset duplication requires Level 3 clearance.' });
+        }
+
+        // 3. Duplicate
+        const copy = await db.insert(playbookStrategies).values({
+            teamId: Number(targetTeamId),
+            title: `${original.title} (Copy)`,
+            game: original.game,
+            map: original.map,
+            category: original.category,
+            side: original.side,
+            priority: original.priority, // Preserve priority
+            role: original.role,
+            content: original.content,
+            notes: original.notes,
+            images: original.images,
+            references: original.references,
+            videoUrl: original.videoUrl,
+            authorId: Number(requesterId),
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }).returning();
+
+        res.json({ success: true, data: copy[0], message: 'Tactical asset successfully cloned to target squad.' });
+    } catch (error: any) {
+        console.error("POST /api/playbook/:stratId/copy Error:", error.message);
+        res.status(500).json({ success: false, error: 'Cloning protocol failure: Internal error.' });
+    }
+});
+
 app.get('/api/orders', async (req, res) => {
     try {
-        const allOrders = await db.select().from(orders).orderBy(desc(orders.createdAt));
+        const userId = req.query.userId ? Number(req.query.userId) : null;
+        const requesterId = req.query.requesterId ? Number(req.query.requesterId) : null;
+
+        let query = db.select().from(orders);
+
+        if (userId) {
+            // Security Check: Only allow users to see their own orders unless they are admin/ceo
+            if (requesterId && requesterId !== userId) {
+                const requester = await db.select().from(users).where(eq(users.id, requesterId));
+                const role = requester[0]?.role || '';
+                if (!role.includes('admin') && !role.includes('ceo')) {
+                    return res.status(403).json({ success: false, error: 'Access Denied: You can only view your own procurement history.' });
+                }
+            }
+            query = query.where(eq(orders.userId, userId)) as any;
+        }
+
+        const allOrders = await query.orderBy(desc(orders.createdAt));
         res.json({ success: true, data: allOrders });
     } catch (error: any) {
         console.error("GET /api/orders Error:", error);
@@ -2767,7 +3839,6 @@ app.get('/api/orders', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
     const { userId, items, recipientName, deliveryAddress, contactNumber, paymentMethod, paymentProofUrl } = req.body;
 
-    // MANDATORY DETAIL VALIDATION
     if (!items || !Array.isArray(items) || items.length === 0 || !recipientName || !deliveryAddress || !contactNumber || !paymentMethod || !paymentProofUrl) {
         return res.status(400).json({ success: false, error: "Mission Intel Missing: All order details including items and payment proof are required." });
     }
@@ -2790,13 +3861,10 @@ app.post('/api/orders', async (req, res) => {
         // 2. CREATE ORDERS
         const createdOrders = [];
         for (const item of items) {
-            // Note: If we don't have a quantity field in DB, we insert multiple rows if needed, 
-            // but for now we'll assume one entry denotes the procurement request for that product type.
-            // Ideally schema should have quantity, but to avoid migration we'll handle it logic-side or 
-            // just insert one row per product type as per original design.
             const newOrder = await db.insert(orders).values({
                 userId,
                 productId: item.productId,
+                quantity: item.quantity,
                 recipientName,
                 deliveryAddress,
                 contactNumber,
@@ -2810,38 +3878,43 @@ app.post('/api/orders', async (req, res) => {
         res.json({ success: true, data: createdOrders });
     } catch (error: any) {
         console.error("POST /api/orders Error:", error);
-        res.status(500).json({ success: false, error: 'Intersystem Error: Failed to process bulk procurement.' });
+        res.status(500).json({ success: false, error: 'Intersystem Error: Failed to process procurement.' });
     }
 });
 
 app.put('/api/orders/:id/status', async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, requesterId } = req.body;
+
     try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requester = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const role = requester[0]?.role || '';
+        if (!role.includes('admin') && !role.includes('ceo') && !role.includes('sponsor')) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient permissions.' });
+        }
+
         const orderRecord = await db.select().from(orders).where(eq(orders.id, Number(id)));
         if (!orderRecord[0]) {
             return res.status(404).json({ success: false, error: "Order not found" });
         }
 
         const oldStatus = orderRecord[0].status;
+        const qty = orderRecord[0].quantity || 1;
 
-        // If transitioning from verification to something else, we deduct stock if not already deducted?
-        // Actually, we should deduct stock only when the payment is verified (moved to Pending).
+        // Atomic Stock Sync
         if (oldStatus === 'For Payment Verification' && status === 'Pending') {
             const product = await db.select().from(products).where(eq(products.id, orderRecord[0].productId));
-            if (product[0] && product[0].stock > 0) {
-                await db.update(products).set({ stock: product[0].stock - 1 }).where(eq(products.id, orderRecord[0].productId));
+            if (product[0] && product[0].stock >= qty) {
+                await db.update(products).set({ stock: sql`${products.stock} - ${qty}` }).where(eq(products.id, orderRecord[0].productId));
             } else {
-                return res.status(400).json({ success: false, error: "Cannot verify payment: Product is now out of stock." });
+                return res.status(400).json({ success: false, error: "Cannot verify payment: Depot stock insufficient." });
             }
         }
 
-        // If moved to Refunded, restock
-        if (status === 'Refunded' && oldStatus !== 'Refunded') {
-            const product = await db.select().from(products).where(eq(products.id, orderRecord[0].productId));
-            if (product[0]) {
-                await db.update(products).set({ stock: product[0].stock + 1 }).where(eq(products.id, product[0].id));
-            }
+        if (status === 'Refunded' && oldStatus !== 'Refunded' && oldStatus !== 'For Payment Verification') {
+            await db.update(products).set({ stock: sql`${products.stock} + ${qty}` }).where(eq(products.id, orderRecord[0].productId));
         }
 
         const updatedOrder = await db.update(orders).set({ status }).where(eq(orders.id, Number(id))).returning();

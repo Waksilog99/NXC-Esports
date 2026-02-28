@@ -3,9 +3,10 @@ import { useNotification } from '../hooks/useNotification';
 
 interface AddSponsorFormProps {
     users: any[];
+    requesterId?: number;
 }
 
-const AddSponsorForm: React.FC<AddSponsorFormProps> = ({ users }) => {
+const AddSponsorForm: React.FC<AddSponsorFormProps> = ({ users, requesterId }) => {
     const { showNotification } = useNotification();
     const [name, setName] = useState('');
     const [tier, setTier] = useState('Silver');
@@ -22,7 +23,7 @@ const AddSponsorForm: React.FC<AddSponsorFormProps> = ({ users }) => {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/sponsors`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, tier, logo, description, website, userId })
+                body: JSON.stringify({ name, tier, logo, description, website, userId, requesterId })
             });
             if (res.ok) {
                 showNotification({

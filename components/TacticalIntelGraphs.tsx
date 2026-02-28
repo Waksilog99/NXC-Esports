@@ -3,17 +3,28 @@ import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
+import { calculateKDA, getKDAColor } from '../utils/tactical';
+import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
 
 interface TacticalIntelGraphsProps {
     teamId?: number | null;
     availableTeams: { id: number; name: string; game: string }[];
+    userRole?: string;
 }
 
 interface PlayerStat {
+    id: number;
     name: string;
     kd: string | number;
     avgAcs: number;
     games: number;
+}
+
+interface AgentStat {
+    name: string;
+    pickRate: number;
+    winRate: number;
+    totalGames: number;
 }
 
 const GOLD = '#fbbf24';
@@ -129,7 +140,7 @@ const RoyalTooltip: React.FC<any> = ({ active, payload, label }) => {
 };
 
 // ─── PLAYER STATS TABLE ───────────────────────────────────────────────────────
-const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string }> = ({ stats, title }) => (
+const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string, onPlayerClick: (stat: PlayerStat) => void }> = ({ stats, title, onPlayerClick }) => (
     <div className="bg-white/[0.02] rounded-[24px] md:rounded-[32px] border border-white/5 overflow-hidden">
         <div className="p-6 md:p-8 border-b border-white/5">
             <SectionLabel label={title} />
@@ -139,7 +150,7 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string }> = ({ st
                 <thead>
                     <tr className="bg-white/[0.01]">
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Operative</th>
-                        <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Combat K/D</th>
+                        <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">KDA Ratio</th>
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Average ACS</th>
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Ops Logged</th>
                     </tr>
@@ -151,7 +162,7 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string }> = ({ st
                         </tr>
                     ) : (
                         stats.map((p, i) => (
-                            <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                            <tr key={i} onClick={() => onPlayerClick(p)} className="hover:bg-white/[0.02] transition-colors group cursor-pointer">
                                 <td className="px-8 py-5">
                                     <div className="flex items-center gap-4">
                                         <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 text-[10px] font-black border border-amber-500/20">
@@ -161,7 +172,7 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string }> = ({ st
                                     </div>
                                 </td>
                                 <td className="px-8 py-5 text-center">
-                                    <span className={`text-sm font-black tracking-tighter ${Number(p.kd) >= 1.5 ? 'text-emerald-400' : Number(p.kd) >= 1.0 ? 'text-white' : 'text-red-400'}`}>
+                                    <span className={`text-sm font-black tracking-tighter ${getKDAColor(p.kd)}`}>
                                         {p.kd}
                                     </span>
                                 </td>
@@ -181,7 +192,7 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string }> = ({ st
 );
 
 // ─── SCRIM TAB ───────────────────────────────────────────────────────────────
-const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[] }> = ({ scrims, playerStats }) => {
+const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerClick: (stat: PlayerStat) => void }> = ({ scrims, playerStats, onPlayerClick }) => {
     const completed = scrims.filter(s => s.status === 'completed');
     const pending = scrims.filter(s => s.status === 'pending').length;
     const cancelled = scrims.filter(s => s.status === 'cancelled').length;
@@ -193,17 +204,24 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[] }> = ({ sc
 
     completed.forEach(s => {
         let results: any[] = [];
-        try { results = JSON.parse(s.results || '[]'); } catch { }
-        const ws = results.filter((r: any) => r.score === 'WIN').length;
-        const ls = results.filter((r: any) => r.score === 'LOSS').length;
+        try {
+            results = typeof s.results === 'string' ? JSON.parse(s.results) : (s.results || []);
+        } catch { results = []; }
+
+        const ws = results.filter((r: any) => r && r.score === 'WIN').length;
+        const ls = results.filter((r: any) => r && r.score === 'LOSS').length;
         const isWin = ws > ls;
         if (isWin) wins++; else losses++;
         recentForm.push(isWin ? 'W' : 'L');
 
         // Map stats
         let maps: string[] = [];
-        try { maps = JSON.parse(s.maps || '[]'); } catch { }
+        try {
+            maps = typeof s.maps === 'string' ? JSON.parse(s.maps) : (s.maps || []);
+        } catch { maps = []; }
+
         maps.forEach((m: string, i: number) => {
+            if (!m) return;
             if (!mapWins[m]) mapWins[m] = { w: 0, t: 0 };
             mapWins[m].t++;
             if (results[i]?.score === 'WIN') mapWins[m].w++;
@@ -260,7 +278,7 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[] }> = ({ sc
             {mapData.length > 0 && (
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8">
                     <SectionLabel label="Theater Win Rate (%)" />
-                    <div className="h-[220px] min-h-[220px]">
+                    <div className="h-[250px] min-h-[250px] w-full"> {/* Stable height wrapper */}
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={mapData} barSize={28}>
                                 <defs>
@@ -280,13 +298,13 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[] }> = ({ sc
                 </div>
             )}
 
-            <PlayerStatsTable stats={playerStats} title="Scrim Performance Metrics" />
+            <PlayerStatsTable stats={playerStats} title="Scrim Performance Metrics" onPlayerClick={onPlayerClick} />
         </div>
     );
 };
 
 // ─── TOURNAMENT TAB ───────────────────────────────────────────────────────────
-const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[] }> = ({ tournaments, playerStats }) => {
+const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[], onPlayerClick: (stat: PlayerStat) => void }> = ({ tournaments, playerStats, onPlayerClick }) => {
     const completed = tournaments.filter(t => t.status === 'completed');
     const pending = tournaments.filter(t => t.status === 'pending').length;
     const cancelled = tournaments.filter(t => t.status === 'cancelled').length;
@@ -298,9 +316,12 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[] 
 
     completed.forEach(t => {
         let results: any[] = [];
-        try { results = JSON.parse(t.results || '[]'); } catch { }
-        const ws = results.filter((r: any) => r.score === 'WIN').length;
-        const ls = results.filter((r: any) => r.score === 'LOSS').length;
+        try {
+            results = typeof t.results === 'string' ? JSON.parse(t.results) : (t.results || []);
+        } catch { results = []; }
+
+        const ws = results.filter((r: any) => r && r.score === 'WIN').length;
+        const ls = results.filter((r: any) => r && r.score === 'LOSS').length;
         const isWin = ws > ls;
         if (isWin) wins++; else losses++;
         recentForm.push(isWin ? 'W' : 'L');
@@ -345,7 +366,7 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[] 
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 flex flex-col justify-center">
                     <SectionLabel label="Format Breakdown" />
                     {formatData.length > 0 ? (
-                        <div className="h-[140px]">
+                        <div className="h-[180px] min-h-[180px] w-full mt-4"> {/* Stable height wrapper */}
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie data={formatData} dataKey="value" nameKey="name" cx="50%" cy="50%"
@@ -376,7 +397,7 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[] 
             {opponentData.length > 0 && (
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8">
                     <SectionLabel label="Opponent Frequency" color="text-purple-400/60" />
-                    <div className="h-[220px] min-h-[220px]">
+                    <div className="h-[250px] min-h-[250px] w-full"> {/* Stable height wrapper */}
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={opponentData} barSize={28}>
                                 <defs>
@@ -396,22 +417,72 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[] 
                 </div>
             )}
 
-            <PlayerStatsTable stats={playerStats} title="Tournament Performance Metrics" />
+            <PlayerStatsTable stats={playerStats} title="Tournament Performance Metrics" onPlayerClick={onPlayerClick} />
         </div>
     );
 };
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initialTeamId, availableTeams }) => {
+const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initialTeamId, availableTeams, userRole: initialUserRole }) => {
     const [activeTab, setActiveTab] = useState<'scrim' | 'tournament'>('scrim');
     const [selectedTeamId, setSelectedTeamId] = useState<number | null>(initialTeamId ?? (availableTeams[0]?.id || null));
     const [scrims, setScrims] = useState<any[]>([]);
     const [tournaments, setTournaments] = useState<any[]>([]);
     const [scrimStats, setScrimStats] = useState<PlayerStat[]>([]);
     const [tourneyStats, setTourneyStats] = useState<PlayerStat[]>([]);
+    const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(false);
+    const [intelError, setIntelError] = useState<string | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [selectedTimeFilter, setSelectedTimeFilter] = useState('All');
+    const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<PlayerStats | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [userRole, setUserRole] = useState<string | undefined>(initialUserRole);
+
+    useEffect(() => {
+        if (initialUserRole) {
+            setUserRole(initialUserRole);
+        } else {
+            const storedRole = localStorage.getItem('userRole');
+            if (storedRole) setUserRole(storedRole);
+        }
+    }, [initialUserRole]);
+
+    const handlePlayerClick = (stat: PlayerStat) => {
+        // Since we now have the ID from the backend stats, we can fetch the full player details 
+        // using the new /api/teams/:id endpoint which includes players.
+
+        const API = import.meta.env.VITE_API_BASE_URL;
+        fetch(`${API}/api/teams/${selectedTeamId}`)
+            .then(res => res.json())
+            .then(result => {
+                if (result.success && result.data.players) {
+                    const fullPlayer = result.data.players.find((p: any) => p.id === stat.id);
+                    if (fullPlayer) {
+                        setSelectedPlayerForModal({
+                            id: fullPlayer.id,
+                            name: fullPlayer.name,
+                            role: fullPlayer.role,
+                            image: fullPlayer.image,
+                            acs: stat.avgAcs.toString(),
+                            kda: stat.kd.toString()
+                        });
+                        setIsModalOpen(true);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Error fetching player details:", err);
+                // Fallback to partial data if fetch fails
+                setSelectedPlayerForModal({
+                    id: stat.id,
+                    name: stat.name,
+                    acs: stat.avgAcs.toString(),
+                    kda: stat.kd.toString()
+                } as any);
+                setIsModalOpen(true);
+            });
+    };
 
     const selectedTeam = availableTeams.find(t => t.id === selectedTeamId) || availableTeams[0];
 
@@ -426,21 +497,30 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
     useEffect(() => {
         if (!selectedTeamId) return;
         setLoading(true);
+        setIntelError(null);
         Promise.all([
-            fetch(`${API}/api/scrims?teamId=${selectedTeamId}`).then(r => r.ok ? r.json() : { success: false, data: [] }),
-            fetch(`${API}/api/tournaments?teamId=${selectedTeamId}`).then(r => r.ok ? r.json() : { success: false, data: [] }),
-            fetch(`${API}/api/teams/${selectedTeamId}/stats`).then(r => r.ok ? r.json() : { success: false, data: null }),
+            fetch(`${API}/api/scrims?teamId=${selectedTeamId}`).then(r => r.ok ? r.json() : { success: false, error: 'SCRIM_FEED_FAILED' }),
+            fetch(`${API}/api/tournaments?teamId=${selectedTeamId}`).then(r => r.ok ? r.json() : { success: false, error: 'TOURNAMENT_FEED_FAILED' }),
+            fetch(`${API}/api/teams/${selectedTeamId}/stats`).then(r => r.ok ? r.json() : { success: false, error: 'INTEL_STATS_FAILED' }),
         ]).then(([sRes, tRes, stRes]) => {
-            setScrims(sRes.success && Array.isArray(sRes.data) ? sRes.data : []);
-            setTournaments(tRes.success && Array.isArray(tRes.data) ? tRes.data : []);
+            if (sRes.success) setScrims(Array.isArray(sRes.data) ? sRes.data : []);
+            if (tRes.success) setTournaments(Array.isArray(tRes.data) ? tRes.data : []);
+
             if (stRes.success && stRes.data) {
                 const st = stRes.data;
+                setStats(st);
                 if (st.scrim) setScrimStats(st.scrim.topPlayers || []);
                 if (st.tournament) setTourneyStats(st.tournament.topPlayers || []);
             }
-        }).catch(console.error)
-            .finally(() => setLoading(false));
-    }, [selectedTeamId]);
+
+            if (!sRes.success && !tRes.success && !stRes.success) {
+                throw new Error("Tactical Neural Network: All streams offline. Verify connectivity.");
+            }
+        }).catch(err => {
+            console.error("Tactical Intelligence Error:", err);
+            setIntelError(err.message || 'Quantum Feed Interrupted');
+        }).finally(() => setLoading(false));
+    }, [selectedTeamId, API]);
 
     const availableMonths = React.useMemo(() => {
         const months = new Set<string>();
@@ -488,61 +568,65 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
     }, [tournaments, selectedTimeFilter]);
 
     return (
-        <div className="space-y-8">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
-                        <h3 className="text-xl font-black text-white uppercase tracking-tight">Tactical Intelligence</h3>
+        <div className="space-y-8 max-h-[85vh] flex flex-col bg-[#020617]/40 backdrop-blur-3xl rounded-[40px] border border-white/5 p-6 md:p-8 shadow-2xl">
+            {/* Header / Navigation Bar */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white/[0.02] p-6 md:p-8 rounded-[32px] border border-white/10 gap-8 flex-shrink-0 relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/[0.02] via-transparent to-purple-500/[0.02] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+
+                <div className="flex flex-col gap-2 w-full sm:w-auto relative z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-2.5 h-8 bg-amber-500 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.6)] animate-pulse" />
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter italic">Tactical Intelligence</h3>
                     </div>
-                    <p className="text-[9px] font-black text-amber-500/50 uppercase tracking-[0.4em] ml-5">Real-Time Combat Analytics</p>
+                    <p className="text-[10px] font-black text-amber-500/50 uppercase tracking-[0.5em] ml-6 leading-none">Quantum Analytics Neural Feed // Unit {selectedTeam?.name}</p>
                 </div>
-                <div className="flex gap-4 flex-wrap">
-                    {/* Tab Toggle */}
-                    <div className="bg-black/40 rounded-2xl p-1.5 border border-white/5 flex">
+
+                <div className="flex flex-wrap lg:flex-nowrap items-center gap-4 w-full lg:w-auto relative z-10">
+                    {/* Tab Switcher */}
+                    <div className="bg-black/60 rounded-[20px] p-1.5 border border-white/10 flex shadow-2xl overflow-hidden flex-shrink-0 backdrop-blur-md">
                         {[
-                            { id: 'scrim', label: 'Scrim Intel' },
-                            { id: 'tournament', label: 'Tournament Intel' }
+                            { id: 'scrim', label: 'Scrims' },
+                            { id: 'tournament', label: 'Tournaments' }
                         ].map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`px-5 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${activeTab === tab.id
-                                    ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
-                                    : 'text-slate-500 hover:text-white'
+                                className={`px-6 md:px-8 py-2.5 md:py-3.5 text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] rounded-[14px] transition-all duration-500 whitespace-nowrap ${activeTab === tab.id
+                                    ? 'bg-amber-500 text-black shadow-[0_0_30px_rgba(245,158,11,0.4)] scale-105'
+                                    : 'text-slate-500 hover:text-white hover:bg-white/5'
                                     }`}
                             >{tab.label}</button>
                         ))}
                     </div>
-                    {/* Time Filter Dropdown */}
-                    <div className="relative">
+
+                    {/* Period Filter */}
+                    <div className="relative min-w-[160px] xl:min-w-[200px] flex-grow lg:flex-grow-0 group/select">
                         <select
                             value={selectedTimeFilter}
                             onChange={(e) => setSelectedTimeFilter(e.target.value)}
-                            className={`bg-black/40 border border-white/10 rounded-2xl px-5 py-2.5 text-[10px] font-black uppercase appearance-none cursor-pointer focus:outline-none focus:border-amber-500/50 transition-all shadow-inner ${selectedTimeFilter !== 'All' ? 'text-amber-400 border-amber-500/50' : 'text-slate-400 hover:text-white hover:bg-black/60'}`}
-                            style={{ backgroundImage: 'none' }}
+                            className={`w-full bg-black/60 border border-white/10 rounded-[20px] px-6 py-4 text-[11px] font-black uppercase tracking-widest appearance-none cursor-pointer focus:outline-none focus:border-amber-500/50 transition-all backdrop-blur-md ${selectedTimeFilter !== 'All' ? 'text-amber-400 border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'text-slate-400'}`}
                         >
-                            <option value="All" className="bg-[#0d0d14] text-amber-400">All Time Stats</option>
+                            <option value="All" className="bg-[#0d0d14] text-amber-500">All Time Intel</option>
                             {availableMonths.map((m, i) => (
                                 <option key={i} value={JSON.stringify(m)} className="bg-[#0d0d14] text-slate-300">
-                                    Month: {m.label}
+                                    {m.label}
                                 </option>
                             ))}
                         </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                            <svg className="w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                        <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600 group-hover/select:text-amber-500 transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
                         </div>
                     </div>
-                    {/* Team Selector */}
+
+                    {/* Team Picker */}
                     {availableTeams.length > 0 && (
-                        <div className="relative">
+                        <div className="relative min-w-[220px] xl:min-w-[320px] flex-grow lg:flex-grow-0">
                             <button
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                className="bg-black/40 border border-white/10 rounded-2xl px-6 py-2.5 text-[10px] font-black text-amber-400 uppercase tracking-widest focus:outline-none focus:border-amber-500/50 flex items-center gap-3 hover:bg-black/60 transition-all"
+                                className="w-full bg-black/60 border border-white/10 rounded-[20px] px-8 py-4 text-[11px] font-black text-amber-400 uppercase tracking-[0.2em] focus:outline-none focus:border-amber-500/50 flex items-center justify-between gap-6 hover:bg-black/80 transition-all backdrop-blur-md shadow-xl group/team"
                             >
-                                {selectedTeam?.name} // {selectedTeam?.game.toUpperCase()}
-                                <svg className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <span className="truncate">{selectedTeam?.name}</span>
+                                <svg className={`w-5 h-5 transition-transform duration-500 ${isDropdownOpen ? 'rotate-180' : ''} group-hover/team:text-amber-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
@@ -550,20 +634,25 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                             {isDropdownOpen && (
                                 <>
                                     <div className="fixed inset-0 z-[60]" onClick={() => setIsDropdownOpen(false)} />
-                                    <div className="absolute top-full mt-2 right-0 w-64 bg-[#0d0d14] border border-white/10 rounded-2xl shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                        {availableTeams.map(t => (
-                                            <button
-                                                key={t.id}
-                                                onClick={() => {
-                                                    setSelectedTeamId(t.id);
-                                                    setIsDropdownOpen(false);
-                                                }}
-                                                className={`w-full px-6 py-3 text-[10px] font-black text-left uppercase tracking-widest transition-all hover:bg-white/5 border-b border-white/5 last:border-0 ${selectedTeamId === t.id ? 'text-amber-500 bg-amber-500/5' : 'text-slate-400 hover:text-white'}`}
-                                            >
-                                                {t.name}
-                                                <span className="block text-[8px] text-slate-600 mt-0.5">{t.game.toUpperCase()}</span>
-                                            </button>
-                                        ))}
+                                    <div className="absolute top-full mt-4 right-0 w-80 bg-[#0d0d14]/95 backdrop-blur-2xl border border-white/10 rounded-[24px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] z-[70] overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500">
+                                        <div className="p-6 border-b border-white/5 bg-white/[0.02]">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">Select Operational Unit</p>
+                                        </div>
+                                        <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+                                            {availableTeams.map(t => (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => {
+                                                        setSelectedTeamId(t.id);
+                                                        setIsDropdownOpen(false);
+                                                    }}
+                                                    className={`w-full px-8 py-5 text-[11px] font-black text-left uppercase tracking-widest transition-all hover:bg-amber-500/10 border-b border-white/5 last:border-0 flex flex-col gap-1.5 ${selectedTeamId === t.id ? 'text-amber-500 bg-amber-500/5' : 'text-slate-400 hover:text-white'}`}
+                                                >
+                                                    {t.name}
+                                                    <span className="text-[8px] text-slate-600 tracking-[0.3em] font-bold">{t.game.toUpperCase()} SIMULATOR</span>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 </>
                             )}
@@ -572,24 +661,130 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                 </div>
             </div>
 
-            {/* Content */}
-            {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                    <div className="relative">
-                        <div className="w-12 h-12 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin" />
-                        <div className="absolute inset-0 w-12 h-12 border-4 border-purple-500/10 border-b-purple-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+            <div className="overflow-y-auto custom-scrollbar flex-grow pr-4 -mr-4 min-h-0">
+                {/* Content */}
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-32 space-y-6">
+                        <div className="relative">
+                            <div className="w-16 h-16 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin" />
+                            <div className="absolute inset-0 w-16 h-16 border-4 border-purple-500/10 border-b-purple-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }} />
+                        </div>
+                        <p className="text-[11px] font-black uppercase tracking-[0.5em] text-slate-600 animate-pulse italic">Compiling Intelligence...</p>
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600 animate-pulse">Compiling Intelligence...</p>
-                </div>
-            ) : (
-                <div className="animate-in fade-in duration-500">
-                    {activeTab === 'scrim' ? (
-                        <ScrimIntel scrims={filteredScrims} playerStats={scrimStats} />
-                    ) : (
-                        <TournamentIntel tournaments={filteredTournaments} playerStats={tourneyStats} />
-                    )}
-                </div>
-            )}
+                ) : intelError ? (
+                    <div className="flex flex-col items-center justify-center py-32 px-10 space-y-8 animate-in fade-in zoom-in-95 duration-700">
+                        <div className="relative">
+                            <div className="absolute -inset-6 bg-red-500/20 rounded-full blur-3xl animate-pulse" />
+                            <div className="relative w-24 h-24 rounded-[32px] bg-[#020617] border border-red-500/40 flex items-center justify-center text-red-500 shadow-[0_0_60px_rgba(239,68,68,0.2)]">
+                                <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                        </div>
+                        <div className="text-center space-y-3">
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Intelligence Stream Offline</h3>
+                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] max-w-sm leading-relaxed">{intelError}</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setLoading(true);
+                                setIntelError(null);
+                                // Simple force refresh
+                                const cid = selectedTeamId;
+                                setSelectedTeamId(null);
+                                setTimeout(() => setSelectedTeamId(cid), 50);
+                            }}
+                            className="px-10 py-4 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-black rounded-2xl text-[10px] font-black uppercase tracking-[0.4em] transition-all border border-red-500/20 active:scale-95"
+                        >
+                            Emergency Reboot
+                        </button>
+                    </div>
+                ) : (
+                    <div className="animate-in fade-in duration-500 space-y-8">
+                        {activeTab === 'scrim' ? (
+                            <ScrimIntel scrims={filteredScrims} playerStats={scrimStats} onPlayerClick={handlePlayerClick} />
+                        ) : (
+                            <TournamentIntel tournaments={filteredTournaments} playerStats={tourneyStats} onPlayerClick={handlePlayerClick} />
+                        )}
+
+                        {/* Agent Performance Section */}
+                        {(() => {
+                            const teamAgentStats = activeTab === 'scrim' ? stats?.scrim?.agentStats : stats?.tournament?.agentStats;
+                            const agentPerformanceData: AgentStat[] = teamAgentStats ? Object.entries(teamAgentStats)
+                                .filter(([name]) => name && name !== '' && name !== 'Unknown' && name !== 'null' && name !== 'undefined')
+                                .map(([name, s]: [string, any]) => {
+                                    const totalGames = activeTab === 'scrim' ? (stats?.scrim?.gamesPlayed || 1) : (stats?.tournament?.gamesPlayed || 1);
+                                    return {
+                                        name,
+                                        totalGames: s.total,
+                                        pickRate: Math.round((s.total / (totalGames || 1)) * 100),
+                                        winRate: Math.round((s.wins / (s.total || 1)) * 100)
+                                    };
+                                }).sort((a, b) => b.totalGames - a.totalGames) : [];
+
+                            if (agentPerformanceData.length === 0) return null;
+
+                            return (
+                                <div className="bg-white/[0.03] rounded-[32px] border border-white/5 p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                    <div className="flex items-center justify-between">
+                                        <SectionLabel label="Agent Tactical Performance" color="text-amber-500/60" />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active Division Intel</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex overflow-x-auto pb-4 space-x-6 custom-scrollbar">
+                                        {agentPerformanceData.map((agent, idx) => (
+                                            <div key={idx} className="flex-shrink-0 w-64 bg-black/40 rounded-2xl border border-white/5 p-6 space-y-4 hover:border-amber-500/30 transition-all group">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <img
+                                                            src={`/assets/agents/${agent.name.replace('/', '_')}${agent.name === 'Veto' ? '.webp' : '.png'}`}
+                                                            className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.3)] group-hover:scale-110 transition-transform duration-500"
+                                                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                        />
+                                                        <h4 className="text-sm font-black text-white uppercase tracking-tighter italic group-hover:text-amber-500 transition-colors uppercase">{agent.name}</h4>
+                                                    </div>
+                                                    <span className="text-[8px] font-black text-slate-600 uppercase">Games: {agent.totalGames}</span>
+                                                </div>
+
+                                                <div className="space-y-4">
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                                                            <span className="text-slate-500">Pick Rate</span>
+                                                            <span className="text-white">{agent.pickRate}%</span>
+                                                        </div>
+                                                        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${agent.pickRate}%` }} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                                                            <span className="text-slate-500">Win Rate</span>
+                                                            <span className="text-emerald-500">{agent.winRate}%</span>
+                                                        </div>
+                                                        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${agent.winRate}%` }} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
+
+                <PlayerStatsModal
+                    player={selectedPlayerForModal}
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    userRole={userRole}
+                    showAdvancedIntel={true}
+                />
+            </div>
         </div>
     );
 };
