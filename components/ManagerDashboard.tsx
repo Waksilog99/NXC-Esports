@@ -4,6 +4,8 @@ import { GET_API_BASE_URL } from '../utils/apiUtils';
 import PerformanceTracker from './PerformanceTracker';
 import AddAchievementForm from './AddAchievementForm';
 import TacticalIntelGraphs from './TacticalIntelGraphs';
+import PlayerStatsModal from './PlayerStatsModal';
+import { PlayerCard } from './PlayerCard';
 import { GAME_TITLES, GAME_ROLES, GAME_CATEGORY } from './constants';
 import Modal from './Modal';
 
@@ -18,8 +20,9 @@ const ManagerDashboard: React.FC<{
     userRole?: string,
     onNavigate?: (view: string) => void
 }> = ({ userId, userRole, onNavigate }) => {
-    const [view, setView] = useState<'menu' | 'operative-matrix' | 'log-achievement' | 'performance-tracker' | 'tournament-network'>('menu');
+    const [view, setView] = useState<'menu' | 'operative-matrix' | 'log-achievement' | 'performance-tracker' | 'tournament-network' | 'decommissioned'>('menu');
     const [teams, setTeams] = useState<Team[]>([]);
+    const [inactivePlayers, setInactivePlayers] = useState<any[]>([]);
     const { showNotification } = useNotification();
 
     useEffect(() => {
@@ -46,6 +49,7 @@ const ManagerDashboard: React.FC<{
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedSquadForModal, setSelectedSquadForModal] = useState<any | null>(null);
+    const [selectedPlayerForStats, setSelectedPlayerForStats] = useState<any | null>(null);
 
     const handleRemovePlayer = async (teamId: number, playerId: number) => {
         if (!window.confirm('Are you sure you want to remove this operative from the active registry?')) return;
@@ -101,8 +105,20 @@ const ManagerDashboard: React.FC<{
         setLoading(true);
         setError(null);
         try {
+            // Fetch Inactive/Decommissioned Operatives
+            const playersUrl = view === 'decommissioned'
+                ? `${GET_API_BASE_URL()}/api/players?decommissioned=true`
+                : `${GET_API_BASE_URL()}/api/players`;
+            const playersRes = await fetch(playersUrl);
+            const playersResult = await playersRes.json();
+            if (playersResult.success) {
+                const inactive = view === 'decommissioned'
+                    ? playersResult.data
+                    : playersResult.data.filter((p: any) => p.teamId === null);
+                setInactivePlayers(inactive);
+            }
             // Teams
-            if (view === 'operative-matrix' || view === 'performance-tracker' || view === 'tournament-network') {
+            if (view === 'operative-matrix' || view === 'performance-tracker' || view === 'tournament-network' || view === 'decommissioned') {
                 const url = ((userRole === 'manager' || userRole === 'coach') && userId)
                     ? `${GET_API_BASE_URL()}/api/teams?managerId=${userId}`
                     : `${GET_API_BASE_URL()}/api/teams`;
@@ -138,13 +154,24 @@ const ManagerDashboard: React.FC<{
     useEffect(() => {
         fetchManagerData();
 
+        const handleReset = (e: any) => {
+            if (e.detail?.view === 'manager') {
+                setView('menu');
+            }
+        };
+
         const handleRefresh = () => {
             console.log("[MANAGER-DASHBOARD] Real-time sync triggered");
             fetchManagerData();
         };
 
+        window.addEventListener('nxc-reset-view', handleReset);
         window.addEventListener('nxc-db-refresh', handleRefresh);
-        return () => window.removeEventListener('nxc-db-refresh', handleRefresh);
+
+        return () => {
+            window.removeEventListener('nxc-reset-view', handleReset);
+            window.removeEventListener('nxc-db-refresh', handleRefresh);
+        };
     }, [view]);
 
     const handleCreateTeam = async (e: React.FormEvent) => {
@@ -294,8 +321,9 @@ const ManagerDashboard: React.FC<{
                         { id: 'playbook', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', title: 'Strategy Playbook', desc: 'Secure data repository for tactical plans.', color: 'fuchsia' },
                         { id: 'log-achievement', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z', title: 'Victory Protocol', desc: 'Record a new tournament win.', color: 'yellow' },
                         { id: 'performance-tracker', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', title: 'Tactical Analytics', desc: 'Track Win Rates, K/D, and Maps.', color: 'cyan' },
-                        { id: 'scrim-ops', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', title: 'Scrim Network', desc: 'Schedule matches and analyze results.', color: 'emerald' }
-                    ].filter(item => !item.restricted || userRole !== 'coach').map((item) => (
+                        { id: 'scrim-ops', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', title: 'Scrim Network', desc: 'Schedule matches and analyze results.', color: 'emerald' },
+                        { id: 'decommissioned', icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', title: 'Decommissioned Registry', desc: 'Access historical records of inactive personnel.', color: 'slate' }
+                    ].filter(item => !item.restricted || (userRole !== 'coach' && userRole !== 'manager')).map((item) => (
                         <div
                             key={item.id}
                             onClick={() => {
@@ -587,6 +615,91 @@ const ManagerDashboard: React.FC<{
                 </div>
             )}
 
+            {view === 'decommissioned' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                        <div>
+                            <h3 className="text-2xl font-black text-[var(--text-color)] tracking-tight uppercase flex items-center">
+                                <span className="bg-slate-500 text-white px-3 py-1 rounded-lg mr-4 text-sm font-black italic">ARCHIVE</span>
+                                Decommissioned Registry
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mt-2">Historical personnel records and combat data</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white/40 dark:bg-black/40 backdrop-blur-3xl rounded-[32px] border border-slate-200 dark:border-white/5 overflow-hidden shadow-xl">
+                        <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-white/80 dark:bg-[#0d0d14]/80 backdrop-blur-md z-10">
+                                    <tr className="border-b border-slate-200 dark:border-white/5">
+                                        <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Operative</th>
+                                        <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Last Assignment</th>
+                                        <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Division</th>
+                                        <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Status</th>
+                                        <th className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200 dark:divide-white/5">
+                                    {(() => {
+                                        if (inactivePlayers.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan={5} className="px-8 py-24 text-center">
+                                                        <p className="text-[12px] text-slate-500 font-black uppercase tracking-[0.5em] italic">No archived operatives found in registry.</p>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return (inactivePlayers as any[]).map((p: any) => (
+                                            <tr key={p.id} className="group hover:bg-slate-50/50 dark:hover:bg-white/5 transition-all">
+                                                <td className="px-8 py-6">
+                                                    <div className="flex items-center space-x-4">
+                                                        <img
+                                                            src={p.image || `https://ui-avatars.com/api/?name=${p.name}`}
+                                                            className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-500/10 group-hover:scale-110 transition-transform"
+                                                            alt={p.name}
+                                                        />
+                                                        <div>
+                                                            <p className="text-sm font-black text-[var(--text-color)] dark:text-white uppercase tracking-tight">{p.name}</p>
+                                                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Asset ID: {p.id}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className="px-3 py-1 bg-slate-100 dark:bg-white/10 rounded-full text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200 dark:border-white/10">
+                                                        {p.role || 'UNASSIGNED'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className="text-[9px] font-black text-amber-500/80 uppercase tracking-widest">
+                                                        {p.teamGame || 'UNSET'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Inactive</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <button
+                                                        onClick={() => setSelectedPlayerForStats(p)}
+                                                        className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border border-amber-500/20"
+                                                    >
+                                                        Review Files
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ));
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {view === 'log-achievement' && (
                 <div className="space-y-8 md:space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6 mb-8 md:mb-10">
@@ -694,6 +807,15 @@ const ManagerDashboard: React.FC<{
                     </div>
                 </div>}
             </Modal>
+            {selectedPlayerForStats && (
+                <PlayerStatsModal
+                    isOpen={!!selectedPlayerForStats}
+                    onClose={() => setSelectedPlayerForStats(null)}
+                    player={selectedPlayerForStats}
+                    userRole={userRole}
+                    showAdvancedIntel={true}
+                />
+            )}
         </div>
     );
 };

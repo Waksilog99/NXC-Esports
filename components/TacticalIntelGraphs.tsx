@@ -4,7 +4,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
 import { calculateKDA, getKDAColor, parseMatchResult } from '../utils/tactical';
-import PlayerStatsModal, { PlayerStats } from './PlayerStatsModal';
+import PlayerStatsModal from './PlayerStatsModal';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface TacticalIntelGraphsProps {
@@ -19,11 +19,12 @@ interface PlayerStat {
     kd: string | number;
     avgAcs: number;
     games: number;
+    teamId?: number | null;
 }
 
 interface AgentStat {
     name: string;
-    pickRate: number;
+    pickRate?: number;
     winRate: number;
     totalGames: number;
     wins: number;
@@ -178,19 +179,25 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string, onPlayerC
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                    {stats.length === 0 ? (
-                        <tr>
-                            <td colSpan={4} className="px-8 py-10 text-center text-[10px] font-black text-slate-600 uppercase tracking-widest">No intelligence gathered for this unit</td>
-                        </tr>
-                    ) : (
-                        stats.map((p, i) => (
+                    {(() => {
+                        const activeStats = stats.filter(p => p.teamId !== null);
+                        if (activeStats.length === 0) {
+                            return (
+                                <tr>
+                                    <td colSpan={4} className="px-8 py-10 text-center text-[10px] font-black text-slate-600 uppercase tracking-widest">No active personnel intelligence gathered</td>
+                                </tr>
+                            );
+                        }
+                        return activeStats.map((p, i) => (
                             <tr key={i} onClick={() => onPlayerClick(p)} className="hover:bg-white/[0.02] transition-colors group cursor-pointer">
                                 <td className="px-8 py-5">
                                     <div className="flex items-center gap-4">
                                         <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 text-[10px] font-black border border-amber-500/20">
                                             {p.name.charAt(0).toUpperCase()}
                                         </div>
-                                        <span className="text-sm font-black text-white uppercase tracking-tight group-hover:text-amber-400 transition-colors">{p.name}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-black text-white uppercase tracking-tight group-hover:text-amber-400 transition-colors">{p.name}</span>
+                                        </div>
                                     </div>
                                 </td>
                                 <td className="px-8 py-5 text-center">
@@ -199,14 +206,16 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string, onPlayerC
                                     </span>
                                 </td>
                                 <td className="px-8 py-5 text-center">
-                                    <span className="text-sm font-black text-amber-400 tracking-tighter">{p.avgAcs}</span>
+                                    <span className="text-sm font-black text-amber-400 tracking-tighter">
+                                        {p.avgAcs}
+                                    </span>
                                 </td>
                                 <td className="px-8 py-5 text-center">
                                     <span className="text-xs font-black text-slate-500 tracking-widest">{p.games}</span>
                                 </td>
                             </tr>
-                        ))
-                    )}
+                        ));
+                    })()}
                 </tbody>
             </table>
         </div>
@@ -474,9 +483,10 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
     const [intelError, setIntelError] = useState<string | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [selectedTimeFilter, setSelectedTimeFilter] = useState('All');
-    const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<PlayerStats | null>(null);
+    const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<any | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [userRole, setUserRole] = useState<string | undefined>(initialUserRole);
+    const [selectedAgentPopup, setSelectedAgentPopup] = useState<any | null>(null);
 
     useEffect(() => {
         if (initialUserRole) {
@@ -503,6 +513,8 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                             name: fullPlayer.name,
                             role: fullPlayer.role,
                             image: fullPlayer.image,
+                            teamId: fullPlayer.teamId || selectedTeamId,
+                            team: result.data.name,
                             acs: stat.avgAcs.toString(),
                             kda: stat.kd.toString()
                         });
@@ -516,6 +528,8 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                 setSelectedPlayerForModal({
                     id: stat.id,
                     name: stat.name,
+                    teamId: selectedTeamId,
+                    team: selectedTeam?.name,
                     acs: stat.avgAcs.toString(),
                     kda: stat.kd.toString()
                 } as any);
@@ -747,20 +761,22 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                         {/* Agent Performance Section */}
                         {(() => {
                             const teamAgentStats = activeTab === 'scrim' ? stats?.scrim?.agentStats : stats?.tournament?.agentStats;
+                            const allMatches = activeTab === 'scrim' ? filteredScrims : filteredTournaments;
+
                             const agentPerformanceData: AgentStat[] = teamAgentStats ? Object.entries(teamAgentStats)
                                 .filter(([name]) => name && name !== '' && name !== 'Unknown' && name !== 'null' && name !== 'undefined')
-                                .map(([name, s]: [string, any]) => {
-                                    const totalGames = activeTab === 'scrim' ? (stats?.scrim?.gamesPlayed || 1) : (stats?.tournament?.gamesPlayed || 1);
-                                    return {
-                                        name,
-                                        totalGames: s.total,
-                                        wins: s.wins || 0,
-                                        draws: s.draws || 0,
-                                        losses: s.total - (s.wins || 0) - (s.draws || 0),
-                                        pickRate: Math.round((s.total / (totalGames || 1)) * 100),
-                                        winRate: Math.round((s.wins / (s.total || 1)) * 100)
-                                    };
-                                }).sort((a, b) => b.totalGames - a.totalGames) : [];
+                                .map(([name, s]: [string, any]) => ({
+                                    name,
+                                    totalGames: s.total,
+                                    wins: s.wins || 0,
+                                    draws: s.draws || 0,
+                                    losses: s.total - (s.wins || 0) - (s.draws || 0),
+                                    winRate: Math.round((s.wins / (s.total || 1)) * 100)
+                                }))
+                                .sort((a, b) => b.totalGames - a.totalGames) : [];
+
+                            // ── Correct pick rate: share of total agent picks (always sums to 100%) ──
+                            const totalAgentPicks = agentPerformanceData.reduce((sum, a) => sum + a.totalGames, 0);
 
                             if (agentPerformanceData.length === 0) return null;
 
@@ -770,56 +786,193 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
                                         <SectionLabel label="Agent Tactical Performance" color="text-amber-500/60" />
                                         <div className="flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Active Division Intel</span>
+                                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Click Agent to Inspect</span>
                                         </div>
                                     </div>
 
                                     <div className="flex overflow-x-auto pb-4 space-x-6 custom-scrollbar">
-                                        {agentPerformanceData.map((agent, idx) => (
-                                            <div key={idx} className="flex-shrink-0 w-64 bg-black/40 rounded-2xl border border-white/5 p-6 space-y-4 hover:border-amber-500/30 transition-all group">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <img
-                                                            src={`/assets/agents/${agent.name.replace('/', '_')}${agent.name === 'Veto' ? '.webp' : '.png'}`}
-                                                            className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.3)] group-hover:scale-110 transition-transform duration-500"
-                                                            onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                        />
-                                                        <h4 className="text-sm font-black text-white uppercase tracking-tighter italic group-hover:text-amber-500 transition-colors uppercase">{agent.name}</h4>
-                                                    </div>
-                                                    <span className="text-[8px] font-black text-slate-600 uppercase">Games: {agent.totalGames}</span>
-                                                </div>
-
-                                                <div className="space-y-4">
-                                                    <div className="space-y-1.5">
-                                                        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
-                                                            <span className="text-slate-500">Pick Rate</span>
-                                                            <span className="text-white">{agent.pickRate}%</span>
+                                        {agentPerformanceData.map((agent, idx) => {
+                                            const pickPct = totalAgentPicks > 0 ? Math.round((agent.totalGames / totalAgentPicks) * 100) : 0;
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setSelectedAgentPopup({ ...agent, pickPct, allMatches })}
+                                                    className="flex-shrink-0 w-64 bg-black/40 rounded-2xl border border-white/5 p-6 space-y-4 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group text-left"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <img
+                                                                src={`/assets/agents/${agent.name.replace('/', '_')}${agent.name === 'Veto' ? '.webp' : '.png'}`}
+                                                                className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.3)] group-hover:scale-110 transition-transform duration-500"
+                                                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                            />
+                                                            <h4 className="text-sm font-black text-white uppercase tracking-tighter italic group-hover:text-amber-500 transition-colors">{agent.name}</h4>
                                                         </div>
-                                                        <div className="flex justify-between text-[7px] font-black uppercase tracking-widest text-slate-500/60 pb-1">
-                                                            <span>Record</span>
-                                                            <span className="text-slate-400">{agent.wins}W-{agent.losses}L-{agent.draws}D</span>
-                                                        </div>
-                                                        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${agent.pickRate}%` }} />
-                                                        </div>
+                                                        <span className="text-[8px] font-black text-slate-600 uppercase">Games: {agent.totalGames}</span>
                                                     </div>
 
-                                                    <div className="space-y-1.5">
-                                                        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
-                                                            <span className="text-slate-500">Win Rate</span>
-                                                            <span className="text-emerald-500">{agent.winRate}%</span>
+                                                    <div className="space-y-4">
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                                                                <span className="text-slate-500">Pick Rate</span>
+                                                                <span className="text-amber-500">{pickPct}%</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-[7px] font-black uppercase tracking-widest text-slate-500/60 pb-1">
+                                                                <span>Record</span>
+                                                                <span className="text-slate-400">{agent.wins}W-{agent.losses}L-{agent.draws}D</span>
+                                                            </div>
+                                                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${pickPct}%` }} />
+                                                            </div>
                                                         </div>
-                                                        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${agent.winRate}%` }} />
+
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                                                                <span className="text-slate-500">Win Rate</span>
+                                                                <span className="text-emerald-500">{agent.winRate}%</span>
+                                                            </div>
+                                                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${agent.winRate}%` }} />
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );
                         })()}
+
+                        {/* ── Agent Detail Popup ─────────────────────────────────────────── */}
+                        {selectedAgentPopup && (() => {
+                            const ag = selectedAgentPopup;
+
+                            // Use pre-aggregated per-player per-agent stats from server
+                            const playerAgentData: any[] = activeTab === 'scrim'
+                                ? (stats?.scrim?.playerAgentStats?.[ag.name] || [])
+                                : (stats?.tournament?.playerAgentStats?.[ag.name] || []);
+
+                            return (
+                                <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4" onClick={() => setSelectedAgentPopup(null)}>
+                                    <div className="absolute inset-0 bg-black/80 backdrop-blur-2xl" />
+                                    <div
+                                        className="relative w-full max-w-2xl bg-[#020617]/95 border border-amber-500/30 rounded-[40px] shadow-[0_0_120px_rgba(245,158,11,0.2)] p-8 md:p-12 animate-in zoom-in-95 fade-in duration-300 max-h-[85vh] overflow-y-auto custom-scrollbar"
+                                        onClick={e => e.stopPropagation()}
+                                    >
+                                        {/* Glow */}
+                                        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/[0.06] blur-[120px] rounded-full pointer-events-none" />
+
+                                        {/* Header */}
+                                        <div className="flex items-center justify-between mb-10">
+                                            <div className="flex items-center gap-5">
+                                                <img
+                                                    src={`/assets/agents/${ag.name.replace('/', '_')}${ag.name === 'Veto' ? '.webp' : '.png'}`}
+                                                    className="w-16 h-16 object-contain drop-shadow-[0_0_20px_rgba(245,158,11,0.5)]"
+                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                />
+                                                <div>
+                                                    <p className="text-[9px] font-black text-amber-500/60 uppercase tracking-[0.4em] mb-1">Agent Tactical Report</p>
+                                                    <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">{ag.name}</h2>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => setSelectedAgentPopup(null)} className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+
+                                        {/* Key Stats Row */}
+                                        <div className="grid grid-cols-4 gap-4 mb-10">
+                                            {[
+                                                { label: 'Pick Rate', value: `${ag.pickPct}%`, color: 'text-amber-500' },
+                                                { label: 'Win Rate', value: `${ag.winRate}%`, color: 'text-emerald-500' },
+                                                { label: 'Total Ops', value: ag.totalGames, color: 'text-white' },
+                                                { label: 'W-L-D', value: `${ag.wins}-${ag.losses}-${ag.draws}`, color: 'text-slate-300' },
+                                            ].map(stat => (
+                                                <div key={stat.label} className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                    <p className={`text-lg font-black italic ${stat.color}`}>{stat.value}</p>
+                                                    <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mt-1">{stat.label}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Map Distribution */}
+                                        {ag.maps && Object.keys(ag.maps).length > 0 && (
+                                            <div className="mb-10">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4">Map Pick Distribution</p>
+                                                <div className="space-y-3">
+                                                    {Object.entries(ag.maps)
+                                                        .map(([map, count]: [string, any]) => ({ map, count, pct: Math.round((count / ag.totalGames) * 100) }))
+                                                        .sort((a, b) => b.count - a.count)
+                                                        .map(({ map, count, pct }) => (
+                                                            <div key={map}>
+                                                                <div className="flex justify-between text-[8px] font-black uppercase tracking-widest mb-1">
+                                                                    <span className="text-slate-400">{map}</span>
+                                                                    <span className="text-amber-500">{pct}% <span className="text-slate-600">({count} ops)</span></span>
+                                                                </div>
+                                                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-amber-500/70 transition-all duration-700" style={{ width: `${pct}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Operative Records — per player */}
+                                        {/* Mission History — Historical logs for this agent */}
+                                        <div className="mt-10">
+                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4">Historical Mission Logs</p>
+                                            {ag.allMatches.filter((s: any) => {
+                                                let results: any[] = [];
+                                                try {
+                                                    results = typeof s.results === 'string' ? JSON.parse(s.results) : (s.results || []);
+                                                } catch { results = []; }
+                                                return results.some((r: any) => r && r.agent === ag.name);
+                                            }).length === 0 ? (
+                                                <p className="text-center text-[10px] text-slate-600 font-black uppercase tracking-widest py-8 italic border border-white/5 rounded-2xl">No historical logs found for this agent unit</p>
+                                            ) : (
+                                                <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                                                    {ag.allMatches.filter((s: any) => {
+                                                        let results: any[] = [];
+                                                        try {
+                                                            results = typeof s.results === 'string' ? JSON.parse(s.results) : (s.results || []);
+                                                        } catch { results = []; }
+                                                        return results.some((r: any) => r && r.agent === ag.name);
+                                                    }).map((s: any, i: number) => {
+                                                        let results: any[] = [];
+                                                        try {
+                                                            results = typeof s.results === 'string' ? JSON.parse(s.results) : (s.results || []);
+                                                        } catch { results = []; }
+                                                        const matchData = results.find((r: any) => r && r.agent === ag.name);
+                                                        const res = parseMatchResult(matchData?.score, matchData?.isVictory);
+
+                                                        return (
+                                                            <div key={i} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:bg-white/[0.08] transition-all">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${res === 1 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                                        {res === 1 ? 'W' : 'L'}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[10px] font-black text-white uppercase">vs {s.opponent || 'UNKNOWN'}</p>
+                                                                        <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest">{new Date(s.date).toLocaleDateString()}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-[10px] font-black text-amber-500 italic">{matchData?.score || '0-0'}</p>
+                                                                    <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">{matchData?.map || 'UNKNOWN'}</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                     </div>
                 )}
 

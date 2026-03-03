@@ -3,12 +3,25 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import Modal from './Modal';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 
+export interface PlayerStats {
+    id: number;
+    name: string;
+    team?: string;
+    role?: string;
+    image?: string;
+    kda?: string;
+    acs?: string;
+    winRate?: string;
+    teamId?: number | null;
+}
+
 interface PlayerStatsModalProps {
-    player: any;
+    player: PlayerStats | any;
     isOpen: boolean;
     onClose: () => void;
     userRole?: string;
     showAdvancedIntel?: boolean;
+    currentUserId?: number;
 }
 
 const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
@@ -29,6 +42,8 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
     const [matchDetailsError, setMatchDetailsError] = useState<string | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [matchIntelError, setMatchIntelError] = useState<string | null>(null);
+    const [archiveSearch, setArchiveSearch] = useState('');
+    const [missionSearch, setMissionSearch] = useState('');
 
     useEffect(() => {
         const fetchBreakdown = async () => {
@@ -178,11 +193,15 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                             <div className="absolute bottom-0 left-0 w-full p-8 md:p-12 z-20 flex items-end justify-between">
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-3">
-                                        <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-lg text-[8px] font-black text-amber-500 uppercase tracking-[0.3em]">Operational Unit</span>
+                                        {!player.teamId ? (
+                                            <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-lg text-[8px] font-black text-amber-500 uppercase tracking-[0.3em]">Pro Stats / High-Priority Archive</span>
+                                        ) : (
+                                            <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-lg text-[8px] font-black text-amber-500 uppercase tracking-[0.3em]">Operational Unit</span>
+                                        )}
                                         {player.role?.includes('coach') && <span className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-lg text-[8px] font-black text-purple-400 uppercase tracking-[0.3em]">Command Staff</span>}
                                     </div>
                                     <h2 className="text-4xl md:text-6xl font-black text-white italic tracking-tighter uppercase leading-none">{player.name}</h2>
-                                    <p className="text-xs md:text-sm text-slate-400 font-bold tracking-[0.2em] uppercase">{player.team} Intelligence Profile</p>
+                                    <p className="text-xs md:text-sm text-slate-400 font-bold tracking-[0.2em] uppercase">{player.team || 'Unassigned'} Intelligence Profile</p>
                                 </div>
                                 <button
                                     onClick={onClose}
@@ -221,177 +240,286 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                     </button>
                                 </div>
                             ) : (
-                                <>
-                                    {/* Stats Grid */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                                        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
-                                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2">Hostile Neutralizations</p>
-                                            <p className="text-3xl font-black text-white italic">{breakdown?.overall?.avgKills?.toFixed(1) || '0.0'}</p>
-                                            <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest mt-1 italic">Average per Mission</span>
-                                        </div>
-                                        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
-                                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2">Neural Efficiency</p>
-                                            <p className={`text-3xl font-black italic ${getKDAColor(breakdown?.overall?.avgKda?.toFixed(2) || '0.00')}`}>{breakdown?.overall?.avgKda?.toFixed(2) || '0.00'}</p>
-                                            <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest mt-1 italic">Composite KDA Ratio</span>
-                                        </div>
-                                        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
-                                            <p className="text-[8px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-2">Combat Support</p>
-                                            <p className="text-3xl font-black text-indigo-400 italic">{breakdown?.overall?.avgAssists?.toFixed(1) || '0.0'}</p>
-                                            <span className="text-[8px] text-indigo-400/60 font-black uppercase tracking-widest mt-1 italic">Mission Influence</span>
-                                        </div>
-                                        <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
-                                            <p className="text-[8px] text-purple-400 font-black uppercase tracking-[0.3em] mb-2">Combat Score</p>
-                                            <p className="text-3xl font-black text-purple-400 italic">{Math.round(breakdown?.overall?.avgAcs || 0)}</p>
-                                            <span className="text-[8px] text-purple-400/60 font-black uppercase tracking-widest mt-1 italic">Average Combat Output</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Charts Section */}
-                                    <div className="space-y-16">
-                                        {/* Operator Affinity */}
-                                        <div className="space-y-8">
-                                            <div className="flex items-center space-x-4 text-amber-500">
-                                                <div className="w-1.5 h-8 bg-amber-500 rounded-full shadow-[0_0_20px_rgba(251,191,36,0.3)] animate-pulse" />
-                                                <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Operator Affinity Matrix</h4>
+                                (!!player.teamId || !!player.team) ? (
+                                    <>
+                                        {/* Stats Grid */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                                            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
+                                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2">Hostile Neutralizations</p>
+                                                <p className="text-3xl font-black text-white italic">{breakdown?.overall?.avgKills?.toFixed(1) || '0.0'}</p>
+                                                <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest mt-1 italic">Average per Mission</span>
                                             </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {breakdown?.agents?.map((agent: any, idx: number) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => setDetailView({ type: 'agent', name: agent.name })}
-                                                        className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 hover:bg-amber-500/5 hover:border-amber-500/30 transition-all cursor-pointer group"
-                                                    >
-                                                        <div className="flex items-center justify-between mb-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <img
-                                                                    src={`/assets/agents/${agent.name.replace('/', '_')}${agent.name === 'Veto' ? '.webp' : '.png'}`}
-                                                                    className="w-10 h-10 object-contain drop-shadow-[0_0_5px_rgba(245,158,11,0.3)] group-hover:scale-110 transition-transform"
-                                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                                                                />
+                                            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
+                                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2">Neural Efficiency</p>
+                                                <p className={`text-3xl font-black italic ${getKDAColor(breakdown?.overall?.avgKda?.toFixed(2) || '0.00')}`}>{breakdown?.overall?.avgKda?.toFixed(2) || '0.00'}</p>
+                                                <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest mt-1 italic">Composite KDA Ratio</span>
+                                            </div>
+                                            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
+                                                <p className="text-[8px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-2">Combat Support</p>
+                                                <p className="text-3xl font-black text-indigo-400 italic">{breakdown?.overall?.avgAssists?.toFixed(1) || '0.0'}</p>
+                                                <span className="text-[8px] text-indigo-400/60 font-black uppercase tracking-widest mt-1 italic">Mission Influence</span>
+                                            </div>
+                                            <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 hover:bg-white/[0.05] transition-all">
+                                                <p className="text-[8px] text-purple-400 font-black uppercase tracking-[0.3em] mb-2">Combat Score</p>
+                                                <p className="text-3xl font-black text-purple-400 italic">{Math.round(breakdown?.overall?.avgAcs || 0)}</p>
+                                                <span className="text-[8px] text-purple-400/60 font-black uppercase tracking-widest mt-1 italic">Average Combat Output</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Charts Section */}
+                                        <div className="space-y-16">
+                                            {/* Operator Affinity */}
+                                            <div className="space-y-8">
+                                                <div className="flex items-center space-x-4 text-amber-500">
+                                                    <div className="w-1.5 h-8 bg-amber-500 rounded-full shadow-[0_0_20px_rgba(251,191,36,0.3)] animate-pulse" />
+                                                    <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Operator Affinity Matrix</h4>
+                                                </div>
+                                                {(() => {
+                                                    const totalAgentPicks = (breakdown?.agents || []).reduce((sum: number, a: any) => sum + (a.matches || 0), 0);
+                                                    return (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                            {breakdown?.agents?.map((agent: any, idx: number) => {
+                                                                const pickPct = totalAgentPicks > 0 ? Math.round((agent.matches / totalAgentPicks) * 100) : 0;
+                                                                return (
+                                                                    <div
+                                                                        key={idx}
+                                                                        onClick={() => setDetailView({ type: 'agent', name: agent.name })}
+                                                                        className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 hover:bg-amber-500/5 hover:border-amber-500/30 transition-all cursor-pointer group"
+                                                                    >
+                                                                        <div className="flex items-center justify-between mb-4">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <img
+                                                                                    src={`/assets/agents/${agent.name.replace('/', '_')}${agent.name === 'Veto' ? '.webp' : '.png'}`}
+                                                                                    className="w-10 h-10 object-contain drop-shadow-[0_0_5px_rgba(245,158,11,0.3)] group-hover:scale-110 transition-transform"
+                                                                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                                />
+                                                                                <div>
+                                                                                    <p className="text-xs font-black text-white uppercase tracking-tight">{agent.name}</p>
+                                                                                    <p className="text-[7px] text-slate-500 font-black uppercase tracking-[0.2em]">{agent.role}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <p className="text-xs font-black text-amber-500 italic">{agent.kda?.toFixed(2)}</p>
+                                                                                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">KDA</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-3">
+                                                                            <div className="flex justify-between text-[7px] font-black uppercase tracking-widest">
+                                                                                <span className="text-slate-500">Pick Rate</span>
+                                                                                <span className="text-amber-500">{pickPct}% <span className="text-slate-600">({agent.matches} Ops)</span></span>
+                                                                            </div>
+                                                                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                                <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${pickPct}%` }} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+
+                                            {/* Agent Service Record */}
+                                            <div className="space-y-8">
+                                                <div className="flex items-center space-x-4 text-amber-500">
+                                                    <div className="w-1.5 h-8 bg-amber-500 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.3)]" />
+                                                    <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Agent Service Record</h4>
+                                                </div>
+                                                <div className="grid grid-cols-1 gap-3">
+                                                    {breakdown?.agents?.map((agent: any, idx: number) => (
+                                                        <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:bg-amber-500/5 transition-all">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-12 h-12 rounded-xl bg-black/40 flex items-center justify-center border border-white/5 overflow-hidden">
+                                                                    <img
+                                                                        src={`/assets/agents/${agent.name.replace('/', '_')}${agent.name === 'Veto' ? '.webp' : '.png'}`}
+                                                                        className="w-10 h-10 object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.3)] group-hover:scale-110 transition-transform"
+                                                                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                    />
+                                                                </div>
                                                                 <div>
-                                                                    <p className="text-xs font-black text-white uppercase tracking-tight">{agent.name}</p>
-                                                                    <p className="text-[7px] text-slate-500 font-black uppercase tracking-[0.2em]">{agent.role}</p>
+                                                                    <p className="text-sm font-black text-white uppercase italic tracking-tight">{agent.name}</p>
+                                                                    <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">{agent.total || agent.matches} Missions Logged</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <p className="text-xs font-black text-amber-500 italic">{agent.kda?.toFixed(2)}</p>
-                                                                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">KDA</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="space-y-3">
-                                                            <div className="flex justify-between text-[7px] font-black uppercase tracking-widest">
-                                                                <span className="text-slate-500">Pick Frequency</span>
-                                                                <span className="text-white">{agent.matches} Ops</span>
-                                                            </div>
-                                                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                                                <div className="h-full bg-amber-500 transition-all duration-1000" style={{ width: `${Math.min(100, (agent.matches / (breakdown?.overall?.totalMatches || 1)) * 300)}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Deployment Zones */}
-                                        <div className="space-y-8">
-                                            <div className="flex items-center space-x-4 text-emerald-500">
-                                                <div className="w-1.5 h-8 bg-emerald-500 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)]" />
-                                                <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Theater Proficiency</h4>
-                                            </div>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                                {breakdown?.maps?.map((map: any, idx: number) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => setDetailView({ type: 'map', name: map.name })}
-                                                        className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:bg-emerald-500/5 hover:border-emerald-500/20 transition-all cursor-pointer text-center group"
-                                                    >
-                                                        <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">{map.name}</p>
-                                                        <p className={`text-base font-black italic group-hover:text-emerald-500 transition-colors ${getKDAColor(map.kda?.toFixed(2))}`}>{map.kda?.toFixed(2)}</p>
-                                                        <p className="text-[7px] text-slate-600 font-black uppercase tracking-tighter mt-1">{map.winRate}% Vic Rate</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Tactical Archive */}
-                                        <div className="space-y-8">
-                                            <div className="flex items-center space-x-4 text-rose-400">
-                                                <div className="w-1.5 h-8 bg-rose-400 rounded-full shadow-[0_0_20px_rgba(251,113,133,0.3)]" />
-                                                <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Class Proficiency</h4>
-                                            </div>
-                                            {breakdown?.roles?.length > 0 ? (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {breakdown.roles.map((role: any, idx: number) => (
-                                                        <div
-                                                            key={idx}
-                                                            onClick={() => setDetailView({ type: 'role', name: role.name })}
-                                                            className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 hover:bg-rose-500/5 hover:border-rose-400/30 transition-all cursor-pointer group"
-                                                        >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <div>
-                                                                    <p className="text-xs font-black text-white uppercase italic">{role.name}</p>
-                                                                    <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mt-0.5">{role.matches} Ops</p>
-                                                                </div>
+                                                            <div className="flex items-center gap-8">
                                                                 <div className="text-right">
-                                                                    <p className={`text-sm font-black italic ${getKDAColor(role.kda?.toFixed(2))}`}>{role.kda?.toFixed(2)}</p>
-                                                                    <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">KDA</p>
+                                                                    <p className={`text-base font-black italic ${getKDAColor((agent.kda || 0).toFixed(2))}`}>{agent.kda?.toFixed(2)}</p>
+                                                                    <p className="text-[7px] text-slate-600 font-black uppercase tracking-tighter">Avg KDA</p>
                                                                 </div>
-                                                            </div>
-                                                            <div className="space-y-2">
-                                                                <div className="flex justify-between text-[7px] font-black uppercase tracking-widest">
-                                                                    <span className="text-slate-500">Win Rate</span>
-                                                                    <span className={role.winRate >= 50 ? 'text-emerald-500' : 'text-red-400'}>{role.winRate}%</span>
-                                                                </div>
-                                                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                                                    <div className={`h-full rounded-full transition-all duration-1000 ${role.winRate >= 50 ? 'bg-emerald-500' : 'bg-red-400'}`} style={{ width: `${role.winRate}%` }} />
+                                                                <div className="text-right w-16">
+                                                                    <p className="text-base font-black text-emerald-500 italic">{agent.winRate || 0}%</p>
+                                                                    <p className="text-[7px] text-slate-600 font-black uppercase tracking-tighter">Victory</p>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            ) : (
-                                                <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest text-center py-6">No role data recorded</p>
-                                            )}
-                                        </div>
+                                            </div>
 
-                                        {/* Engagement Archive */}
-                                        <div className="space-y-8">
-                                            <div className="flex items-center space-x-4 text-purple-400">
-                                                <div className="w-1.5 h-8 bg-purple-400 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.3)]" />
-                                                <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Engagement Archive</h4>
+                                            {/* Deployment Zones */}
+                                            <div className="space-y-8">
+                                                <div className="flex items-center space-x-4 text-emerald-500">
+                                                    <div className="w-1.5 h-8 bg-emerald-500 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)]" />
+                                                    <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Theater Proficiency</h4>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                                    {breakdown?.maps?.map((map: any, idx: number) => (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => setDetailView({ type: 'map', name: map.name })}
+                                                            className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:bg-emerald-500/5 hover:border-emerald-500/20 transition-all cursor-pointer text-center group"
+                                                        >
+                                                            <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1">{map.name}</p>
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <p className={`text-base font-black italic group-hover:text-emerald-500 transition-colors ${getKDAColor(map.kda?.toFixed(2))}`}>{map.kda?.toFixed(2)}</p>
+                                                                <span className={`text-[9px] font-black italic ${(map.kills - map.deaths) >= 0 ? 'text-emerald-500/60' : 'text-red-500/60'}`}>
+                                                                    {(map.kills - map.deaths) >= 0 ? `+${map.kills - map.deaths}` : map.kills - map.deaths}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[7px] text-slate-600 font-black uppercase tracking-tighter mt-1">{map.winRate}% Vic Rate</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                            <div className="space-y-3">
-                                                {breakdown?.history?.slice(0, 10).map((s: any, idx: number) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => setSelectedMatchForStats(s)}
-                                                        className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex items-center justify-between hover:bg-white/[0.05] transition-all cursor-pointer group"
-                                                    >
-                                                        <div className="flex items-center gap-6">
-                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] ${s.isWin ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                                {s.isWin ? 'WIN' : 'LOSS'}
+
+                                            {/* Tactical Archive */}
+                                            <div className="space-y-8">
+                                                <div className="flex items-center space-x-4 text-rose-400">
+                                                    <div className="w-1.5 h-8 bg-rose-400 rounded-full shadow-[0_0_20px_rgba(251,113,133,0.3)]" />
+                                                    <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Class Proficiency</h4>
+                                                </div>
+                                                {breakdown?.roles?.length > 0 ? (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                        {breakdown.roles.map((role: any, idx: number) => (
+                                                            <div
+                                                                key={idx}
+                                                                onClick={() => setDetailView({ type: 'role', name: role.name })}
+                                                                className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 hover:bg-rose-500/5 hover:border-rose-400/30 transition-all cursor-pointer group"
+                                                            >
+                                                                <div className="flex items-center justify-between mb-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <img
+                                                                            src={`/assets/roles/${role.name.charAt(0).toUpperCase() + role.name.slice(1).toLowerCase()}.png`}
+                                                                            className="w-9 h-9 object-contain drop-shadow-[0_0_6px_rgba(251,113,133,0.4)] group-hover:scale-110 transition-transform"
+                                                                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                                                                            alt={role.name}
+                                                                        />
+                                                                        <div>
+                                                                            <p className="text-xs font-black text-white uppercase italic">{role.name}</p>
+                                                                            <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mt-0.5">{role.matches} Ops</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className={`text-sm font-black italic ${getKDAColor(role.kda?.toFixed(2))}`}>{role.kda?.toFixed(2)}</p>
+                                                                        <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">KDA</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="space-y-2">
+                                                                    <div className="flex justify-between text-[7px] font-black uppercase tracking-widest">
+                                                                        <span className="text-slate-500">Win Rate</span>
+                                                                        <span className={role.winRate >= 50 ? 'text-emerald-500' : 'text-red-400'}>{role.winRate}%</span>
+                                                                    </div>
+                                                                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                        <div className={`h-full rounded-full transition-all duration-1000 ${role.winRate >= 50 ? 'bg-emerald-500' : 'bg-red-400'}`} style={{ width: `${role.winRate}%` }} />
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                            <div>
-                                                                <p className="text-sm font-black text-white uppercase italic">vs {s.opponent}</p>
-                                                                <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{new Date(s.date).toLocaleDateString()}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex gap-8 text-right pr-4">
-                                                            <div>
-                                                                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Theater</p>
-                                                                <p className="text-[10px] font-black text-white uppercase">{s.map}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Registry</p>
-                                                                <p className="text-[10px] font-black text-amber-500 italic">{s.kills}/{s.deaths}/{s.assists}</p>
-                                                            </div>
-                                                        </div>
+                                                        ))}
                                                     </div>
-                                                ))}
+                                                ) : (
+                                                    <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest text-center py-6">No role data recorded</p>
+                                                )}
                                             </div>
+
+                                            {/* Engagement Archive */}
+                                            <div className="space-y-8">
+                                                <div className="flex items-center space-x-4 text-purple-400">
+                                                    <div className="w-1.5 h-8 bg-purple-400 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.3)]" />
+                                                    <h4 className="text-sm font-black uppercase tracking-[0.4em] italic">Engagement Archive</h4>
+                                                </div>
+                                                {/* Search filter */}
+                                                <div className="relative">
+                                                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                    <input
+                                                        type="text"
+                                                        value={archiveSearch}
+                                                        onChange={e => setArchiveSearch(e.target.value)}
+                                                        placeholder="Search opponent..."
+                                                        className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs font-black text-white uppercase tracking-widest placeholder-slate-600 focus:outline-none focus:border-purple-400/50 transition-all"
+                                                    />
+                                                </div>
+                                                {(() => {
+                                                    const filtered = (breakdown?.history || []).filter((s: any) =>
+                                                        !archiveSearch || (s.opponent || '').toLowerCase().includes(archiveSearch.toLowerCase())
+                                                    );
+                                                    // Removed .slice(0, 5) to allow full scrolling as requested
+                                                    // const recentMatches = filtered.slice(0, 5);
+                                                    return (
+                                                        <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
+                                                            {filtered.length === 0 ? (
+                                                                <p className="text-center text-[10px] text-slate-600 font-black uppercase tracking-widest py-8">No matches found</p>
+                                                            ) : filtered.map((s: any, idx: number) => (
+                                                                <div
+                                                                    key={idx}
+                                                                    onClick={() => setSelectedMatchForStats(s)}
+                                                                    className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 flex items-center justify-between hover:bg-white/[0.05] transition-all cursor-pointer group"
+                                                                >
+                                                                    <div className="flex items-center gap-6">
+                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] ${s.isWin ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                                            {s.isWin ? 'WIN' : 'LOSS'}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm font-black text-white uppercase italic">vs {s.opponent}</p>
+                                                                            <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{new Date(s.date).toLocaleDateString()}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex gap-8 text-right pr-4">
+                                                                        <div>
+                                                                            <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Theater</p>
+                                                                            <p className="text-[10px] font-black text-white uppercase">{s.map}</p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-0.5">+/-</p>
+                                                                            <p className={`text-[10px] font-black italic ${(s.kills - s.deaths) >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                                                {(s.kills - s.deaths) >= 0 ? `+${s.kills - s.deaths}` : s.kills - s.deaths}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Registry</p>
+                                                                            <p className="text-[10px] font-black text-amber-500 italic">{s.kills}/{s.deaths}/{s.assists}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="py-32 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-1000">
+                                        <div className="relative">
+                                            <div className="absolute -inset-10 bg-amber-500/10 rounded-full blur-3xl animate-pulse" />
+                                            <div className="relative w-24 h-24 rounded-[32px] bg-white/5 border border-white/10 flex items-center justify-center text-amber-500/40">
+                                                <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                            </div>
+                                        </div>
+                                        <div className="text-center space-y-4 max-w-md">
+                                            <h4 className="text-2xl font-black text-white uppercase tracking-tighter italic">Tactical Intel Classified</h4>
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em] leading-relaxed">
+                                                Detailed performance analytics are currently restricted. Operative is not currently assigned to an active combat unit.
+                                                Intel will be decrypted upon unit reassignment.
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div className="w-12 h-1 bg-white/10 rounded-full" />
+                                            <div className="w-12 h-1 bg-amber-500/40 rounded-full animate-pulse" />
+                                            <div className="w-12 h-1 bg-white/10 rounded-full" />
                                         </div>
                                     </div>
-                                </>
+                                )
                             )}
                         </div>
                     </div>
@@ -483,43 +611,61 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                     <div className="w-1.5 h-8 bg-amber-500 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.4)]" />
                                     <h4 className="text-xs md:text-sm font-black uppercase tracking-[0.4em] italic">Mission History Intelligence</h4>
                                 </div>
-                                <div className="space-y-4">
-                                    {breakdown?.history
-                                        ?.filter((s: any) => {
-                                            if (detailView.type === 'agent') return s.agent === detailView.name;
-                                            if (detailView.type === 'role') return s.role === detailView.name;
-                                            if (detailView.type === 'map') return s.map === detailView.name;
-                                            return false;
-                                        })
-                                        .slice(0, 8)
-                                        .map((s: any, idx: number) => (
-                                            <div
-                                                key={idx}
-                                                onClick={() => handleMatchClick(s)}
-                                                className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:bg-amber-500/5 hover:border-amber-500/20 transition-all cursor-pointer group"
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${s.isWin ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                        {s.isWin ? 'W' : 'L'}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-white uppercase">vs {s.opponent}</p>
-                                                        <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest">{new Date(s.date).toLocaleDateString()}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <span className={`text-[7px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${s.type === 'tournament' ? 'bg-purple-500/10 text-purple-400' : 'bg-amber-500/10 text-amber-500'}`}>
-                                                        {s.type === 'tournament' ? 'TOURN' : 'SCRIM'}
-                                                    </span>
-                                                    <div className="text-right">
-                                                        <p className="text-[10px] font-black text-amber-500 italic">{s.kills}/{s.deaths}/{s.assists}</p>
-                                                        <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">{s.map}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    }
+                                {/* Search filter */}
+                                <div className="relative">
+                                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    <input
+                                        type="text"
+                                        value={missionSearch}
+                                        onChange={e => setMissionSearch(e.target.value)}
+                                        placeholder="Search opponent..."
+                                        className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs font-black text-white uppercase tracking-widest placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-all"
+                                    />
                                 </div>
+                                {(() => {
+                                    const filtered = (breakdown?.history || []).filter((s: any) => {
+                                        const matchesType =
+                                            (detailView?.type === 'agent' && (s.agent || '').toLowerCase() === (detailView.name || '').toLowerCase()) ||
+                                            (detailView?.type === 'role' && (s.role || '').toLowerCase() === (detailView.name || '').toLowerCase()) ||
+                                            (detailView?.type === 'map' && (s.map || '').toLowerCase() === (detailView.name || '').toLowerCase());
+                                        const matchesSearch = !missionSearch || (s.opponent || '').toLowerCase().includes(missionSearch.toLowerCase());
+                                        return matchesType && matchesSearch;
+                                    });
+                                    // Removed .slice(0, 5) to allow full scrolling as requested
+                                    // const recentMissions = filtered.slice(0, 5);
+                                    return (
+                                        <div className="space-y-4 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
+                                            {filtered.length === 0 ? (
+                                                <p className="text-center text-[10px] text-slate-600 font-black uppercase tracking-widest py-8">No matches found</p>
+                                            ) : filtered.map((s: any, idx: number) => (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => handleMatchClick(s)}
+                                                    className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:bg-amber-500/5 hover:border-amber-500/20 transition-all cursor-pointer group"
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[8px] ${s.isWin ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                            {s.isWin ? 'W' : 'L'}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black text-white uppercase">vs {s.opponent}</p>
+                                                            <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest">{new Date(s.date).toLocaleDateString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <span className={`text-[7px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${s.type === 'tournament' ? 'bg-purple-500/10 text-purple-400' : 'bg-amber-500/10 text-amber-500'}`}>
+                                                            {s.type === 'tournament' ? 'TOURN' : 'SCRIM'}
+                                                        </span>
+                                                        <div className="text-right">
+                                                            <p className="text-[10px] font-black text-amber-500 italic">{s.kills}/{s.deaths}/{s.assists}</p>
+                                                            <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">{s.map}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -673,10 +819,10 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                         </button>
                     </div>
                 )}
-            </Modal>
+            </Modal >
 
             {/* Engagement Analysis Modal (from breakdown history) */}
-            <Modal isOpen={!!selectedMatchForStats} onClose={() => setSelectedMatchForStats(null)} zIndex={4000} backdropClassName="bg-black/95 backdrop-blur-3xl" className="w-full max-w-4xl p-4">
+            < Modal isOpen={!!selectedMatchForStats} onClose={() => setSelectedMatchForStats(null)} zIndex={4000} backdropClassName="bg-black/95 backdrop-blur-3xl" className="w-full max-w-4xl p-4" >
                 {selectedMatchForStats && (
                     <div className="bg-[#020617] p-8 md:p-12 rounded-[40px] shadow-2xl w-full max-h-[85vh] overflow-y-auto custom-scrollbar border border-white/10 relative overflow-hidden animate-in zoom-in-95 duration-500">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[80px] rounded-full pointer-events-none" />
@@ -821,7 +967,7 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                         </div>
                     </div>
                 )}
-            </Modal>
+            </Modal >
         </>
     );
 };

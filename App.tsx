@@ -49,6 +49,11 @@ const App: React.FC = () => {
     if (view !== currentView) {
       setPreviousView(currentView);
       localStorage.setItem('nxc-view', view);
+    } else {
+      // If clicking current view again, reset or scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Signal to child components to reset if needed
+      window.dispatchEvent(new CustomEvent('nxc-reset-view', { detail: { view } }));
     }
     setSelectedUserId(userId);
     setCurrentView(view);

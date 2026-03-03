@@ -274,6 +274,10 @@ const TeamManagement: React.FC<{
         }
 
         try {
+            showNotification({
+                message: `Scheduling engagement with ${scrimOpponent}...`,
+                type: 'info'
+            });
             const API_BASE_URL = GET_API_BASE_URL();
             const method = isEditingDetails ? 'PUT' : 'POST';
             const url = isEditingDetails
@@ -606,6 +610,10 @@ const TeamManagement: React.FC<{
         });
 
         try {
+            showNotification({
+                message: 'Synchronizing battle records with command center...',
+                type: 'info'
+            });
             const res = await fetch(`${GET_API_BASE_URL()}/api/${apiBase}/${selectedScrimId}/results`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -16,6 +16,10 @@ const AddAchievementForm: React.FC<{ requesterId?: number }> = ({ requesterId })
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        showNotification({
+            message: 'Commencing upload protocol...',
+            type: 'info'
+        });
         try {
             const res = await fetch(`${GET_API_BASE_URL()}/api/achievements`, {
                 method: 'POST',

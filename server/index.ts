@@ -17,7 +17,7 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress, products, orders, siteSettings, playbookStrategies, notifications } from './schema.js';
-import { eq, inArray, and, or, sql, desc, notIlike } from 'drizzle-orm';
+import { eq, inArray, and, or, sql, desc, notIlike, isNull, isNotNull } from 'drizzle-orm';
 import crypto from 'crypto';
 import fs from 'fs';
 import { finished } from 'stream/promises';
@@ -461,8 +461,8 @@ app.post('/api/auth/login', async (req, res) => {
             createdAt: users.createdAt,
             ign: users.ign,
             password: users.password, // needed for verification; stripped before response
-            level: players.level,
-            xp: players.xp
+            xp: players.xp,
+            playerImage: players.image
         })
             .from(users)
             .leftJoin(players, eq(users.id, players.userId))
@@ -488,6 +488,9 @@ app.post('/api/auth/login', async (req, res) => {
         // Strip password before sending; compute role-based level
         const { password: _pw, ...safeUser } = userRow as any;
         safeUser.level = determineLevel(safeUser.role, safeUser.level);
+        if (!safeUser.avatar && safeUser.playerImage) {
+            safeUser.avatar = safeUser.playerImage;
+        }
 
         console.log('[AUTH TRACE] 6. Login success. Sending response.');
         res.json({ success: true, message: 'Login success', data: safeUser });
@@ -536,7 +539,8 @@ app.post('/api/users/sync', async (req, res) => {
                 createdAt: users.createdAt,
                 ign: users.ign,
                 level: players.level,
-                xp: players.xp
+                xp: players.xp,
+                playerImage: players.image
             })
                 .from(users)
                 .leftJoin(players, eq(users.id, players.userId))
@@ -546,6 +550,9 @@ app.post('/api/users/sync', async (req, res) => {
 
             if (updatedUser) {
                 (updatedUser as any).level = determineLevel(updatedUser.role, updatedUser.level);
+                if (!updatedUser.avatar && (updatedUser as any).playerImage) {
+                    updatedUser.avatar = (updatedUser as any).playerImage;
+                }
             }
 
             notifyRefresh();
@@ -996,6 +1003,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
         const scrimRecentForm: string[] = [];
         const scrimMapStats: Record<string, { played: number, wins: number, losses: number, draws: number }> = {};
         const scrimAgentStats: Record<string, { wins: number, draws: number, total: number }> = {};
+        const scrimPlayerAgentAgg: Record<string, Record<number, any>> = {};
         let scrimTopPlayers: any[] = [];
 
         if (scrimIds.length > 0) {
@@ -1034,7 +1042,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             const scrimAllStats = await db.select({
                 ...scrimPlayerStats,
                 playerName: players.name,
-                playerUserId: players.userId
+                playerUserId: players.userId,
+                playerTeamId: players.teamId
             })
                 .from(scrimPlayerStats)
                 .leftJoin(players, eq(scrimPlayerStats.playerId, players.id))
@@ -1046,17 +1055,35 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 
                 // Track agent stats for team
                 if (stat.agent) {
-                    if (!scrimAgentStats[stat.agent]) scrimAgentStats[stat.agent] = { wins: 0, draws: 0, total: 0 };
+                    if (!scrimAgentStats[stat.agent]) scrimAgentStats[stat.agent] = { wins: 0, draws: 0, total: 0, maps: {} } as any;
                     scrimAgentStats[stat.agent].total++;
                     if (stat.isWin === 1) {
                         scrimAgentStats[stat.agent].wins++;
                     } else if (stat.isWin === 2) {
                         scrimAgentStats[stat.agent].draws++;
                     }
+
+                    // Track maps for this agent
+                    const mapName = stat.map || 'Unknown';
+                    const sAg = scrimAgentStats[stat.agent] as any;
+                    sAg.maps[mapName] = (sAg.maps[mapName] || 0) + 1;
+
+                    // Per-player per-agent aggregation
+                    if (!scrimPlayerAgentAgg[stat.agent]) scrimPlayerAgentAgg[stat.agent] = {};
+                    if (!scrimPlayerAgentAgg[stat.agent][stat.playerId!]) {
+                        scrimPlayerAgentAgg[stat.agent][stat.playerId!] = { playerId: stat.playerId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, wins: 0, total: 0 };
+                    }
+                    const paa = scrimPlayerAgentAgg[stat.agent][stat.playerId!];
+                    paa.kills += stat.kills || 0;
+                    paa.deaths += stat.deaths || 0;
+                    paa.assists += stat.assists || 0;
+                    paa.acs += stat.acs || 0;
+                    paa.total++;
+                    if (stat.isWin === 1) paa.wins++;
                 }
 
                 if (!scrimPlayerAgg[stat.playerId]) {
-                    scrimPlayerAgg[stat.playerId] = { id: stat.playerId, userId: stat.playerUserId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
+                    scrimPlayerAgg[stat.playerId] = { id: stat.playerId, userId: stat.playerUserId, teamId: (stat as any).playerTeamId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
                 }
                 scrimPlayerAgg[stat.playerId].kills += stat.kills || 0;
                 scrimPlayerAgg[stat.playerId].deaths += stat.deaths || 0;
@@ -1069,6 +1096,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                 id: p.id,
                 name: p.name,
                 userId: p.userId,
+                teamId: p.teamId,
                 kd: p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills,
                 avgAcs: Math.round(p.acs / p.games),
                 games: p.games
@@ -1082,8 +1110,9 @@ app.get('/api/teams/:id/stats', async (req, res) => {
         let tourneyLosses = 0;
         let tourneyDraws = 0;
         const tourneyRecentForm: string[] = [];
-        let tourneyTopPlayers: any[] = [];
         const tourneyAgentStats: Record<string, { wins: number, draws: number, total: number }> = {};
+        const tourneyPlayerAgentAgg: Record<string, Record<number, any>> = {};
+        let tourneyTopPlayers: any[] = [];
 
         if (tourneyIds.length > 0) {
             completedTourneys.forEach(t => {
@@ -1110,7 +1139,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             const tourneyAllStats = await db.select({
                 ...tournamentPlayerStats,
                 playerName: players.name,
-                playerUserId: players.userId
+                playerUserId: players.userId,
+                playerTeamId: players.teamId
             })
                 .from(tournamentPlayerStats)
                 .leftJoin(players, eq(tournamentPlayerStats.playerId, players.id))
@@ -1122,17 +1152,35 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 
                 // Track agent stats for team
                 if (stat.agent) {
-                    if (!tourneyAgentStats[stat.agent]) tourneyAgentStats[stat.agent] = { wins: 0, draws: 0, total: 0 };
+                    if (!tourneyAgentStats[stat.agent]) tourneyAgentStats[stat.agent] = { wins: 0, draws: 0, total: 0, maps: {} } as any;
                     tourneyAgentStats[stat.agent].total++;
                     if (stat.isWin === 1) {
                         tourneyAgentStats[stat.agent].wins++;
                     } else if (stat.isWin === 2) {
                         tourneyAgentStats[stat.agent].draws++;
                     }
+
+                    // Track maps for this agent
+                    const mapName = stat.map || 'Unknown';
+                    const tAg = tourneyAgentStats[stat.agent] as any;
+                    tAg.maps[mapName] = (tAg.maps[mapName] || 0) + 1;
+
+                    // Per-player per-agent aggregation
+                    if (!tourneyPlayerAgentAgg[stat.agent]) tourneyPlayerAgentAgg[stat.agent] = {};
+                    if (!tourneyPlayerAgentAgg[stat.agent][stat.playerId!]) {
+                        tourneyPlayerAgentAgg[stat.agent][stat.playerId!] = { playerId: stat.playerId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, wins: 0, total: 0 };
+                    }
+                    const paa = tourneyPlayerAgentAgg[stat.agent][stat.playerId!];
+                    paa.kills += stat.kills || 0;
+                    paa.deaths += stat.deaths || 0;
+                    paa.assists += stat.assists || 0;
+                    paa.acs += stat.acs || 0;
+                    paa.total++;
+                    if (stat.isWin === 1) paa.wins++;
                 }
 
                 if (!tourneyPlayerAgg[stat.playerId]) {
-                    tourneyPlayerAgg[stat.playerId] = { id: stat.playerId, userId: stat.playerUserId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
+                    tourneyPlayerAgg[stat.playerId] = { id: stat.playerId, userId: stat.playerUserId, teamId: (stat as any).playerTeamId, name: stat.playerName || 'Unknown', kills: 0, deaths: 0, assists: 0, acs: 0, games: 0 };
                 }
                 tourneyPlayerAgg[stat.playerId].kills += stat.kills || 0;
                 tourneyPlayerAgg[stat.playerId].deaths += stat.deaths || 0;
@@ -1145,6 +1193,7 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                 id: p.id,
                 name: p.name,
                 userId: p.userId,
+                teamId: p.teamId,
                 kd: p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills,
                 avgAcs: Math.round(p.acs / p.games),
                 games: p.games
@@ -1163,6 +1212,20 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                     recentForm: scrimRecentForm.slice(-5),
                     mapStats: scrimMapStats,
                     agentStats: scrimAgentStats,
+                    playerAgentStats: Object.fromEntries(
+                        Object.entries(scrimPlayerAgentAgg).map(([agent, players]) => [
+                            agent,
+                            Object.values(players).map((p: any) => ({
+                                name: p.name,
+                                teamId: p.teamId,
+                                kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
+                                avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
+                                wins: p.wins,
+                                total: p.total,
+                                winRate: p.total > 0 ? Math.round((p.wins / p.total) * 100) : 0
+                            })).sort((a: any, b: any) => Number(b.kda) - Number(a.kda))
+                        ])
+                    ),
                     topPlayers: scrimTopPlayers
                 },
                 tournament: {
@@ -1173,6 +1236,20 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                     draws: tourneyDraws,
                     recentForm: tourneyRecentForm.slice(-5),
                     agentStats: tourneyAgentStats,
+                    playerAgentStats: Object.fromEntries(
+                        Object.entries(tourneyPlayerAgentAgg).map(([agent, players]) => [
+                            agent,
+                            Object.values(players).map((p: any) => ({
+                                name: p.name,
+                                teamId: p.teamId,
+                                kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
+                                avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
+                                wins: p.wins,
+                                total: p.total,
+                                winRate: p.total > 0 ? Math.round((p.wins / p.total) * 100) : 0
+                            })).sort((a: any, b: any) => Number(b.kda) - Number(a.kda))
+                        ])
+                    ),
                     topPlayers: tourneyTopPlayers
                 },
                 topPlayers: scrimTopPlayers.slice(0, 5)
@@ -1188,9 +1265,17 @@ app.get('/api/teams/:id/stats', async (req, res) => {
 app.get('/api/players/:id/breakdown', async (req, res) => {
     const playerId = Number(req.params.id);
     try {
-        // 1. Fetch Player and their match records
+        // 1. Fetch Player and all their historical player records (across different teams)
         const playerRecord = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
         if (playerRecord.length === 0) return res.status(404).json({ success: false, error: 'Player not found' });
+
+        const targetUserId = playerRecord[0].userId;
+        let allPlayerIds = [playerId];
+
+        if (targetUserId) {
+            const relatedPlayers = await db.select({ id: players.id }).from(players).where(eq(players.userId, targetUserId));
+            allPlayerIds = relatedPlayers.map(p => p.id);
+        }
 
         const [scrimStats, tourneyStats] = await Promise.all([
             db.select({
@@ -1209,7 +1294,7 @@ app.get('/api/players/:id/breakdown', async (req, res) => {
             })
                 .from(scrimPlayerStats)
                 .leftJoin(scrims, eq(scrimPlayerStats.scrimId, scrims.id))
-                .where(eq(scrimPlayerStats.playerId, playerId)),
+                .where(inArray(scrimPlayerStats.playerId, allPlayerIds)),
 
             db.select({
                 id: tournamentPlayerStats.id,
@@ -1227,7 +1312,7 @@ app.get('/api/players/:id/breakdown', async (req, res) => {
             })
                 .from(tournamentPlayerStats)
                 .leftJoin(tournaments, eq(tournamentPlayerStats.tournamentId, tournaments.id))
-                .where(eq(tournamentPlayerStats.playerId, playerId))
+                .where(inArray(tournamentPlayerStats.playerId, allPlayerIds))
         ]);
 
         const allStats = [...scrimStats, ...tourneyStats].sort((a, b) =>
@@ -1710,11 +1795,35 @@ app.get('/api/teams', async (req, res) => {
             uniqueUserIds.length > 0
                 ? db.select().from(users).where(inArray(users.id, uniqueUserIds))
                 : Promise.resolve([] as any[]),
-            completedScrimIds.length > 0
-                ? db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.scrimId, completedScrimIds))
+            uniqueUserIds.length > 0
+                ? db.select({
+                    playerId: scrimPlayerStats.playerId,
+                    scrimId: scrimPlayerStats.scrimId,
+                    kills: scrimPlayerStats.kills,
+                    deaths: scrimPlayerStats.deaths,
+                    assists: scrimPlayerStats.assists,
+                    acs: scrimPlayerStats.acs,
+                    isWin: scrimPlayerStats.isWin,
+                    userId: players.userId
+                })
+                    .from(scrimPlayerStats)
+                    .innerJoin(players, eq(scrimPlayerStats.playerId, players.id))
+                    .where(inArray(players.userId, uniqueUserIds))
                 : Promise.resolve([] as any[]),
-            completedTourneyIds.length > 0
-                ? db.select().from(tournamentPlayerStats).where(inArray(tournamentPlayerStats.tournamentId, completedTourneyIds))
+            uniqueUserIds.length > 0
+                ? db.select({
+                    playerId: tournamentPlayerStats.playerId,
+                    tournamentId: tournamentPlayerStats.tournamentId,
+                    kills: tournamentPlayerStats.kills,
+                    deaths: tournamentPlayerStats.deaths,
+                    assists: tournamentPlayerStats.assists,
+                    acs: tournamentPlayerStats.acs,
+                    isWin: tournamentPlayerStats.isWin,
+                    userId: players.userId
+                })
+                    .from(tournamentPlayerStats)
+                    .innerJoin(players, eq(tournamentPlayerStats.playerId, players.id))
+                    .where(inArray(players.userId, uniqueUserIds))
                 : Promise.resolve([] as any[]),
         ]);
 
@@ -1731,10 +1840,11 @@ app.get('/api/teams', async (req, res) => {
             if (teamArr) teamArr.push(p);
         });
 
-        const playerStatsMap = new Map<number, typeof consolidatedStats>();
+        const playerStatsMap = new Map<number, any[]>();
         consolidatedStats.forEach(s => {
-            if (!playerStatsMap.has(s.playerId)) playerStatsMap.set(s.playerId, []);
-            playerStatsMap.get(s.playerId)!.push(s);
+            if (!s.userId) return;
+            if (!playerStatsMap.has(s.userId)) playerStatsMap.set(s.userId, []);
+            playerStatsMap.get(s.userId)!.push(s);
         });
 
         // Assemble the final payload synchronously
@@ -1753,7 +1863,7 @@ app.get('/api/teams', async (req, res) => {
                 let avgAcs = 0;
                 let winRateVal = 0;
 
-                const myStats = playerStatsMap.get(p.id) || [];
+                const myStats = p.userId ? (playerStatsMap.get(p.userId) || []) : [];
                 if (myStats.length > 0) {
                     const totalAcs = myStats.reduce((acc, s) => acc + (s.acs || 0), 0);
                     const sumKda = myStats.reduce((acc, s) => {
@@ -1822,7 +1932,61 @@ app.get('/api/teams/:id', async (req, res) => {
         if (!team) return res.status(404).json({ success: false, error: "Unit not found" });
 
         const teamPlayers = await db.select().from(players).where(eq(players.teamId, id));
-        res.json({ success: true, data: { ...team, players: teamPlayers } });
+
+        // Aggregate Career Stats for these players
+        const uniqueUserIds = Array.from(new Set(teamPlayers.map(p => p.userId).filter((u): u is number => u !== null))) as number[];
+
+        const [allUsers, allSStats, allTStats] = await Promise.all([
+            uniqueUserIds.length > 0 ? db.select().from(users).where(inArray(users.id, uniqueUserIds)) : Promise.resolve([]),
+            uniqueUserIds.length > 0 ? db.select({
+                userId: players.userId,
+                kills: scrimPlayerStats.kills,
+                deaths: scrimPlayerStats.deaths,
+                assists: scrimPlayerStats.assists,
+                acs: scrimPlayerStats.acs,
+                isWin: scrimPlayerStats.isWin
+            }).from(scrimPlayerStats).innerJoin(players, eq(scrimPlayerStats.playerId, players.id)).where(inArray(players.userId, uniqueUserIds)) : Promise.resolve([]),
+            uniqueUserIds.length > 0 ? db.select({
+                userId: players.userId,
+                kills: tournamentPlayerStats.kills,
+                deaths: tournamentPlayerStats.deaths,
+                assists: tournamentPlayerStats.assists,
+                acs: tournamentPlayerStats.acs,
+                isWin: tournamentPlayerStats.isWin
+            }).from(tournamentPlayerStats).innerJoin(players, eq(tournamentPlayerStats.playerId, players.id)).where(inArray(players.userId, uniqueUserIds)) : Promise.resolve([]),
+        ]);
+
+        const consolidatedStats = [...allSStats, ...allTStats];
+        const statsMap = new Map<number, any[]>();
+        consolidatedStats.forEach(s => {
+            if (!s.userId) return;
+            if (!statsMap.has(s.userId)) statsMap.set(s.userId, []);
+            statsMap.get(s.userId)!.push(s);
+        });
+        const userMap = new Map<number, any>((allUsers as any[]).map(u => [u.id, u]));
+
+        const enrichedPlayers = teamPlayers.map(p => {
+            let enriched = { ...p };
+            if (p.userId && userMap.has(p.userId)) {
+                const u = userMap.get(p.userId);
+                enriched.name = u.ign || u.username;
+                enriched.image = u.avatar || p.image;
+            }
+
+            const myStats = p.userId ? (statsMap.get(p.userId) || []) : [];
+            let kda = "0.00", acs = "0", winRate = "0.0%";
+            if (myStats.length > 0) {
+                const totalAcs = myStats.reduce((acc, s) => acc + (s.acs || 0), 0);
+                const sumKda = myStats.reduce((acc, s) => acc + ((s.kills + s.assists) / (s.deaths || 1)), 0);
+                const wins = myStats.filter(s => s.isWin === 1).length;
+                kda = (sumKda / myStats.length).toFixed(2);
+                acs = Math.round(totalAcs / myStats.length).toString();
+                winRate = `${((wins / myStats.length) * 100).toFixed(1)}%`;
+            }
+            return { ...enriched, kda, acs, winRate };
+        });
+
+        res.json({ success: true, data: { ...team, players: enrichedPlayers } });
     } catch (error) {
         console.error("Error in GET /api/teams/:id:", error);
         res.status(500).json({ success: false, error: "Database error" });
@@ -1830,13 +1994,56 @@ app.get('/api/teams/:id', async (req, res) => {
 });
 
 app.get('/api/players', async (req, res) => {
-    const { userId } = req.query;
+    const { userId, decommissioned } = req.query;
     try {
-        let data;
+        let playersData;
         const uId = userId && userId !== 'undefined' ? Number(userId) : NaN;
 
-        if (!isNaN(uId)) {
-            data = await db.select({
+        if (decommissioned === 'true') {
+            // CENTRALIZED ROBUST FILTERING: Find users who are TRULY inactive platform-wide
+
+            // 1. Identify all User IDs active in players (assigned to a team)
+            const activePlayerQuery = await db.select({ userId: players.userId }).from(players).where(isNotNull(players.teamId));
+            const activePlayerIds = new Set(activePlayerQuery.map(r => r.userId).filter((id): id is number => id !== null));
+
+            // 2. Identify all User IDs who are Managers
+            const managerQuery = await db.select({ managerId: teams.managerId }).from(teams).where(isNotNull(teams.managerId));
+            const managerIds = new Set(managerQuery.map(r => r.managerId).filter((id): id is number => id !== null));
+
+            const activeUserIds = new Set([...activePlayerIds, ...managerIds]);
+
+            // 3. Select unique decommissioned records (teamId is null) for users NOT in activeUserIds
+            // We use a broader query and filter/deduplicate to ensure all historical data is handled
+            const allInactiveRecords = await db.select({
+                id: players.id,
+                teamId: players.teamId,
+                userId: players.userId,
+                name: players.name,
+                role: players.role,
+                kda: players.kda,
+                winRate: players.winRate,
+                acs: players.acs,
+                image: players.image,
+                level: players.level,
+                xp: players.xp,
+                isActive: players.isActive,
+                teamGame: teams.game
+            })
+                .from(players)
+                .leftJoin(teams, eq(players.teamId, teams.id))
+                .where(isNull(players.teamId));
+
+            // Deduplicate by userId and ensure they aren't active elsewhere
+            const deduplicated = new Map<number, any>();
+            allInactiveRecords.forEach(p => {
+                if (p.userId && !activeUserIds.has(p.userId) && !deduplicated.has(p.userId)) {
+                    deduplicated.set(p.userId, p);
+                }
+            });
+
+            playersData = Array.from(deduplicated.values());
+        } else if (!isNaN(uId)) {
+            playersData = await db.select({
                 id: players.id,
                 teamId: players.teamId,
                 userId: players.userId,
@@ -1855,7 +2062,7 @@ app.get('/api/players', async (req, res) => {
                 .leftJoin(teams, eq(players.teamId, teams.id))
                 .where(eq(players.userId, uId));
         } else {
-            data = await db.select({
+            playersData = await db.select({
                 id: players.id,
                 teamId: players.teamId,
                 userId: players.userId,
@@ -1873,7 +2080,88 @@ app.get('/api/players', async (req, res) => {
                 .from(players)
                 .leftJoin(teams, eq(players.teamId, teams.id));
         }
-        res.json({ success: true, data });
+
+        const playersResult = playersData;
+        if (playersResult.length === 0) return res.json({ success: true, data: [] });
+
+        const uniqueUserIds = Array.from(new Set(playersResult.map(p => p.userId).filter((id): id is number => id !== null))) as number[];
+
+        const [allUsers, allSStats, allTStats] = await Promise.all([
+            uniqueUserIds.length > 0
+                ? db.select().from(users).where(inArray(users.id, uniqueUserIds))
+                : Promise.resolve([] as any[]),
+            uniqueUserIds.length > 0
+                ? db.select({
+                    userId: players.userId,
+                    kills: scrimPlayerStats.kills,
+                    deaths: scrimPlayerStats.deaths,
+                    assists: scrimPlayerStats.assists,
+                    acs: scrimPlayerStats.acs,
+                    isWin: scrimPlayerStats.isWin
+                })
+                    .from(scrimPlayerStats)
+                    .innerJoin(players, eq(scrimPlayerStats.playerId, players.id))
+                    .where(inArray(players.userId, uniqueUserIds))
+                : Promise.resolve([] as any[]),
+            uniqueUserIds.length > 0
+                ? db.select({
+                    userId: players.userId,
+                    kills: tournamentPlayerStats.kills,
+                    deaths: tournamentPlayerStats.deaths,
+                    assists: tournamentPlayerStats.assists,
+                    acs: tournamentPlayerStats.acs,
+                    isWin: tournamentPlayerStats.isWin
+                })
+                    .from(tournamentPlayerStats)
+                    .innerJoin(players, eq(tournamentPlayerStats.playerId, players.id))
+                    .where(inArray(players.userId, uniqueUserIds))
+                : Promise.resolve([] as any[]),
+        ]);
+
+        const consolidatedStats = [...allSStats, ...allTStats];
+        const playerStatsMap = new Map<number, any[]>();
+        consolidatedStats.forEach(s => {
+            if (!s.userId) return;
+            if (!playerStatsMap.has(s.userId)) playerStatsMap.set(s.userId, []);
+            playerStatsMap.get(s.userId)!.push(s);
+        });
+
+        const userMap = new Map<number, any>((allUsers as any[]).map((u: any) => [u.id, u]));
+
+        const enrichedPlayers = playersResult.map(p => {
+            let enriched = { ...p };
+            if (p.userId && userMap.has(p.userId)) {
+                const u = userMap.get(p.userId);
+                enriched.name = u.ign || u.username;
+                enriched.image = u.avatar || p.image;
+            }
+
+            let kdaValue = 0;
+            let avgAcs = 0;
+            let winRateVal = 0;
+
+            const myStats = p.userId ? (playerStatsMap.get(p.userId) || []) : [];
+            if (myStats.length > 0) {
+                const totalAcs = myStats.reduce((acc, s) => acc + (s.acs || 0), 0);
+                const sumKda = myStats.reduce((acc, s) => {
+                    const matchKda = (s.kills + s.assists) / (s.deaths || 1);
+                    return acc + matchKda;
+                }, 0);
+                kdaValue = sumKda / myStats.length;
+                avgAcs = Math.round(totalAcs / myStats.length);
+                const wins = myStats.filter(s => s.isWin === 1).length;
+                winRateVal = (wins / myStats.length) * 100;
+            }
+
+            return {
+                ...enriched,
+                kda: kdaValue.toFixed(2),
+                acs: avgAcs.toString(),
+                winRate: `${winRateVal.toFixed(1)}%`
+            };
+        });
+
+        res.json({ success: true, data: enrichedPlayers });
     } catch (error: any) {
         console.error("Error in GET /api/players:", error);
         res.status(500).json({ success: false, error: 'Failed to fetch players', details: IS_PROD ? undefined : error.message });
@@ -1883,6 +2171,17 @@ app.get('/api/players', async (req, res) => {
 app.get('/api/players/:id/stats/breakdown', async (req, res) => {
     const playerId = Number(req.params.id);
     try {
+        // 0. Get userId for this playerId to aggregate all their history
+        const playerRecord = await db.select({ userId: players.userId }).from(players).where(eq(players.id, playerId)).limit(1);
+        const uId = playerRecord[0]?.userId;
+
+        // If we have a userId, find all playerIds for this user
+        let allPlayerIds = [playerId];
+        if (uId) {
+            const allRecords = await db.select({ id: players.id }).from(players).where(eq(players.userId, uId));
+            allPlayerIds = allRecords.map(r => r.id);
+        }
+
         // 1. Fetch Scrim Stats
         const scrimStats = await db.select({
             id: scrimPlayerStats.id,
@@ -1901,7 +2200,7 @@ app.get('/api/players/:id/stats/breakdown', async (req, res) => {
         })
             .from(scrimPlayerStats)
             .innerJoin(scrims, eq(scrimPlayerStats.scrimId, scrims.id))
-            .where(eq(scrimPlayerStats.playerId, playerId));
+            .where(inArray(scrimPlayerStats.playerId, allPlayerIds));
 
         // 2. Fetch Tournament Stats
         const tourneyStats = await db.select({
@@ -1921,7 +2220,7 @@ app.get('/api/players/:id/stats/breakdown', async (req, res) => {
         })
             .from(tournamentPlayerStats)
             .innerJoin(tournaments, eq(tournamentPlayerStats.tournamentId, tournaments.id))
-            .where(eq(tournamentPlayerStats.playerId, playerId));
+            .where(inArray(tournamentPlayerStats.playerId, allPlayerIds));
 
         const allStats = [...scrimStats, ...tourneyStats];
 
