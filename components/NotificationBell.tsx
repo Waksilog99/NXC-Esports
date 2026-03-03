@@ -19,6 +19,7 @@ const NotificationBell: React.FC = () => {
     const [showDropdown, setShowDropdown] = useState(false);
     const [loading, setLoading] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const lastNotifiedIdRef = useRef<number>(0);
     // Note: API_BASE_URL is resolved inside each fetch call (not at mount) so Capacitor
     // env changes and late-initialization are always picked up correctly.
 
@@ -31,7 +32,38 @@ const NotificationBell: React.FC = () => {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const result = await resp.json();
             if (result.success) {
-                setNotifications(result.data);
+                const fetchedNotifs: Notification[] = result.data;
+
+                // Browser Notification Logic
+                if ("Notification" in window && Notification.permission === "granted" && fetchedNotifs.length > 0) {
+                    const unread = fetchedNotifs.filter(n => !n.isRead);
+                    if (unread.length > 0) {
+                        const maxId = Math.max(...unread.map(n => n.id));
+                        // If we have a new max ID and it's not the first load (lastNotifiedIdRef.current > 0 or similar check)
+                        // Or just trigger for anything > lastNotifiedIdRef.current
+
+                        const newUnread = unread.filter(n => n.id > lastNotifiedIdRef.current);
+
+                        newUnread.forEach(n => {
+                            new Notification(n.title, {
+                                body: n.message,
+                                icon: '/favicon.ico', // Adjust icon path if needed
+                            });
+                        });
+
+                        if (newUnread.length > 0) {
+                            lastNotifiedIdRef.current = maxId;
+                        }
+                    }
+                } else if (fetchedNotifs.length > 0) {
+                    // Initialize lastNotifiedIdRef on first load even if permission not granted yet
+                    const unread = fetchedNotifs.filter(n => !n.isRead);
+                    if (unread.length > 0) {
+                        lastNotifiedIdRef.current = Math.max(...unread.map(n => n.id));
+                    }
+                }
+
+                setNotifications(fetchedNotifs);
             }
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
@@ -40,6 +72,17 @@ const NotificationBell: React.FC = () => {
         }
     }, [user?.id]);
 
+
+    // Request Notification Permission
+    useEffect(() => {
+        if (user?.id && "Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    console.log('[Notifications] Browser permission granted.');
+                }
+            });
+        }
+    }, [user?.id]);
 
     // Initial fetch
     useEffect(() => {

@@ -323,7 +323,7 @@ const ManagerDashboard: React.FC<{
                         { id: 'performance-tracker', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', title: 'Tactical Analytics', desc: 'Track Win Rates, K/D, and Maps.', color: 'cyan' },
                         { id: 'scrim-ops', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', title: 'Scrim Network', desc: 'Schedule matches and analyze results.', color: 'emerald' },
                         { id: 'decommissioned', icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', title: 'Decommissioned Registry', desc: 'Access historical records of inactive personnel.', color: 'slate' }
-                    ].filter(item => !item.restricted || (userRole !== 'coach' && userRole !== 'manager')).map((item) => (
+                    ].filter(item => !item.restricted || userRole?.toLowerCase() !== 'coach').map((item) => (
                         <div
                             key={item.id}
                             onClick={() => {
