@@ -1788,72 +1788,30 @@ app.get('/api/teams', async (req, res) => {
 
         const teamIds = teamData.map(t => t.id);
 
-        // Fetch players + scrims + tournaments all in parallel (was sequential before)
-        const [allPlayers, allScrims, allTournaments] = await Promise.all([
-            db.select({
-                id: players.id,
-                teamId: players.teamId,
-                userId: players.userId,
-                name: players.name,
-                role: players.role,
-                kda: players.kda,
-                winRate: players.winRate,
-                acs: players.acs,
-                image: players.image,
-                level: players.level,
-                xp: players.xp,
-                isActive: players.isActive
-            }).from(players).where(inArray(players.teamId, teamIds)),
-            db.select().from(scrims).where(inArray(scrims.teamId, teamIds)),
-            db.select().from(tournaments).where(inArray(tournaments.teamId, teamIds)),
-        ]);
+        // Optimized FETCH: Only get players and teams initially
+        const allPlayers = await db.select({
+            id: players.id,
+            teamId: players.teamId,
+            userId: players.userId,
+            name: players.name,
+            role: players.role,
+            kda: players.kda,
+            winRate: players.winRate,
+            acs: players.acs,
+            image: players.image,
+            level: players.level,
+            xp: players.xp,
+            isActive: players.isActive
+        }).from(players).where(inArray(players.teamId, teamIds));
 
-        // Fetch users + player stats in parallel
+        // Fetch users in parallel
         const playerUserIds = allPlayers.map(p => p.userId).filter((id): id is number => id !== null);
         const managerUserIds = teamData.map(t => t.managerId).filter((id): id is number => id !== null);
         const uniqueUserIds = Array.from(new Set([...playerUserIds, ...managerUserIds]));
 
-        const completedScrimIds = allScrims.filter(s => s.status === 'completed').map(s => s.id);
-        const completedTourneyIds = allTournaments.filter(t => t.status === 'completed').map(t => t.id);
-
-        const [allUsers, allSStats, allTStats] = await Promise.all([
-            uniqueUserIds.length > 0
-                ? db.select().from(users).where(inArray(users.id, uniqueUserIds))
-                : Promise.resolve([] as any[]),
-            uniqueUserIds.length > 0
-                ? db.select({
-                    playerId: scrimPlayerStats.playerId,
-                    scrimId: scrimPlayerStats.scrimId,
-                    kills: scrimPlayerStats.kills,
-                    deaths: scrimPlayerStats.deaths,
-                    assists: scrimPlayerStats.assists,
-                    acs: scrimPlayerStats.acs,
-                    isWin: scrimPlayerStats.isWin,
-                    userId: players.userId
-                })
-                    .from(scrimPlayerStats)
-                    .innerJoin(players, eq(scrimPlayerStats.playerId, players.id))
-                    .where(inArray(players.userId, uniqueUserIds))
-                : Promise.resolve([] as any[]),
-            uniqueUserIds.length > 0
-                ? db.select({
-                    playerId: tournamentPlayerStats.playerId,
-                    tournamentId: tournamentPlayerStats.tournamentId,
-                    kills: tournamentPlayerStats.kills,
-                    deaths: tournamentPlayerStats.deaths,
-                    assists: tournamentPlayerStats.assists,
-                    acs: tournamentPlayerStats.acs,
-                    isWin: tournamentPlayerStats.isWin,
-                    userId: players.userId
-                })
-                    .from(tournamentPlayerStats)
-                    .innerJoin(players, eq(tournamentPlayerStats.playerId, players.id))
-                    .where(inArray(players.userId, uniqueUserIds))
-                : Promise.resolve([] as any[]),
-        ]);
-
-
-        const consolidatedStats = [...allSStats, ...allTStats];
+        const allUsers = uniqueUserIds.length > 0
+            ? await db.select().from(users).where(inArray(users.id, uniqueUserIds))
+            : [];
 
         // Create mappings for O(1) lookups
         const userMap = new Map<number, any>((allUsers as any[]).map((u: any) => [u.id, u]));
@@ -1863,13 +1821,6 @@ app.get('/api/teams', async (req, res) => {
         allPlayers.forEach(p => {
             const teamArr = teamPlayersMap.get(p.teamId!);
             if (teamArr) teamArr.push(p);
-        });
-
-        const playerStatsMap = new Map<number, any[]>();
-        consolidatedStats.forEach(s => {
-            if (!s.userId) return;
-            if (!playerStatsMap.has(s.userId)) playerStatsMap.set(s.userId, []);
-            playerStatsMap.get(s.userId)!.push(s);
         });
 
         // Assemble the final payload synchronously
@@ -1884,28 +1835,12 @@ app.get('/api/teams', async (req, res) => {
                     enriched.image = u.avatar || p.image;
                 }
 
-                let kdaValue = 0;
-                let avgAcs = 0;
-                let winRateVal = 0;
-
-                const myStats = p.userId ? (playerStatsMap.get(p.userId) || []) : [];
-                if (myStats.length > 0) {
-                    const totalAcs = myStats.reduce((acc, s) => acc + (s.acs || 0), 0);
-                    const sumKda = myStats.reduce((acc, s) => {
-                        const matchKda = (s.kills + s.assists) / (s.deaths || 1);
-                        return acc + matchKda;
-                    }, 0);
-                    kdaValue = sumKda / myStats.length;
-                    avgAcs = Math.round(totalAcs / myStats.length);
-                    const wins = myStats.filter(s => s.isWin === 1).length;
-                    winRateVal = (wins / myStats.length) * 100;
-                }
-
+                // USE PRE-CALCULATED STATS FROM DB (Optimized)
                 return {
                     ...enriched,
-                    kda: kdaValue.toFixed(2),
-                    acs: avgAcs.toString(),
-                    winRate: `${winRateVal.toFixed(1)}%`
+                    kda: p.kda || '0.00',
+                    acs: p.acs || '0',
+                    winRate: p.winRate || '0.0%'
                 };
             });
 
@@ -3774,10 +3709,10 @@ app.get('/api/scrims', async (req, res) => {
                     return res.json({ success: true, data: [] }); // No access
                 }
             }
-            q.where(eq(scrims.teamId, Number(teamId)));
+            q = q.where(eq(scrims.teamId, Number(teamId)));
         } else if (!isAdmin && requesterId) {
             // Global view for non-admins: filter scrims for teams they are part of
-            q.where(
+            q = q.where(
                 sql`EXISTS (
                     SELECT 1 FROM ${teams} 
                     WHERE ${teams.id} = ${scrims.teamId} 
@@ -4003,10 +3938,10 @@ app.get('/api/tournaments', async (req, res) => {
                     return res.json({ success: true, data: [] }); // No access
                 }
             }
-            q.where(eq(tournaments.teamId, Number(teamId)));
+            q = q.where(eq(tournaments.teamId, Number(teamId)));
         } else if (!isAdmin && requesterId) {
             // Global view for non-admins: filter tournaments for teams they are part of
-            q.where(
+            q = q.where(
                 sql`EXISTS (
                     SELECT 1 FROM ${teams} 
                     WHERE ${teams.id} = ${tournaments.teamId} 
