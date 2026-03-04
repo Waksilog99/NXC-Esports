@@ -871,6 +871,15 @@ app.post('/api/events', async (req, res) => {
         }).returning();
         const newEvent = newEventRows[0];
         notifyRefresh();
+
+        // Immediate Discord Announcement
+        try {
+            const { sendAIEventNotification } = await import('./scheduler.js');
+            await sendAIEventNotification(newEvent, 'NEW');
+        } catch (err) {
+            console.error('[DISCORD ERROR] Failed to send immediate event notification:', err);
+        }
+
         res.json({ success: true, data: newEvent });
     } catch (e: any) {
         console.error("Error creating event:", e);
@@ -3828,35 +3837,13 @@ app.post('/api/scrims', async (req, res) => {
         const scrimMsg = `A scrim against ${opponent} (${format}) has been scheduled for ${new Date(date).toLocaleString()}. Maps: ${Array.isArray(maps) ? maps.join(', ') : 'TBD'}.`;
         sendWebsiteNotification(Number(teamId), scrimTitle, scrimMsg, 'scrim');
 
-        // Discord Notification (fire-and-forget, does not block response)
-        (async () => {
-            try {
-                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
-                const team = teamRows[0];
-                const teamName = team?.name || 'Unknown Squad';
-                const formattedMaps = Array.isArray(maps)
-                    ? maps.map((m, i) => `> **Theater ${i + 1}:** ${m}`).join('\n')
-                    : '> **Theater:** TBD';
-
-                const localDate = new Date(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-                const localTime = new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-                const discordMsg = `🚨 **NEW TACTICAL SCRIM SCHEDULED** 🚨\n\n` +
-                    `**Squad Mention:** @${teamName}\n` +
-                    `**Opponent:** ${opponent}\n` +
-                    `**Engagement Protocol:** ${format}\n` +
-                    `**Operational Date:** ${localDate}\n` +
-                    `**Deployment Time:** ${localTime}\n\n` +
-                    `**Active Theaters:**\n${formattedMaps}\n\n` +
-                    `*Stand by for engagement updates. All personnel report to stations.*`;
-
-                const { sendToDiscord } = await import('./discord');
-                const targetChannelId = process.env.DISCORD_SCRIM_CHANNEL_ID;
-                await sendToDiscord(discordMsg, null, targetChannelId);
-            } catch (discordErr) {
-                console.error('[DISCORD ERROR] Failed to send scrim notification:', discordErr);
-            }
-        })();
+        // Discord Notification (Immediate Announcement)
+        try {
+            const { sendScrimReminder } = await import('./scheduler.js');
+            await sendScrimReminder(newScrim, 'NEW');
+        } catch (discordErr) {
+            console.error('[SCRIM DISCORD ERROR] Failed to send announcement:', discordErr);
+        }
     } catch (error: any) {
         console.error("Error in POST /api/scrims:", error);
         res.status(500).json({ success: false, error: 'Failed to create scrim', details: IS_PROD ? undefined : error.message });
@@ -4186,35 +4173,13 @@ app.post('/api/tournaments', async (req, res) => {
         const tourneyMsg = `The team has been entered into ${name} (${format}) scheduled for ${new Date(date).toLocaleString()}. Opponent: ${opponent || 'TBD'}.`;
         sendWebsiteNotification(Number(teamId), tourneyTitle, tourneyMsg, 'tournament');
 
-        // Discord Notification (fire-and-forget, does not block response)
-        (async () => {
-            try {
-                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
-                const team = teamRows[0];
-                const teamName = team?.name || 'Unknown Squad';
-                const formattedMaps = Array.isArray(maps)
-                    ? maps.map((m, i) => `> **Theater ${i + 1}:** ${m}`).join('\n')
-                    : '> **Theater:** TBD';
-
-                const localDate = new Date(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-                const localTime = new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-                const discordMsg = `🏆 **NEW TOURNAMENT OPERATION LOGGED** 🏆\n\n` +
-                    `**Unit Mention:** @${teamName}\n` +
-                    `**Tournament:** ${name}\n` +
-                    `**Engagement Protocol:** ${format}\n` +
-                    `**Operational Date:** ${localDate}\n` +
-                    `**Deployment Time:** ${localTime}\n\n` +
-                    `**Active Theaters:**\n${formattedMaps}\n\n` +
-                    `*Stand by for tournament status updates. Good luck operatives.*`;
-
-                const { sendToDiscord } = await import('./discord');
-                const targetChannelId = process.env.DISCORD_TOURNAMENT_CHANNEL_ID;
-                await sendToDiscord(discordMsg, null, targetChannelId);
-            } catch (discordErr) {
-                console.error('[DISCORD ERROR] Failed to send tournament notification:', discordErr);
-            }
-        })();
+        // Discord Notification (Immediate Announcement)
+        try {
+            const { sendTournamentReminder } = await import('./scheduler.js');
+            await sendTournamentReminder(newTournament, 'NEW');
+        } catch (discordErr) {
+            console.error('[TOURNEY DISCORD ERROR] Failed to send announcement:', discordErr);
+        }
     } catch (error: any) {
         console.error("Error in POST /api/tournaments:", error);
         res.status(500).json({ success: false, error: 'Failed to create tournament entry', details: IS_PROD ? undefined : error.message });

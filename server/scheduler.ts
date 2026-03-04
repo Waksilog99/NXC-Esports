@@ -176,40 +176,48 @@ export const initScheduler = (onWeeklyReportTrigger?: () => Promise<any>) => {
     console.log('[SCHEDULER] Event, Scrim, and Weekly Report schedulers active.');
 };
 
-async function sendScrimReminder(scrim: any, timeText: string) {
+export async function sendScrimReminder(scrim: any, timeText: string) {
     try {
         const families = await db.select().from(teams).where(eq(teams.id, Number(scrim.teamId)));
         const team = families[0];
         const teamName = team?.name || 'Unknown Squad';
 
-        const discordMsg = `🚨 **SCRIM DEPLOYMENT IMMINENT** 🚨\n\n` +
+        const isNew = timeText.toLowerCase().includes('new');
+        const header = isNew ? '📢 **NEW SCRIM SCHEDULED** 📢' : '🚨 **SCRIM DEPLOYMENT IMMINENT** 🚨';
+        const countdownLine = isNew ? `**Date/Time:** ${new Date(scrim.date).toLocaleString()}\n` : `**Countdown:** Starting in **${timeText}**\n`;
+
+        const discordMsg = `${header}\n\n` +
             `**Squad Mention:** @${teamName}\n` +
-            `**Countdown:** Starting in **${timeText}**\n` +
+            countdownLine +
             `**Opponent:** ${scrim.opponent}\n` +
             `**Protocol:** ${scrim.format}\n\n` +
-            `*All personnel report to stations immediately. Prepare for theater engagement.*`;
+            (isNew ? `*Personnel: Sync your logs. Prepare for engagement.*` : `*All personnel report to stations immediately. Prepare for theater engagement.*`);
 
-        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_SCRIM_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}`);
+        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_SCRIM_CHANNEL_ID} (${isNew ? 'NEW' : 'REMINDER'})\n${discordMsg}\n${'='.repeat(50)}`);
         await sendToDiscord(discordMsg, null, process.env.DISCORD_SCRIM_CHANNEL_ID);
     } catch (err) {
         console.error('[SCHEDULER ERROR] Failed to send scrim reminder:', err);
     }
 }
 
-async function sendTournamentReminder(tourney: any, timeText: string) {
+export async function sendTournamentReminder(tourney: any, timeText: string) {
     try {
         const families = await db.select().from(teams).where(eq(teams.id, Number(tourney.teamId)));
         const team = families[0];
         const teamName = team?.name || 'Unknown Squad';
 
-        const discordMsg = `🏆 **TOURNAMENT OPERATION IMMINENT** 🏆\n\n` +
+        const isNew = timeText.toLowerCase().includes('new');
+        const header = isNew ? '🏆 **NEW TOURNAMENT OPERATION LOGGED** 🏆' : '🏆 **TOURNAMENT OPERATION IMMINENT** 🏆';
+        const countdownLine = isNew ? `**Date/Time:** ${new Date(tourney.date).toLocaleString()}\n` : `**Countdown:** Starting in **${timeText}**\n`;
+
+        const discordMsg = `${header}\n\n` +
             `**Unit Mention:** @${teamName}\n` +
-            `**Countdown:** Starting in **${timeText}**\n` +
+            countdownLine +
             `**Tournament:** ${tourney.name}\n` +
             `**Protocol:** ${tourney.format}\n\n` +
-            `*All operatives report for final briefing. Glory to the Corporation.*`;
+            (isNew ? `*Operatives: Gear up for the upcoming championship. Glory to the Corporation.*` : `*All operatives report for final briefing. Glory to the Corporation.*`);
 
-        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_TOURNAMENT_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}`);
+        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_TOURNAMENT_CHANNEL_ID} (${isNew ? 'NEW' : 'REMINDER'})\n${discordMsg}\n${'='.repeat(50)}`);
         await sendToDiscord(discordMsg, null, process.env.DISCORD_TOURNAMENT_CHANNEL_ID);
     } catch (err) {
         console.error('[SCHEDULER ERROR] Failed to send tournament reminder:', err);
@@ -227,32 +235,33 @@ export async function sendAIEventNotification(event: any, timeLabel: string) {
     }
 
     let timeText = timeLabel;
+    const isNew = timeLabel.toLowerCase().includes('new');
     if (timeLabel === '3d') timeText = '3 Days';
-    if (timeLabel === '1d') timeText = '1 Day';
-    if (timeLabel === '1h') timeText = '1 Hour';
-    // "5 Hours" or "30 Minutes" comes through as-is
+    else if (timeLabel === '1d') timeText = '1 Day';
+    else if (timeLabel === '1h') timeText = '1 Hour';
+    else if (isNew) timeText = 'IMMIMNENT (Just Announced)';
 
     const prompt = `
-        You are the hype announcer for WC Esports (Waks Corporation).
-        Write a short, high-energy Discord notification for an upcoming event.
-        
-        Event Details:
-        - Title: ${event.title}
-        - Description: ${event.description || 'N/A'}
-        - Location: ${event.location || 'N/A'}
-        - Time Remaining: ${timeText} EXACTLY.
-        
-        Instructions:
-        - Format the message as a structured Discord announcement using Markdown.
-        - **Headline**: Use a bold, emoji-prefixed headline (e.g., 🎮 **TITLE**).
-        - **Description**: A clear, engaging paragraph.
-        - **Details/Requirements**: Use bullet points (• or -) if the event description implies a list (e.g., rules, requirements, lineup).
-        - **Key Info**: distinct sections for Location/Time if relevant.
-        - **Action**: A clear "Interested?" or "Join now" call to action.
-        - **Footer**: Ends with relevant hashtags and @everyone.
-        - Do NOT limit length to 2 sentences. Make it look professional and complete (like a recruitment or tournament post).
-        - Output ONLY the message content.
-    `;
+            You are the hype announcer for WC Esports (Waks Corporation).
+            Write a short, high-energy Discord notification for an ${isNew ? 'NEWLY ANNOUNCED' : 'UPCOMING'} event.
+            
+            Event Details:
+            - Title: ${event.title}
+            - Description: ${event.description || 'N/A'}
+            - Location: ${event.location || 'N/A'}
+            - Time Status: ${timeText} EXACTLY.
+            
+            Instructions:
+            - Format the message as a structured Discord announcement using Markdown.
+            - **Headline**: Use a bold, emoji-prefixed headline (e.g., 🎮 **NEW EVENT: TITLE** or 🚨 **READY UP: TITLE**).
+            - **Description**: A clear, engaging paragraph.
+            - **Details/Requirements**: Use bullet points (• or -) if the event description implies a list (e.g., rules, requirements, lineup).
+            - **Key Info**: distinct sections for Location/Time if relevant.
+            - **Action**: A clear "Interested?" or "Join now" call to action.
+            - **Footer**: Ends with relevant hashtags and @everyone.
+            - Do NOT limit length to 2 sentences. Make it look professional and complete.
+            - Output ONLY the message content.
+        `;
 
     try {
         const { GoogleGenAI } = await import('@google/genai');
