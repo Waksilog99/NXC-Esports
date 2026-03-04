@@ -147,6 +147,7 @@ const PerformanceTracker: React.FC<{ teamId: number }> = ({ teamId }) => {
                                 <tr>
                                     <th className="p-3">Player</th>
                                     <th className="p-3 text-right">K/D</th>
+                                    <th className="p-3 text-right">+/-</th>
                                     <th className="p-3 text-right">ACS</th>
                                     <th className="p-3 text-right">Games</th>
                                 </tr>
@@ -156,6 +157,17 @@ const PerformanceTracker: React.FC<{ teamId: number }> = ({ teamId }) => {
                                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
                                         <td className="p-3 font-bold text-slate-700 dark:text-slate-300">{p.name}</td>
                                         <td className="p-3 text-right font-mono font-bold text-amber-500">{p.kd}</td>
+                                        <td className="p-3 text-right font-mono font-bold">
+                                            {(() => {
+                                                const ak = (p as any).avgKills;
+                                                const ad = (p as any).avgDeaths;
+                                                if (ak !== undefined && ad !== undefined) {
+                                                    const d = (ak - ad).toFixed(1);
+                                                    return <span className={parseFloat(d) > 0 ? 'text-emerald-500' : parseFloat(d) < 0 ? 'text-red-500' : 'text-slate-500'}>{parseFloat(d) > 0 ? `+${d}` : d}</span>;
+                                                }
+                                                return '--';
+                                            })()}
+                                        </td>
                                         <td className="p-3 text-right font-mono">{p.avgAcs}</td>
                                         <td className="p-3 text-right font-mono text-slate-500">{p.games}</td>
                                     </tr>

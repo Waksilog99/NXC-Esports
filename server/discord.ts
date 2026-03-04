@@ -6,12 +6,42 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds]
 });
 
-let isReady = false;
 
-client.once('ready', () => {
+client.on('ready', () => {
     console.log(`[DISCORD] Logged in as ${client.user?.tag}`);
-    isReady = true;
 });
+
+client.on('error', (err) => {
+    console.error('[DISCORD CLIENT ERROR]', err);
+});
+
+// Helper to wait for bot to be ready
+const ensureDiscordReady = async (timeoutMs = 15000): Promise<boolean> => {
+    if (client.isReady()) return true;
+
+    const token = process.env.DISCORD_BOT_TOKEN;
+    if (!token) return false;
+
+    // Trigger login if not already started
+    // In serverless, if client exists but is not ready, we attempt login
+    try {
+        if (!client.isReady()) {
+            initDiscord();
+        }
+    } catch (e) {
+        console.error('[DISCORD] Error during on-demand init:', e);
+    }
+
+    const start = Date.now();
+    while (!client.isReady() && Date.now() - start < timeoutMs) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    if (!client.isReady()) {
+        console.error('[DISCORD] Timeout waiting for bot to be ready.');
+    }
+    return client.isReady();
+};
 
 // Initialize the bot
 export const initDiscord = () => {
@@ -27,8 +57,9 @@ export const initDiscord = () => {
 
 // Send message to configured channel
 export const sendToDiscord = async (message: string, imagePath?: string | null, targetChannelId?: string) => {
-    if (!isReady) {
-        console.warn('[DISCORD] Bot not ready yet.');
+    const ready = await ensureDiscordReady();
+    if (!ready) {
+        console.warn('[DISCORD] Cannot send message: bot not ready after wait/init.');
         return;
     }
 

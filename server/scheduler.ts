@@ -3,7 +3,6 @@ import { db } from './db.js';
 import { events, eventNotifications, scrims, teams, scrimNotifications, tournaments, tournamentNotifications } from './schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { sendToDiscord } from './discord.js';
-import fs from 'fs';
 
 // NOTIFICATION_INTERVALS removed - we use custom logic in check loop
 
@@ -190,7 +189,7 @@ async function sendScrimReminder(scrim: any, timeText: string) {
             `**Protocol:** ${scrim.format}\n\n` +
             `*All personnel report to stations immediately. Prepare for theater engagement.*`;
 
-        fs.appendFile('discord_audit.log', `[${new Date().toISOString()}] TO: ${process.env.DISCORD_SCRIM_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}\n`, err => { if (err) console.error('[AUDIT LOG] Write failed:', err); });
+        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_SCRIM_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}`);
         await sendToDiscord(discordMsg, null, process.env.DISCORD_SCRIM_CHANNEL_ID);
     } catch (err) {
         console.error('[SCHEDULER ERROR] Failed to send scrim reminder:', err);
@@ -210,7 +209,7 @@ async function sendTournamentReminder(tourney: any, timeText: string) {
             `**Protocol:** ${tourney.format}\n\n` +
             `*All operatives report for final briefing. Glory to the Corporation.*`;
 
-        fs.appendFile('discord_audit.log', `[${new Date().toISOString()}] TO: ${process.env.DISCORD_TOURNAMENT_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}\n`, err => { if (err) console.error('[AUDIT LOG] Write failed:', err); });
+        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_TOURNAMENT_CHANNEL_ID} (REMINDER)\n${discordMsg}\n${'='.repeat(50)}`);
         await sendToDiscord(discordMsg, null, process.env.DISCORD_TOURNAMENT_CHANNEL_ID);
     } catch (err) {
         console.error('[SCHEDULER ERROR] Failed to send tournament reminder:', err);
@@ -222,7 +221,7 @@ export async function sendAIEventNotification(event: any, timeLabel: string) {
     if (!process.env.GEMINI_API_KEY) {
         console.warn('[SCHEDULER] Missing GEMINI_API_KEY — sending plain fallback notification.');
         const fallbackMsg = `🚨 **UPCOMING EVENT** 🚨\n**${event.title}** is starting in ${timeLabel}!\n${event.description || ''}\n@everyone`;
-        fs.appendFile('discord_audit.log', `[${new Date().toISOString()}] TO: ${process.env.DISCORD_EVENT_CHANNEL_ID} (FALLBACK-NO-KEY)\n${fallbackMsg}\n${'='.repeat(50)}\n`, err => { if (err) console.error('[AUDIT LOG] Write failed:', err); });
+        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_EVENT_CHANNEL_ID} (FALLBACK-NO-KEY)\n${fallbackMsg}\n${'='.repeat(50)}`);
         await sendToDiscord(fallbackMsg, event.image, process.env.DISCORD_EVENT_CHANNEL_ID);
         return;
     }
@@ -269,7 +268,7 @@ export async function sendAIEventNotification(event: any, timeLabel: string) {
         console.log(`[SCHEDULER] Generated message (${message?.length} chars):\n${message}`);
 
         if (message) {
-            fs.appendFile('discord_audit.log', `[${new Date().toISOString()}] TO: ${process.env.DISCORD_EVENT_CHANNEL_ID}\n${message}\n${'='.repeat(50)}\n`, err => { if (err) console.error('[AUDIT LOG] Write failed:', err); });
+            console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_EVENT_CHANNEL_ID}\n${message}\n${'='.repeat(50)}`);
             await sendToDiscord(message, event.image, process.env.DISCORD_EVENT_CHANNEL_ID);
         } else {
             console.error('[SCHEDULER] Error: Generated message is empty. Sending fallback.');
@@ -278,7 +277,7 @@ export async function sendAIEventNotification(event: any, timeLabel: string) {
     } catch (error: any) {
         console.error(`[SCHEDULER ERROR] AI generation failed: ${error.message}. Sending plain fallback.`);
         const fallbackMsg = `🚨 **UPCOMING EVENT** 🚨\n**${event.title}** is starting in ${timeLabel}!\n${event.description || ''}\n@everyone`;
-        fs.appendFile('discord_audit.log', `[${new Date().toISOString()}] TO: ${process.env.DISCORD_EVENT_CHANNEL_ID} (FALLBACK)\n${fallbackMsg}\n${'='.repeat(50)}\n`, err => { if (err) console.error('[AUDIT LOG] Write failed:', err); });
+        console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_EVENT_CHANNEL_ID} (FALLBACK)\n${fallbackMsg}\n${'='.repeat(50)}`);
         await sendToDiscord(fallbackMsg, event.image, process.env.DISCORD_EVENT_CHANNEL_ID);
     }
 }

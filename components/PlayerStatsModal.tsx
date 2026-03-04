@@ -720,6 +720,12 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xl font-black text-amber-500 italic">{matchIntelDetail.kills}/{matchIntelDetail.deaths}/{matchIntelDetail.assists}</p>
+                                        <p className="text-[10px] font-black italic tabular-nums">
+                                            <span className={(matchIntelDetail.kills - matchIntelDetail.deaths) > 0 ? 'text-emerald-500' : (matchIntelDetail.kills - matchIntelDetail.deaths) < 0 ? 'text-red-500' : 'text-slate-500'}>
+                                                {(matchIntelDetail.kills - matchIntelDetail.deaths) > 0 ? `+${matchIntelDetail.kills - matchIntelDetail.deaths}` : matchIntelDetail.kills - matchIntelDetail.deaths}
+                                            </span>
+                                            <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest ml-1">+/-</span>
+                                        </p>
                                         <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">KDA Registry</p>
                                     </div>
                                 </div>
@@ -802,6 +808,9 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <span className="text-[10px] font-black text-slate-400">{st.kills}/{st.deaths}/{st.assists}</span>
+                                                    <span className={`text-[10px] font-black w-8 text-center ${(st.kills - st.deaths) > 0 ? 'text-emerald-500' : (st.kills - st.deaths) < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                                        {(st.kills - st.deaths) > 0 ? `+${st.kills - st.deaths}` : st.kills - st.deaths}
+                                                    </span>
                                                     <span className="text-[10px] font-black text-amber-500 w-8 text-right">{st.acs}</span>
                                                 </div>
                                             </div>
@@ -925,7 +934,8 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                                     <thead>
                                                         <tr className="bg-white/[0.01]">
                                                             <th className="px-6 py-4 text-[8px] font-black text-slate-600 uppercase tracking-widest">Operator</th>
-                                                            <th className="px-6 py-4 text-[8px] font-black text-slate-600 uppercase tracking-widest text-center">K/D/A</th>
+                                                            <th className="px-6 py-4 text-[8px] font-black text-slate-600 uppercase tracking-widest text-center">K / D / A</th>
+                                                            <th className="px-6 py-4 text-[8px] font-black text-slate-600 uppercase tracking-widest text-center">+/-</th>
                                                             <th className="px-6 py-4 text-[8px] font-black text-slate-600 uppercase tracking-widest text-center">ACS</th>
                                                         </tr>
                                                     </thead>
@@ -944,6 +954,11 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                                                 </td>
                                                                 <td className="px-6 py-4 text-center">
                                                                     <span className="text-xs font-black text-slate-400">{st.kills}/{st.deaths}/{st.assists}</span>
+                                                                </td>
+                                                                <td className="px-6 py-4 text-center">
+                                                                    <span className={`text-xs font-black ${(st.kills - st.deaths) > 0 ? 'text-emerald-500' : (st.kills - st.deaths) < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                                                        {(st.kills - st.deaths) > 0 ? `+${st.kills - st.deaths}` : st.kills - st.deaths}
+                                                                    </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 text-center">
                                                                     <span className="text-xs font-black text-purple-400">{st.acs || 0}</span>

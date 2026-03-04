@@ -22,6 +22,11 @@ import crypto from 'crypto';
 import fs from 'fs';
 import { finished } from 'stream/promises';
 
+// Forward declaration for Cron/Scheduler
+let checkAllNotifications: () => Promise<void>;
+let initDiscord: () => void;
+let initScheduler: (onWeeklyReportTrigger?: () => Promise<any>) => void;
+
 const GAME_CATEGORY = {
     'Valorant': 'VALORANT',
     'Valorant Mobile': 'VALORANT',
@@ -787,6 +792,24 @@ app.patch('/api/notifications/:id/read', async (req, res) => {
 
 // --- DYNAMIC CONTENT ROUTES ---
 
+// CRON Trigger for Vercel
+app.get('/api/cron/check-notifications', async (req, res) => {
+    // Basic security: check for a secret header or key if desired, 
+    // but Vercel Cron can also be restricted by IP or just rely on obscurity/low-impact.
+    console.log('[CRON] Triggered notification check via API...');
+    try {
+        if (!checkAllNotifications) {
+            const scheduler = await import('./scheduler.js');
+            checkAllNotifications = scheduler.checkAllNotifications;
+        }
+        await checkAllNotifications();
+        res.json({ success: true, message: 'Notification check completed.' });
+    } catch (error: any) {
+        console.error('[CRON ERROR] Notification check failed:', error);
+        res.status(500).json({ success: false, error: 'Cron check failed', details: error.message });
+    }
+});
+
 // achievements
 app.get('/api/achievements', async (req, res) => {
     try {
@@ -855,19 +878,6 @@ app.post('/api/events', async (req, res) => {
     }
 });
 
-// scrims — list all (optionally filtered by teamId)
-app.get('/api/scrims', async (req, res) => {
-    try {
-        const { teamId } = req.query;
-        const data = teamId
-            ? await db.select().from(scrims).where(eq(scrims.teamId, Number(teamId)))
-            : await db.select().from(scrims);
-        res.json({ success: true, data });
-    } catch (error: any) {
-        console.error("Error in GET /api/scrims:", error);
-        res.status(500).json({ success: false, error: 'Failed to fetch scrims', details: error.message });
-    }
-});
 
 app.get('/api/scrims/:id/stats', async (req, res) => {
     const scrimId = Number(req.params.id);
@@ -1098,6 +1108,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                 userId: p.userId,
                 teamId: p.teamId,
                 kd: p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills,
+                avgKills: Number((p.kills / p.games).toFixed(1)),
+                avgDeaths: Number((p.deaths / p.games).toFixed(1)),
                 avgAcs: Math.round(p.acs / p.games),
                 games: p.games
             })).sort((a, b) => Number(b.kd) - Number(a.kd));
@@ -1195,6 +1207,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                 userId: p.userId,
                 teamId: p.teamId,
                 kd: p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills,
+                avgKills: Number((p.kills / p.games).toFixed(1)),
+                avgDeaths: Number((p.deaths / p.games).toFixed(1)),
                 avgAcs: Math.round(p.acs / p.games),
                 games: p.games
             })).sort((a, b) => Number(b.kd) - Number(a.kd));
@@ -1242,6 +1256,8 @@ app.get('/api/teams/:id/stats', async (req, res) => {
                             Object.values(players).map((p: any) => ({
                                 name: p.name,
                                 teamId: p.teamId,
+                                avgKills: p.total > 0 ? Number((p.kills / p.total).toFixed(1)) : 0,
+                                avgDeaths: p.total > 0 ? Number((p.deaths / p.total).toFixed(1)) : 0,
                                 kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
                                 avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
                                 wins: p.wins,
@@ -4367,27 +4383,22 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
         if (playerStats && Array.isArray(playerStats)) {
             await db.delete(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id)));
 
+            const statsToInsert: any[] = [];
+            const affectedPlayerIds = new Set<number>();
+
+            // Pre-calculate series result once
+            let seriesIsWin = 0;
+            if (results && Array.isArray(results)) {
+                const ws = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 1).length;
+                const ls = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 0).length;
+                if (ws > ls) seriesIsWin = 1;
+                else if (ws < ls) seriesIsWin = 0;
+                else seriesIsWin = 2; // DRAW
+            }
+
             for (const stat of playerStats) {
                 if (stat.playerId) {
-                    // Refinement: Enforce exclusion of coaches/managers from stats in backend
-                    const coachCheckRows = await db.select().from(players).where(eq(players.id, stat.playerId));
-                    const player = coachCheckRows[0];
-                    if (player?.role?.toLowerCase().includes('coach')) {
-                        console.log(`[DEBUG] Skipping stats for coach: ${player.name}`);
-                        continue;
-                    }
-
-                    // Determine isWin value (1=Win, 0=Loss, 2=Draw) based on series results
-                    let seriesIsWin = 0;
-                    if (results && Array.isArray(results)) {
-                        const ws = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 1).length;
-                        const ls = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 0).length;
-                        if (ws > ls) seriesIsWin = 1;
-                        else if (ws < ls) seriesIsWin = 0;
-                        else seriesIsWin = 2; // DRAW
-                    }
-
-                    await db.insert(tournamentPlayerStats).values({
+                    statsToInsert.push({
                         tournamentId: Number(id),
                         playerId: stat.playerId,
                         kills: Number(stat.kills),
@@ -4399,29 +4410,55 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
                         role: stat.role,
                         map: stat.map
                     });
+                    affectedPlayerIds.add(stat.playerId);
+                }
+            }
 
-                    // 3. Trigger Aggregation
-                    const allStats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.tournamentId, Number(id)));
-                    const scrimStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId));
-                    const tourStats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.playerId, stat.playerId));
-                    const combined = [...tourStats, ...scrimStats];
+            if (statsToInsert.length > 0) {
+                // Batch insert tournament stats
+                await db.insert(tournamentPlayerStats).values(statsToInsert);
 
-                    let totalK = 0, totalD = 0, totalA = 0, totalAcs = 0, winsArr = 0;
+                // 3. Trigger Aggregation (Optimized)
+                const playerIdsArray = Array.from(affectedPlayerIds);
+
+                // Fetch all history and current players data in parallel
+                const [allScrimHistory, allTourHistory, currentPlayers] = await Promise.all([
+                    db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.playerId, playerIdsArray)),
+                    db.select().from(tournamentPlayerStats).where(inArray(tournamentPlayerStats.playerId, playerIdsArray)),
+                    db.select().from(players).where(inArray(players.id, playerIdsArray))
+                ]);
+
+                // Map players for easy lookup
+                const playerMap = new Map(currentPlayers.map(p => [p.id, p]));
+
+                // Update each player's aggregate stats
+                for (const pId of playerIdsArray) {
+                    const pScrims = allScrimHistory.filter(s => s.playerId === pId);
+                    const pTours = allTourHistory.filter(s => s.playerId === pId);
+                    const combined = [...pScrims, ...pTours];
+
+                    let totalK = 0, totalD = 0, totalA = 0, totalAcs = 0, winsCount = 0;
                     combined.forEach((s: any) => {
                         totalK += s.kills;
                         totalD += s.deaths;
                         totalA += s.assists;
                         totalAcs += (s.acs || 0);
-                        if (s.isWin === 1) winsArr++;
+                        if (s.isWin === 1) winsCount++;
                     });
 
+                    const totalMatches = combined.length;
                     const kda = totalD === 0 ? totalK + totalA : (totalK + totalA) / totalD;
-                    const winRate = combined.length > 0 ? (winsArr / combined.length) * 100 : 0;
-                    const avgAcs = combined.length > 0 ? Math.round(totalAcs / combined.length) : 0;
+                    const winRate = totalMatches > 0 ? (winsCount / totalMatches) * 100 : 0;
+                    const avgAcs = totalMatches > 0 ? Math.round(totalAcs / totalMatches) : 0;
 
-                    const currentPlayerRows = await db.select().from(players).where(eq(players.id, stat.playerId));
-                    const currentPlayer = currentPlayerRows[0];
-                    let newXp = (currentPlayer?.xp || 0) + 50; // More XP for tournament
+                    // Award XP for tournament (more than scrims)
+                    // Note: Scrims award 20 XP per match in totalHistory * 20. 
+                    // Tournament handler previously did (currentPlayer.xp || 0) + 50.
+                    // To keep it clean and resilient, we'll use a similar logic but pre-calculate based on counts if possible.
+                    // However, tournament XP seems to be a flat addition per tournament entry recorded.
+                    const currentPlayer = playerMap.get(pId) as any;
+                    const xpToAdd = 50;
+                    const newXp = (currentPlayer?.xp || 0) + xpToAdd;
                     let newLevel = Math.floor(newXp / 100) + 1;
                     if (newLevel > 1000) newLevel = 1000;
 
@@ -4431,7 +4468,7 @@ app.post('/api/tournaments/:id/results', async (req, res) => {
                         acs: avgAcs.toString(),
                         xp: newXp,
                         level: newLevel
-                    }).where(eq(players.id, stat.playerId));
+                    }).where(eq(players.id, pId));
                 }
             }
         }
@@ -4513,30 +4550,25 @@ app.post('/api/scrims/:id/results', async (req, res) => {
 
         // 2. Insert Player Stats
         if (playerStats && Array.isArray(playerStats)) {
-            // clear old stats if re-submitting
+            // Clear old stats if re-submitting
             await db.delete(scrimPlayerStats).where(eq(scrimPlayerStats.scrimId, Number(id)));
+
+            const statsToInsert: any[] = [];
+            const affectedPlayerIds = new Set<number>();
+
+            // Pre-calculate series result once
+            let seriesIsWin = 0;
+            if (results && Array.isArray(results)) {
+                const ws = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 1).length;
+                const ls = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 0).length;
+                if (ws > ls) seriesIsWin = 1;
+                else if (ws < ls) seriesIsWin = 0;
+                else seriesIsWin = 2; // DRAW
+            }
 
             for (const stat of playerStats) {
                 if (stat.playerId) {
-                    // Refinement: Enforce exclusion of coaches/managers from stats in backend
-                    const coachCheckRows = await db.select().from(players).where(eq(players.id, stat.playerId));
-                    const player = coachCheckRows[0];
-                    if (player?.role?.toLowerCase().includes('coach')) {
-                        console.log(`[DEBUG] Skipping stats for coach: ${player.name}`);
-                        continue;
-                    }
-
-                    // Determine isWin value (1=Win, 0=Loss, 2=Draw) based on series results
-                    let seriesIsWin = 0;
-                    if (results && Array.isArray(results)) {
-                        const ws = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 1).length;
-                        const ls = results.filter((r: any) => parseIsWin(r.score, r.isVictory) === 0).length;
-                        if (ws > ls) seriesIsWin = 1;
-                        else if (ws < ls) seriesIsWin = 0;
-                        else seriesIsWin = 2; // DRAW
-                    }
-
-                    await db.insert(scrimPlayerStats).values({
+                    statsToInsert.push({
                         scrimId: Number(id),
                         playerId: stat.playerId,
                         kills: Number(stat.kills),
@@ -4548,13 +4580,31 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                         role: stat.role,
                         map: stat.map
                     });
+                    affectedPlayerIds.add(stat.playerId);
+                }
+            }
 
-                    // 3. Trigger Aggregation & Award XP
-                    const allScrimStats = await db.select().from(scrimPlayerStats).where(eq(scrimPlayerStats.playerId, stat.playerId));
-                    const allTourStats = await db.select().from(tournamentPlayerStats).where(eq(tournamentPlayerStats.playerId, stat.playerId));
+            if (statsToInsert.length > 0) {
+                // Batch insert
+                await db.insert(scrimPlayerStats).values(statsToInsert);
+
+                // 3. Trigger Aggregation & Award XP (Optimized)
+                const playerIdsArray = Array.from(affectedPlayerIds);
+
+                // Fetch all history for all affected players in one go
+                const [allScrimHistory, allTourHistory] = await Promise.all([
+                    db.select().from(scrimPlayerStats).where(inArray(scrimPlayerStats.playerId, playerIdsArray)),
+                    db.select().from(tournamentPlayerStats).where(inArray(tournamentPlayerStats.playerId, playerIdsArray))
+                ]);
+
+                // Update each player's aggregate stats
+                for (const pId of playerIdsArray) {
+                    const pScrims = allScrimHistory.filter(s => s.playerId === pId);
+                    const pTours = allTourHistory.filter(s => s.playerId === pId);
+                    const combined = [...pScrims, ...pTours];
 
                     let totalK = 0, totalD = 0, totalA = 0, totalAcs = 0, winsCount = 0;
-                    allScrimStats.forEach((s: any) => {
+                    combined.forEach((s: any) => {
                         totalK += s.kills;
                         totalD += s.deaths;
                         totalA += s.assists;
@@ -4562,21 +4612,12 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                         if (s.isWin === 1) winsCount++;
                     });
 
-                    // Add tournament stats to the aggregate for KDA/ACS/Winrate
-                    allTourStats.forEach((s: any) => {
-                        totalK += s.kills;
-                        totalD += s.deaths;
-                        totalA += s.assists;
-                        totalAcs += (s.acs || 0);
-                        if (s.isWin === 1) winsCount++;
-                    });
-
-                    const totalMatches = allScrimStats.length + allTourStats.length;
+                    const totalMatches = combined.length;
                     const kda = totalD === 0 ? totalK + totalA : (totalK + totalA) / totalD;
                     const winRate = totalMatches > 0 ? (winsCount / totalMatches) * 100 : 0;
                     const avgAcs = totalMatches > 0 ? Math.round(totalAcs / totalMatches) : 0;
 
-                    // XP Calculation (Resilient to re-submissions)
+                    // XP Calculation (20 XP per match)
                     const totalXP = totalMatches * 20;
                     let newLevel = Math.floor(totalXP / 100) + 1;
                     if (newLevel > 1000) newLevel = 1000;
@@ -4587,7 +4628,7 @@ app.post('/api/scrims/:id/results', async (req, res) => {
                         acs: avgAcs.toString(),
                         xp: totalXP,
                         level: newLevel
-                    }).where(eq(players.id, stat.playerId));
+                    }).where(eq(players.id, pId));
                 }
             }
         }
@@ -5002,16 +5043,24 @@ if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
 
         // Lazy load services only in local dev to save cold-start time in serverless production
         console.log('[DEBUG] Lazy loading services (Discord, Scheduler)...');
-        const { initDiscord } = await import('./discord.js');
-        const { initScheduler } = await import('./scheduler.js');
+        const discord = await import('./discord.js');
+        const scheduler = await import('./scheduler.js');
+
+        initDiscord = discord.initDiscord;
+        initScheduler = scheduler.initScheduler;
+        checkAllNotifications = scheduler.checkAllNotifications;
 
         initDiscord();
         initScheduler(generateAndSendWeeklyReport);
     });
 } else {
-    // In Vercel serverless, we disable persistency-reliant services like Discord/Cron
-    // to prevent cold-start timeouts and unnecessary resource usage.
-    console.log('[DEBUG] Running in Vercel Serverless environment.');
+    // In Vercel serverless, we still want to be able to initialize Discord when needed.
+    // We don't run initScheduler('* * * * *') because cron won't persist,
+    // but the /api/cron endpoint will handle the manual triggers.
+    console.log('[DEBUG] Running in Vercel Serverless environment. Use /api/cron endpoints for periodic tasks.');
+
+    // We don't call initDiscord() here to avoid slowing down EVERY cold start,
+    // instead sendToDiscord() will call it on-demand via ensureDiscordReady().
 }
 
 // --- GLOBAL ERROR HANDLER ---

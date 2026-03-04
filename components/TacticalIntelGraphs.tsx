@@ -174,6 +174,7 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string, onPlayerC
                     <tr className="bg-white/[0.01]">
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Operative</th>
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">KDA Ratio</th>
+                        <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">+/- (Avg)</th>
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Average ACS</th>
                         <th className="px-6 md:px-8 py-4 md:py-5 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Ops Logged</th>
                     </tr>
@@ -204,6 +205,25 @@ const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string, onPlayerC
                                     <span className={`text-sm font-black tracking-tighter ${getKDAColor(p.kd)}`}>
                                         {p.kd}
                                     </span>
+                                </td>
+                                <td className="px-8 py-5 text-center">
+                                    {(() => {
+                                        // p.kd is string or number. If it's a string from calculateKDA, it's (K+A)/D.
+                                        // However, the backend stats might provide avgKills and avgDeaths.
+                                        // If not, I can't easily calculate accurate +/- from KDA alone without A.
+                                        // Let me check PerformanceTracker.tsx again which also shows these stats.
+                                        const avgK = (p as any).avgKills;
+                                        const avgD = (p as any).avgDeaths;
+                                        if (avgK !== undefined && avgD !== undefined) {
+                                            const diff = (avgK - avgD).toFixed(1);
+                                            return (
+                                                <span className={`text-sm font-black tracking-tighter ${parseFloat(diff) > 0 ? 'text-emerald-500' : parseFloat(diff) < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                                    {parseFloat(diff) > 0 ? `+${diff}` : diff}
+                                                </span>
+                                            );
+                                        }
+                                        return <span className="text-xs text-slate-600">--</span>;
+                                    })()}
                                 </td>
                                 <td className="px-8 py-5 text-center">
                                     <span className="text-sm font-black text-amber-400 tracking-tighter">

@@ -30,6 +30,37 @@ export const VALORANT_MAPS = ["Ascent", "Bind", "Breeze", "Fracture", "Haven", "
 export const VALORANT_AGENTS = ['Astra', 'Brimstone', 'Clove', 'Harbor', 'Omen', 'Viper', 'Jett', 'Neon', 'Phoenix', 'Raze', 'Reyna', 'Yoru', 'Iso', 'Waylay', 'Veto', 'Breach', 'Fade', 'Gekko', 'KAY_O', 'Skye', 'Sova', 'Tejo', 'Chamber', 'Cypher', 'Deadlock', 'Killjoy', 'Sage', 'Vyse'];
 export const VALORANT_ROLES = ["Controller", "Duelist", "Initiator", "Sentinel"];
 
+export const VALORANT_AGENT_ROLE_MAP: Record<string, string> = {
+    'Astra': 'Controller',
+    'Brimstone': 'Controller',
+    'Clove': 'Controller',
+    'Harbor': 'Controller',
+    'Omen': 'Controller',
+    'Viper': 'Controller',
+    'Jett': 'Duelist',
+    'Neon': 'Duelist',
+    'Phoenix': 'Duelist',
+    'Raze': 'Duelist',
+    'Reyna': 'Duelist',
+    'Yoru': 'Duelist',
+    'Iso': 'Duelist',
+    'Waylay': 'Duelist',
+    'Breach': 'Initiator',
+    'Fade': 'Initiator',
+    'Gekko': 'Initiator',
+    'KAY_O': 'Initiator',
+    'Skye': 'Initiator',
+    'Sova': 'Initiator',
+    'Tejo': 'Initiator',
+    'Chamber': 'Sentinel',
+    'Cypher': 'Sentinel',
+    'Deadlock': 'Sentinel',
+    'Killjoy': 'Sentinel',
+    'Sage': 'Sentinel',
+    'Vyse': 'Sentinel',
+    'Veto': 'Sentinel'
+};
+
 export const GAME_MAPS: Record<string, string[]> = {
     "Valorant": VALORANT_MAPS,
     "Valorant Mobile": VALORANT_MAPS,
