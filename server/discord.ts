@@ -16,7 +16,7 @@ client.on('error', (err) => {
 });
 
 // Helper to wait for bot to be ready
-const ensureDiscordReady = async (timeoutMs = 15000): Promise<boolean> => {
+const ensureDiscordReady = async (timeoutMs = 8000): Promise<boolean> => {
     if (client.isReady()) return true;
 
     const token = process.env.DISCORD_BOT_TOKEN;

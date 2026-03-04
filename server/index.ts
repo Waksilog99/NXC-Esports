@@ -3765,8 +3765,6 @@ app.post('/api/scrims', async (req, res) => {
         const newScrim = newScrimRows[0];
 
         notifyRefresh();
-        res.json({ success: true, data: newScrim });
-
         // Website Notification
         const scrimTitle = "New Scrim Scheduled";
         const scrimMsg = `A scrim against ${opponent} (${format}) has been scheduled for ${new Date(date).toLocaleString()}. Maps: ${Array.isArray(maps) ? maps.join(', ') : 'TBD'}.`;
@@ -3779,6 +3777,8 @@ app.post('/api/scrims', async (req, res) => {
         } catch (discordErr) {
             console.error('[SCRIM DISCORD ERROR] Failed to send announcement:', discordErr);
         }
+
+        res.json({ success: true, data: newScrim });
     } catch (error: any) {
         console.error("Error in POST /api/scrims:", error);
         res.status(500).json({ success: false, error: 'Failed to create scrim', details: IS_PROD ? undefined : error.message });
@@ -4101,8 +4101,6 @@ app.post('/api/tournaments', async (req, res) => {
         const newTournament = newTournamentRows[0];
 
         notifyRefresh();
-        res.json({ success: true, data: newTournament });
-
         // Website Notification
         const tourneyTitle = "Tournament Entry Confirmed";
         const tourneyMsg = `The team has been entered into ${name} (${format}) scheduled for ${new Date(date).toLocaleString()}. Opponent: ${opponent || 'TBD'}.`;
@@ -4115,6 +4113,8 @@ app.post('/api/tournaments', async (req, res) => {
         } catch (discordErr) {
             console.error('[TOURNEY DISCORD ERROR] Failed to send announcement:', discordErr);
         }
+
+        res.json({ success: true, data: newTournament });
     } catch (error: any) {
         console.error("Error in POST /api/tournaments:", error);
         res.status(500).json({ success: false, error: 'Failed to create tournament entry', details: IS_PROD ? undefined : error.message });
