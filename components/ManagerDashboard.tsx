@@ -356,7 +356,7 @@ const ManagerDashboard: React.FC<{
 
             {view === 'performance-tracker' && (
                 <div className="space-y-12 animate-in fade-in duration-700">
-                    <TacticalIntelGraphs availableTeams={teams} userRole={userRole} />
+                    <TacticalIntelGraphs availableTeams={teams} userRole={userRole} dbUserId={userId} />
                 </div>
             )}
 

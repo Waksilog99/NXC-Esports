@@ -1004,7 +1004,13 @@ function parseIsWin(score: any, isVictory?: boolean): number {
 
 app.get('/api/teams/:id/stats', async (req, res) => {
     const teamId = Number(req.params.id);
+    const { requesterId } = req.query;
+    const cacheKey = `team-stats:${teamId}:${requesterId ?? 'guest'}`;
+
     try {
+        const cached = getCache(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
         // Fetch scrims + tournaments in parallel (was sequential before)
         const [teamScrims, teamTourneys] = await Promise.all([
             db.select().from(scrims).where(eq(scrims.teamId, teamId)),
@@ -1223,63 +1229,63 @@ app.get('/api/teams/:id/stats', async (req, res) => {
             })).sort((a, b) => Number(b.kd) - Number(a.kd));
         }
 
-        res.json({
-            success: true,
-            data: {
-                scrim: {
-                    gamesPlayed: scrimWins + scrimLosses + scrimDraws,
-                    winRate: (scrimWins + scrimLosses + scrimDraws) > 0 ? Math.round((scrimWins / (scrimWins + scrimLosses + scrimDraws)) * 100) : 0,
-                    wins: scrimWins,
-                    losses: scrimLosses,
-                    draws: scrimDraws,
-                    recentForm: scrimRecentForm.slice(-5),
-                    mapStats: scrimMapStats,
-                    agentStats: scrimAgentStats,
-                    playerAgentStats: Object.fromEntries(
-                        Object.entries(scrimPlayerAgentAgg).map(([agent, players]) => [
-                            agent,
-                            Object.values(players).map((p: any) => ({
-                                name: p.name,
-                                teamId: p.teamId,
-                                kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
-                                avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
-                                wins: p.wins,
-                                total: p.total,
-                                winRate: p.total > 0 ? Math.round((p.wins / p.total) * 100) : 0
-                            })).sort((a: any, b: any) => Number(b.kda) - Number(a.kda))
-                        ])
-                    ),
-                    topPlayers: scrimTopPlayers
-                },
-                tournament: {
-                    gamesPlayed: tourneyWins + tourneyLosses + tourneyDraws,
-                    winRate: (tourneyWins + tourneyLosses + tourneyDraws) > 0 ? Math.round((tourneyWins / (tourneyWins + tourneyLosses + tourneyDraws)) * 100) : 0,
-                    wins: tourneyWins,
-                    losses: tourneyLosses,
-                    draws: tourneyDraws,
-                    recentForm: tourneyRecentForm.slice(-5),
-                    agentStats: tourneyAgentStats,
-                    playerAgentStats: Object.fromEntries(
-                        Object.entries(tourneyPlayerAgentAgg).map(([agent, players]) => [
-                            agent,
-                            Object.values(players).map((p: any) => ({
-                                name: p.name,
-                                teamId: p.teamId,
-                                avgKills: p.total > 0 ? Number((p.kills / p.total).toFixed(1)) : 0,
-                                avgDeaths: p.total > 0 ? Number((p.deaths / p.total).toFixed(1)) : 0,
-                                kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
-                                avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
-                                wins: p.wins,
-                                total: p.total,
-                                winRate: p.total > 0 ? Math.round((p.wins / p.total) * 100) : 0
-                            })).sort((a: any, b: any) => Number(b.kda) - Number(a.kda))
-                        ])
-                    ),
-                    topPlayers: tourneyTopPlayers
-                },
-                topPlayers: scrimTopPlayers.slice(0, 5)
-            }
-        });
+        const statsData = {
+            scrim: {
+                gamesPlayed: scrimWins + scrimLosses + scrimDraws,
+                winRate: (scrimWins + scrimLosses + scrimDraws) > 0 ? Math.round((scrimWins / (scrimWins + scrimLosses + scrimDraws)) * 100) : 0,
+                wins: scrimWins,
+                losses: scrimLosses,
+                draws: scrimDraws,
+                recentForm: scrimRecentForm.slice(-5),
+                mapStats: scrimMapStats,
+                agentStats: scrimAgentStats,
+                playerAgentStats: Object.fromEntries(
+                    Object.entries(scrimPlayerAgentAgg).map(([agent, players]) => [
+                        agent,
+                        Object.values(players).map((p: any) => ({
+                            name: p.name,
+                            teamId: p.teamId,
+                            kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
+                            avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
+                            wins: p.wins,
+                            total: p.total,
+                            winRate: p.total > 0 ? Math.round((p.wins / p.total) * 100) : 0
+                        })).sort((a: any, b: any) => Number(b.kda) - Number(a.kda))
+                    ])
+                ),
+                topPlayers: scrimTopPlayers
+            },
+            tournament: {
+                gamesPlayed: tourneyWins + tourneyLosses + tourneyDraws,
+                winRate: (tourneyWins + tourneyLosses + tourneyDraws) > 0 ? Math.round((tourneyWins / (tourneyWins + tourneyLosses + tourneyDraws)) * 100) : 0,
+                wins: tourneyWins,
+                losses: tourneyLosses,
+                draws: tourneyDraws,
+                recentForm: tourneyRecentForm.slice(-5),
+                agentStats: tourneyAgentStats,
+                playerAgentStats: Object.fromEntries(
+                    Object.entries(tourneyPlayerAgentAgg).map(([agent, players]) => [
+                        agent,
+                        Object.values(players).map((p: any) => ({
+                            name: p.name,
+                            teamId: p.teamId,
+                            avgKills: p.total > 0 ? Number((p.kills / p.total).toFixed(1)) : 0,
+                            avgDeaths: p.total > 0 ? Number((p.deaths / p.total).toFixed(1)) : 0,
+                            kda: p.deaths > 0 ? ((p.kills + p.assists * 0.5) / p.deaths).toFixed(2) : (p.kills + p.assists * 0.5).toFixed(2),
+                            avgAcs: p.total > 0 ? Math.round(p.acs / p.total) : 0,
+                            wins: p.wins,
+                            total: p.total,
+                            winRate: p.total > 0 ? Math.round((p.wins / p.total) * 100) : 0
+                        })).sort((a: any, b: any) => Number(b.kda) - Number(a.kda))
+                    ])
+                ),
+                topPlayers: tourneyTopPlayers
+            },
+            topPlayers: scrimTopPlayers.slice(0, 5)
+        };
+
+        setCache(cacheKey, statsData);
+        res.json({ success: true, data: statsData });
 
     } catch (error: any) {
         console.error("Error fetching team stats:", error);
@@ -3688,30 +3694,38 @@ app.delete('/api/teams/:teamId/players/:playerId', async (req, res) => {
 app.get('/api/scrims', async (req, res) => {
     const { teamId, requesterId } = req.query;
     try {
-        let requester = null;
-        if (requesterId) {
-            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
-            requester = requesterRows[0];
-        }
+        const cacheKey = `scrims:${teamId ?? 'all'}:${requesterId ?? 'guest'}`;
+        const cached = getCache(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
 
-        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+        let requester = null;
+        let isAdmin = false;
+
+        // 1. Parallelize Auth and Authorization data
+        const [requesterRow, teamData, isMemberRows] = await Promise.all([
+            requesterId ? db.select().from(users).where(eq(users.id, Number(requesterId))) : Promise.resolve([]),
+            teamId ? db.select().from(teams).where(eq(teams.id, Number(teamId))) : Promise.resolve([]),
+            (teamId && requesterId) ? db.select().from(players).where(and(eq(players.teamId, Number(teamId)), eq(players.userId, Number(requesterId)))) : Promise.resolve([])
+        ]);
+
+        requester = requesterRow[0];
+        isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
 
         let q = db.select().from(scrims);
 
         if (teamId) {
-            // If teamId is provided, verify access unless admin
+            // Verify access unless admin
             if (!isAdmin && requesterId) {
-                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
-                const team = teamRows[0];
-                const isMember = await db.select().from(players).where(and(eq(players.teamId, Number(teamId)), eq(players.userId, Number(requesterId))));
+                const team = teamData[0];
+                const isMember = isMemberRows.length > 0;
 
-                if (team?.managerId !== Number(requesterId) && isMember.length === 0) {
-                    return res.json({ success: true, data: [] }); // No access
+                if (team?.managerId !== Number(requesterId) && !isMember) {
+                    setCache(cacheKey, []);
+                    return res.json({ success: true, data: [] });
                 }
             }
             q = q.where(eq(scrims.teamId, Number(teamId)));
         } else if (!isAdmin && requesterId) {
-            // Global view for non-admins: filter scrims for teams they are part of
             q = q.where(
                 sql`EXISTS (
                     SELECT 1 FROM ${teams} 
@@ -3721,11 +3735,11 @@ app.get('/api/scrims', async (req, res) => {
                 )`
             );
         } else if (!isAdmin && !requesterId) {
-            // No requesterId and not admin? Return nothing for safety
             return res.json({ success: true, data: [] });
         }
 
         const data = await q;
+        setCache(cacheKey, data);
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/scrims:", error);
@@ -3917,30 +3931,37 @@ app.delete('/api/scrims/:id', async (req, res) => {
 app.get('/api/tournaments', async (req, res) => {
     const { teamId, requesterId } = req.query;
     try {
-        let requester = null;
-        if (requesterId) {
-            const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
-            requester = requesterRows[0];
-        }
+        const cacheKey = `tournaments:${teamId ?? 'all'}:${requesterId ?? 'guest'}`;
+        const cached = getCache(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
 
-        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+        let requester = null;
+        let isAdmin = false;
+
+        // 1. Parallelize Auth and Authorization data
+        const [requesterRow, teamData, isMemberRows] = await Promise.all([
+            requesterId ? db.select().from(users).where(eq(users.id, Number(requesterId))) : Promise.resolve([]),
+            teamId ? db.select().from(teams).where(eq(teams.id, Number(teamId))) : Promise.resolve([]),
+            (teamId && requesterId) ? db.select().from(players).where(and(eq(players.teamId, Number(teamId)), eq(players.userId, Number(requesterId)))) : Promise.resolve([])
+        ]);
+
+        requester = requesterRow[0];
+        isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
 
         let q = db.select().from(tournaments);
 
         if (teamId) {
-            // If teamId is provided, verify access unless admin
             if (!isAdmin && requesterId) {
-                const teamRows = await db.select().from(teams).where(eq(teams.id, Number(teamId)));
-                const team = teamRows[0];
-                const isMember = await db.select().from(players).where(and(eq(players.teamId, Number(teamId)), eq(players.userId, Number(requesterId))));
+                const team = teamData[0];
+                const isMember = isMemberRows.length > 0;
 
-                if (team?.managerId !== Number(requesterId) && isMember.length === 0) {
-                    return res.json({ success: true, data: [] }); // No access
+                if (team?.managerId !== Number(requesterId) && !isMember) {
+                    setCache(cacheKey, []);
+                    return res.json({ success: true, data: [] });
                 }
             }
             q = q.where(eq(tournaments.teamId, Number(teamId)));
         } else if (!isAdmin && requesterId) {
-            // Global view for non-admins: filter tournaments for teams they are part of
             q = q.where(
                 sql`EXISTS (
                     SELECT 1 FROM ${teams} 
@@ -3950,11 +3971,11 @@ app.get('/api/tournaments', async (req, res) => {
                 )`
             );
         } else if (!isAdmin && !requesterId) {
-            // No requesterId and not admin? Return nothing for safety
             return res.json({ success: true, data: [] });
         }
 
         const data = await q;
+        setCache(cacheKey, data);
         res.json({ success: true, data });
     } catch (error: any) {
         console.error("Error in GET /api/tournaments:", error);

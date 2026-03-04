@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 import { VALORANT_AGENTS } from './constants';
@@ -101,6 +101,31 @@ const TeamManagement: React.FC<{
     const labelSingular = isTournament ? 'Tournament' : 'Scrim';
     const labelPlural = isTournament ? 'Tournaments' : 'Scrims';
     const labelAction = isTournament ? 'Operation' : 'Engagement';
+
+    const filteredScrims = useMemo(() => {
+        return [...scrims]
+            .filter(s => statusFilter === 'all' || s.status === statusFilter)
+            .sort((a, b) => {
+                // Pending first, soonest first
+                if (a.status === 'pending' && b.status !== 'pending') return -1;
+                if (a.status !== 'pending' && b.status === 'pending') return 1;
+                if (a.status === 'pending' && b.status === 'pending') {
+                    return new Date(a.date).getTime() - new Date(b.date).getTime();
+                }
+                // Others, latest first
+                return new Date(b.date).getTime() - new Date(a.date).getTime();
+            });
+    }, [scrims, statusFilter]);
+
+    const groupedScrimsByDate = useMemo(() => {
+        const groups: Record<string, Scrim[]> = {};
+        scrims.forEach(s => {
+            const dateStr = new Date(s.date).toDateString();
+            if (!groups[dateStr]) groups[dateStr] = [];
+            groups[dateStr].push(s);
+        });
+        return groups;
+    }, [scrims]);
 
     const canSubmit = (scrim: Scrim) => {
         const roles = userRole?.split(',').map(r => r.trim().toLowerCase()) || [];
@@ -229,7 +254,7 @@ const TeamManagement: React.FC<{
 
     useEffect(() => {
         fetchScrims();
-    }, [selectedTeamId, view, apiBase, userId]); // apiBase added to handle mode changes
+    }, [selectedTeamId, apiBase, userId]); // apiBase added to handle mode changes
 
     useEffect(() => {
         const handleRefresh = () => {
@@ -755,201 +780,101 @@ const TeamManagement: React.FC<{
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {[...scrims]
-                                    .filter(s => statusFilter === 'all' || s.status === statusFilter)
-                                    .sort((a, b) => {
-                                        // Pending first, soonest first
-                                        if (a.status === 'pending' && b.status !== 'pending') return -1;
-                                        if (a.status !== 'pending' && b.status === 'pending') return 1;
-                                        if (a.status === 'pending' && b.status === 'pending') {
-                                            return new Date(a.date).getTime() - new Date(b.date).getTime();
-                                        }
-                                        // Others, latest first
-                                        return new Date(b.date).getTime() - new Date(a.date).getTime();
-                                    })
-                                    .map(scrim => (
-                                        <tr
-                                            key={scrim.id}
-                                            onClick={() => scrim.status === 'completed' && fetchScrimDetails(scrim)}
-                                            className={`group hover:bg-white/[0.03] transition-all duration-300 ${scrim.status === 'completed' ? 'cursor-pointer active:scale-[0.99]' : ''} ${scrim.status !== 'pending' ? 'opacity-40 grayscale-[0.7] hover:opacity-60 transition-opacity' : ''}`}
-                                        >
-                                            <td className="px-6 md:px-8 py-5 md:py-8 font-black text-white italic tracking-tighter text-base md:text-lg whitespace-nowrap">
-                                                <span className="text-amber-500/40 text-[8px] md:text-[10px] not-italic block mb-1 tracking-widest">{new Date(scrim.date).toLocaleDateString()}</span>
-                                                {new Date(scrim.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </td>
-                                            <td className="px-6 md:px-8 py-5 md:py-8">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className="font-black text-white uppercase tracking-tight group-hover:text-amber-500 transition-colors text-xs md:text-base">{scrim.opponent}</div>
-                                                    {scrim.status === 'completed' && (() => {
-                                                        const { score, color } = calculateSeriesResult(scrim);
-                                                        return (
-                                                            <span className={`text-[10px] md:text-xs font-black px-2 py-0.5 rounded border border-white/5 bg-white/[0.03] ${color} italic`}>
-                                                                {score}
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <div className="text-[8px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 italic">
-                                                    {(() => {
-                                                        const m = safeJSONParse(scrim.maps);
-                                                        if (m.length > 0) {
-                                                            return m.map((mapName: string, i: number) => `Map ${i + 1}: ${mapName}`).join(' • ');
-                                                        }
-                                                        return isTournament ? 'Mission Progress' : 'Objective Secured';
-                                                    })()}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 md:px-8 py-5 md:py-8">
-                                                <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(168,85,247,0.1)] whitespace-nowrap">{scrim.format}</span>
-                                            </td>
-                                            <td className="px-6 md:px-8 py-5 md:py-8">
-                                                {scrim.status === 'completed' ? (() => {
-                                                    const { result, color } = calculateSeriesResult(scrim);
+                                {filteredScrims.map(scrim => (
+                                    <tr
+                                        key={scrim.id}
+                                        onClick={() => scrim.status === 'completed' && fetchScrimDetails(scrim)}
+                                        className={`group hover:bg-white/[0.03] transition-all duration-300 ${scrim.status === 'completed' ? 'cursor-pointer active:scale-[0.99]' : ''} ${scrim.status !== 'pending' ? 'opacity-40 grayscale-[0.7] hover:opacity-60 transition-opacity' : ''}`}
+                                    >
+                                        <td className="px-6 md:px-8 py-5 md:py-8 font-black text-white italic tracking-tighter text-base md:text-lg whitespace-nowrap">
+                                            <span className="text-amber-500/40 text-[8px] md:text-[10px] not-italic block mb-1 tracking-widest">{new Date(scrim.date).toLocaleDateString()}</span>
+                                            {new Date(scrim.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </td>
+                                        <td className="px-6 md:px-8 py-5 md:py-8">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="font-black text-white uppercase tracking-tight group-hover:text-amber-500 transition-colors text-xs md:text-base">{scrim.opponent}</div>
+                                                {scrim.status === 'completed' && (() => {
+                                                    const { score, color } = calculateSeriesResult(scrim);
                                                     return (
-                                                        <div className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${color.replace('text-', 'bg-').replace('-400', '-500/10')} ${color.replace('text-', 'border-').replace('-400', '-500/30')} ${color} inline-block`}>
-                                                            {result}
-                                                        </div>
+                                                        <span className={`text-[10px] md:text-xs font-black px-2 py-0.5 rounded border border-white/5 bg-white/[0.03] ${color} italic`}>
+                                                            {score}
+                                                        </span>
                                                     );
-                                                })() : (
-                                                    <div className="relative inline-block">
-                                                        <select
-                                                            value={scrim.status}
-                                                            onChange={(e) => handleStatusUpdate(scrim.id, e.target.value)}
-                                                            disabled={!canEdit() || (scrim.status !== 'pending' && scrim.status !== 'cancelled')}
-                                                            className={`pl-4 pr-10 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none transition-all border appearance-none shadow-lg ${(!canEdit() || (scrim.status !== 'pending' && scrim.status !== 'cancelled')) ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} ${scrim.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                                                                scrim.status === 'cancelled' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
-                                                                    'bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20 animate-pulse'
-                                                                }`}
-                                                        >
-                                                            <option value="pending" className="bg-[#1e1e2d]">PENDING</option>
-                                                            <option value="completed" className="bg-[#1e1e2d]">COMPLETED</option>
-                                                            <option value="cancelled" className="bg-[#1e1e2d]">CANCELLED</option>
-                                                        </select>
-                                                        <div className={`absolute inset-y-0 right-3 flex items-center pointer-events-none transition-colors ${scrim.status === 'completed' ? 'text-emerald-400/50' : scrim.status === 'cancelled' ? 'text-red-400/50' : 'text-amber-400/50'}`}>
-                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
-                                                        </div>
+                                                })()}
+                                            </div>
+                                            <div className="text-[8px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 italic">
+                                                {(() => {
+                                                    const m = safeJSONParse(scrim.maps);
+                                                    if (m.length > 0) {
+                                                        return m.map((mapName: string, i: number) => `Map ${i + 1}: ${mapName}`).join(' • ');
+                                                    }
+                                                    return isTournament ? 'Mission Progress' : 'Objective Secured';
+                                                })()}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 md:px-8 py-5 md:py-8">
+                                            <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(168,85,247,0.1)] whitespace-nowrap">{scrim.format}</span>
+                                        </td>
+                                        <td className="px-6 md:px-8 py-5 md:py-8">
+                                            {scrim.status === 'completed' ? (() => {
+                                                const { result, color } = calculateSeriesResult(scrim);
+                                                return (
+                                                    <div className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${color.replace('text-', 'bg-').replace('-400', '-500/10')} ${color.replace('text-', 'border-').replace('-400', '-500/30')} ${color} inline-block`}>
+                                                        {result}
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 md:px-8 py-5 md:py-8 text-right">
-                                                {scrim.status === 'completed' ? (
-                                                    <div className="flex justify-end space-x-2">
-                                                        <button
-                                                            onClick={() => fetchScrimDetails(scrim)}
-                                                            className="px-4 md:px-6 py-2 bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-blue-500/30 active:scale-95 whitespace-nowrap"
-                                                        >
-                                                            Analyze Intel
-                                                        </button>
-                                                        {canEdit() && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedScrimId(scrim.id);
-                                                                        setSelectedTeamId(scrim.teamId);
-                                                                        const existingResultsArr = scrim.results ? JSON.parse(scrim.results) : [];
-                                                                        const init: any = {};
-                                                                        existingResultsArr.forEach((r: any) => {
-                                                                            init[r.map] = {
-                                                                                image: r.image,
-                                                                                results: {
-                                                                                    isVictory: r.isVictory,
-                                                                                    score: r.score,
-                                                                                    results: r.results
-                                                                                }
-                                                                            };
-                                                                        });
-                                                                        const count = getMapCount(scrim.format);
-                                                                        for (let i = 1; i <= count; i++) {
-                                                                            if (!init[i]) init[i] = { image: null, results: { isVictory: false, score: '0-0', results: [] } };
-                                                                        }
-                                                                        setMapResults(init);
-                                                                        setActiveMapTab(1);
-                                                                        setView('upload-result');
-                                                                    }}
-                                                                    className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
-                                                                >
-                                                                    Edit Stats
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteMatch(scrim.id);
-                                                                    }}
-                                                                    className="px-4 md:px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-red-500/30 active:scale-95 whitespace-nowrap"
-                                                                >
-                                                                    Term. Mission
-                                                                </button>
-                                                            </>
-                                                        )}
+                                                );
+                                            })() : (
+                                                <div className="relative inline-block">
+                                                    <select
+                                                        value={scrim.status}
+                                                        onChange={(e) => handleStatusUpdate(scrim.id, e.target.value)}
+                                                        disabled={!canEdit() || (scrim.status !== 'pending' && scrim.status !== 'cancelled')}
+                                                        className={`pl-4 pr-10 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest outline-none transition-all border appearance-none shadow-lg ${(!canEdit() || (scrim.status !== 'pending' && scrim.status !== 'cancelled')) ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} ${scrim.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                                                            scrim.status === 'cancelled' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                                                                'bg-amber-500/10 text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20 animate-pulse'
+                                                            }`}
+                                                    >
+                                                        <option value="pending" className="bg-[#1e1e2d]">PENDING</option>
+                                                        <option value="completed" className="bg-[#1e1e2d]">COMPLETED</option>
+                                                        <option value="cancelled" className="bg-[#1e1e2d]">CANCELLED</option>
+                                                    </select>
+                                                    <div className={`absolute inset-y-0 right-3 flex items-center pointer-events-none transition-colors ${scrim.status === 'completed' ? 'text-emerald-400/50' : scrim.status === 'cancelled' ? 'text-red-400/50' : 'text-amber-400/50'}`}>
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
                                                     </div>
-                                                ) : scrim.status === 'cancelled' ? (
-                                                    <div className="flex justify-end space-x-2 items-center">
-                                                        <div className="px-4 md:px-6 py-2 bg-white/5 text-slate-600 border border-white/5 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl italic whitespace-nowrap">
-                                                            Op Cancelled
-                                                        </div>
-                                                        {canEdit() && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const d = new Date(scrim.date);
-                                                                        const offset = d.getTimezoneOffset() * 60000;
-                                                                        const localIso = new Date(d.getTime() - offset).toISOString().slice(0, 16);
-
-                                                                        setScrimDate(localIso);
-                                                                        setScrimOpponent(scrim.opponent);
-                                                                        setScrimFormat(scrim.format);
-                                                                        setSelectedMaps(safeJSONParse(scrim.maps));
-                                                                        setSelectedScrimId(scrim.id);
-                                                                        setIsEditingDetails(true);
-                                                                        setView('add-scrim');
-                                                                    }}
-                                                                    className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
-                                                                >
-                                                                    Edit Deployment
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteMatch(scrim.id);
-                                                                    }}
-                                                                    className="px-4 md:px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-red-500/30 active:scale-95 whitespace-nowrap"
-                                                                >
-                                                                    Term. Mission
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex justify-end space-x-2">
-                                                        {canSubmit(scrim) && (
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-6 md:px-8 py-5 md:py-8 text-right">
+                                            {scrim.status === 'completed' ? (
+                                                <div className="flex justify-end space-x-2">
+                                                    <button
+                                                        onClick={() => fetchScrimDetails(scrim)}
+                                                        className="px-4 md:px-6 py-2 bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-blue-500/30 active:scale-95 whitespace-nowrap"
+                                                    >
+                                                        Analyze Intel
+                                                    </button>
+                                                    {canEdit() && (
+                                                        <>
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     setSelectedScrimId(scrim.id);
-                                                                    setSelectedTeamId(scrim.teamId); // Hardlock sector to scrim owner
-                                                                    const count = getMapCount(scrim.format);
+                                                                    setSelectedTeamId(scrim.teamId);
+                                                                    const existingResultsArr = scrim.results ? JSON.parse(scrim.results) : [];
                                                                     const init: any = {};
-                                                                    const rosterPlayers = currentTeam?.players.filter(p => p.id > 0).map(p => ({
-                                                                        name: p.name,
-                                                                        playerId: p.id,
-                                                                        kills: 0,
-                                                                        deaths: 0,
-                                                                        assists: 0,
-                                                                        acs: 0,
-                                                                        agent: '',
-                                                                        role: ''
-                                                                    })) || [];
-                                                                    for (let i = 1; i <= count; i++) {
-                                                                        init[i] = {
-                                                                            image: null,
+                                                                    existingResultsArr.forEach((r: any) => {
+                                                                        init[r.map] = {
+                                                                            image: r.image,
                                                                             results: {
-                                                                                isVictory: false,
-                                                                                score: '0-0',
-                                                                                results: [...rosterPlayers]
+                                                                                isVictory: r.isVictory,
+                                                                                score: r.score,
+                                                                                results: r.results
                                                                             }
                                                                         };
+                                                                    });
+                                                                    const count = getMapCount(scrim.format);
+                                                                    for (let i = 1; i <= count; i++) {
+                                                                        if (!init[i]) init[i] = { image: null, results: { isVictory: false, score: '0-0', results: [] } };
                                                                     }
                                                                     setMapResults(init);
                                                                     setActiveMapTab(1);
@@ -957,46 +882,134 @@ const TeamManagement: React.FC<{
                                                                 }}
                                                                 className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
                                                             >
-                                                                Upload Data
+                                                                Edit Stats
                                                             </button>
-                                                        )}
-                                                        {canEdit() && (
-                                                            <>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const d = new Date(scrim.date);
-                                                                        const offset = d.getTimezoneOffset() * 60000;
-                                                                        const localIso = new Date(d.getTime() - offset).toISOString().slice(0, 16);
-
-                                                                        setScrimDate(localIso);
-                                                                        setScrimOpponent(scrim.opponent);
-                                                                        setScrimFormat(scrim.format);
-                                                                        setSelectedMaps(scrim.maps ? JSON.parse(scrim.maps) : []);
-                                                                        setSelectedScrimId(scrim.id);
-                                                                        setIsEditingDetails(true);
-                                                                        setView('add-scrim');
-                                                                    }}
-                                                                    className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
-                                                                >
-                                                                    Edit Deployment
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteMatch(scrim.id);
-                                                                    }}
-                                                                    className="px-4 md:px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-red-500/30 active:scale-95 whitespace-nowrap"
-                                                                >
-                                                                    Term. Mission
-                                                                </button>
-                                                            </>
-                                                        )}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteMatch(scrim.id);
+                                                                }}
+                                                                className="px-4 md:px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-red-500/30 active:scale-95 whitespace-nowrap"
+                                                            >
+                                                                Term. Mission
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ) : scrim.status === 'cancelled' ? (
+                                                <div className="flex justify-end space-x-2 items-center">
+                                                    <div className="px-4 md:px-6 py-2 bg-white/5 text-slate-600 border border-white/5 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl italic whitespace-nowrap">
+                                                        Op Cancelled
                                                     </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                    {canEdit() && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const d = new Date(scrim.date);
+                                                                    const offset = d.getTimezoneOffset() * 60000;
+                                                                    const localIso = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+
+                                                                    setScrimDate(localIso);
+                                                                    setScrimOpponent(scrim.opponent);
+                                                                    setScrimFormat(scrim.format);
+                                                                    setSelectedMaps(safeJSONParse(scrim.maps));
+                                                                    setSelectedScrimId(scrim.id);
+                                                                    setIsEditingDetails(true);
+                                                                    setView('add-scrim');
+                                                                }}
+                                                                className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
+                                                            >
+                                                                Edit Deployment
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteMatch(scrim.id);
+                                                                }}
+                                                                className="px-4 md:px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-red-500/30 active:scale-95 whitespace-nowrap"
+                                                            >
+                                                                Term. Mission
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-end space-x-2">
+                                                    {canSubmit(scrim) && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedScrimId(scrim.id);
+                                                                setSelectedTeamId(scrim.teamId); // Hardlock sector to scrim owner
+                                                                const count = getMapCount(scrim.format);
+                                                                const init: any = {};
+                                                                const rosterPlayers = currentTeam?.players.filter(p => p.id > 0).map(p => ({
+                                                                    name: p.name,
+                                                                    playerId: p.id,
+                                                                    kills: 0,
+                                                                    deaths: 0,
+                                                                    assists: 0,
+                                                                    acs: 0,
+                                                                    agent: '',
+                                                                    role: ''
+                                                                })) || [];
+                                                                for (let i = 1; i <= count; i++) {
+                                                                    init[i] = {
+                                                                        image: null,
+                                                                        results: {
+                                                                            isVictory: false,
+                                                                            score: '0-0',
+                                                                            results: [...rosterPlayers]
+                                                                        }
+                                                                    };
+                                                                }
+                                                                setMapResults(init);
+                                                                setActiveMapTab(1);
+                                                                setView('upload-result');
+                                                            }}
+                                                            className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
+                                                        >
+                                                            Upload Data
+                                                        </button>
+                                                    )}
+                                                    {canEdit() && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const d = new Date(scrim.date);
+                                                                    const offset = d.getTimezoneOffset() * 60000;
+                                                                    const localIso = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+
+                                                                    setScrimDate(localIso);
+                                                                    setScrimOpponent(scrim.opponent);
+                                                                    setScrimFormat(scrim.format);
+                                                                    setSelectedMaps(scrim.maps ? JSON.parse(scrim.maps) : []);
+                                                                    setSelectedScrimId(scrim.id);
+                                                                    setIsEditingDetails(true);
+                                                                    setView('add-scrim');
+                                                                }}
+                                                                className="px-4 md:px-6 py-2 bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black border border-amber-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-amber-500/30 active:scale-95 whitespace-nowrap"
+                                                            >
+                                                                Edit Deployment
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteMatch(scrim.id);
+                                                                }}
+                                                                className="px-4 md:px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg md:rounded-xl transition-all shadow-xl hover:shadow-red-500/30 active:scale-95 whitespace-nowrap"
+                                                            >
+                                                                Term. Mission
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
                                 {scrims.length === 0 && (
                                     <tr>
                                         <td colSpan={5} className="p-16 text-center">
@@ -1066,7 +1079,7 @@ const TeamManagement: React.FC<{
                                     return Array.from({ length: 42 }).map((_, i) => {
                                         const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), i - startDay + 1);
                                         const isCurrentMonth = date.getMonth() === viewDate.getMonth();
-                                        const dayScrims = scrims.filter(s => new Date(s.date).toDateString() === date.toDateString());
+                                        const dayScrims = groupedScrimsByDate[date.toDateString()] || [];
                                         const isToday = date.toDateString() === new Date().toDateString();
 
                                         return (

@@ -11,6 +11,7 @@ interface TacticalIntelGraphsProps {
     teamId?: number | null;
     availableTeams: { id: number; name: string; game: string }[];
     userRole?: string;
+    dbUserId?: number;
 }
 
 interface PlayerStat {
@@ -491,7 +492,7 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
 };
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initialTeamId, availableTeams, userRole: initialUserRole }) => {
+const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initialTeamId, availableTeams, userRole: initialUserRole, dbUserId }) => {
     const [activeTab, setActiveTab] = useState<'scrim' | 'tournament'>('scrim');
     const [selectedTeamId, setSelectedTeamId] = useState<number | null>(initialTeamId ?? (availableTeams[0]?.id || null));
     const [scrims, setScrims] = useState<any[]>([]);
@@ -571,10 +572,11 @@ const TacticalIntelGraphs: React.FC<TacticalIntelGraphsProps> = ({ teamId: initi
         if (!selectedTeamId) return;
         setLoading(true);
         setIntelError(null);
+        const queryParams = `teamId=${selectedTeamId}${dbUserId ? `&requesterId=${dbUserId}` : ''}`;
         Promise.all([
-            fetch(`${API}/api/scrims?teamId=${selectedTeamId}`).then(r => r.ok ? r.json() : { success: false, error: 'SCRIM_FEED_FAILED' }),
-            fetch(`${API}/api/tournaments?teamId=${selectedTeamId}`).then(r => r.ok ? r.json() : { success: false, error: 'TOURNAMENT_FEED_FAILED' }),
-            fetch(`${API}/api/teams/${selectedTeamId}/stats`).then(r => r.ok ? r.json() : { success: false, error: 'INTEL_STATS_FAILED' }),
+            fetch(`${API}/api/scrims?${queryParams}`).then(r => r.ok ? r.json() : { success: false, error: 'SCRIM_FEED_FAILED' }),
+            fetch(`${API}/api/tournaments?${queryParams}`).then(r => r.ok ? r.json() : { success: false, error: 'TOURNAMENT_FEED_FAILED' }),
+            fetch(`${API}/api/teams/${selectedTeamId}/stats?${queryParams}`).then(r => r.ok ? r.json() : { success: false, error: 'INTEL_STATS_FAILED' }),
         ]).then(([sRes, tRes, stRes]) => {
             if (sRes.success) setScrims(Array.isArray(sRes.data) ? sRes.data : []);
             if (tRes.success) setTournaments(Array.isArray(tRes.data) ? tRes.data : []);
