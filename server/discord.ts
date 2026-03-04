@@ -16,16 +16,19 @@ client.on('error', (err) => {
 });
 
 // Helper to wait for bot to be ready
-const ensureDiscordReady = async (timeoutMs = 8000): Promise<boolean> => {
+const ensureDiscordReady = async (timeoutMs = 12000): Promise<boolean> => {
     if (client.isReady()) return true;
 
     const token = process.env.DISCORD_BOT_TOKEN;
-    if (!token) return false;
+    if (!token) {
+        console.error('[DISCORD] BOT_TOKEN missing in environment.');
+        return false;
+    }
 
-    // Trigger login if not already started
-    // In serverless, if client exists but is not ready, we attempt login
+    // Trigger login if not already connected
     try {
         if (!client.isReady()) {
+            console.log('[DISCORD] Bot not ready, attempting on-demand login...');
             initDiscord();
         }
     } catch (e) {
@@ -34,11 +37,14 @@ const ensureDiscordReady = async (timeoutMs = 8000): Promise<boolean> => {
 
     const start = Date.now();
     while (!client.isReady() && Date.now() - start < timeoutMs) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`[DISCORD] Waiting for readiness... (${Math.round((Date.now() - start) / 1000)}s)`);
     }
 
     if (!client.isReady()) {
-        console.error('[DISCORD] Timeout waiting for bot to be ready.');
+        console.error('[DISCORD] Timeout waiting for bot to be ready after', timeoutMs, 'ms');
+    } else {
+        console.log('[DISCORD] Bot is now ready for operations.');
     }
     return client.isReady();
 };
@@ -50,6 +56,15 @@ export const initDiscord = () => {
         console.warn('[DISCORD] No bot token found (DISCORD_BOT_TOKEN). Notifications will be skipped.');
         return;
     }
+
+    // Check if login is already in progress to avoid multiple parallel attempts
+    if (client.ws.status === 0) return; // Already ready
+    if (client.ws.status === 1 || client.ws.status === 2) {
+        console.log('[DISCORD] Login already in progress, skipping redundant attempt.');
+        return;
+    }
+
+    console.log('[DISCORD] Initiating login sequence...');
     client.login(token).catch(err => {
         console.error('[DISCORD] Failed to login:', err);
     });
@@ -57,20 +72,23 @@ export const initDiscord = () => {
 
 // Send message to configured channel
 export const sendToDiscord = async (message: string, imagePath?: string | null, targetChannelId?: string) => {
+    console.log(`[DISCORD] Preparing notification for channel: ${targetChannelId || 'DEFAULT'}`);
+
     const ready = await ensureDiscordReady();
     if (!ready) {
-        console.warn('[DISCORD] Cannot send message: bot not ready after wait/init.');
+        console.warn('[DISCORD] Aborting: Bot never reached ready state.');
         return;
     }
 
     const channelId = targetChannelId || process.env.DISCORD_SCRIM_CHANNEL_ID;
     if (!channelId) {
-        console.warn('[DISCORD] No channel ID configured.');
+        console.warn('[DISCORD] No channel ID found in environment or parameters.');
         return;
     }
 
     try {
-        const channel = await client.channels.fetch(channelId);
+        // Use force: true to bypass cache in serverless cold starts
+        const channel = await client.channels.fetch(channelId, { force: true });
         if (channel && channel.isTextBased()) {
             // Role mention resolution
             let finalMessage = message;
@@ -78,7 +96,6 @@ export const sendToDiscord = async (message: string, imagePath?: string | null, 
 
             if (guild) {
                 // Find all potential @Role mentions in the message
-                // Use a character set that excludes newlines to preserve formatting
                 const mentionMatches = message.match(/@([a-zA-Z0-9 :_-]+)/g);
                 if (mentionMatches) {
                     const roles = await guild.roles.fetch();
@@ -98,11 +115,11 @@ export const sendToDiscord = async (message: string, imagePath?: string | null, 
             }
 
             await (channel as TextChannel).send(payload);
-            console.log(`[DISCORD] Notification sent to channel ${channelId} ${imagePath ? 'with image' : ''}`);
+            console.log(`[DISCORD] Message dispatched successfully to ${channelId}`);
         } else {
-            console.error(`[DISCORD ERROR] Channel ${channelId} not found or is not a text channel.`);
+            console.error(`[DISCORD ERROR] Target ${channelId} is invalid or non-textual.`);
         }
     } catch (error: any) {
-        console.error(`[DISCORD ERROR] Error sending message to ${channelId}: ${error.message}`);
+        console.error(`[DISCORD ERROR] Dispatch failed for ${channelId}:`, error.message);
     }
 };
