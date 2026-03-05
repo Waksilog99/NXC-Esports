@@ -179,15 +179,16 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
             .map((a: any) => a.name);
     };
 
-    const getPerformanceLabel = (avgPlusMinus: number) => {
-        if (avgPlusMinus < -10) return { label: 'Very Poor Avg', color: 'text-red-600' };
-        if (avgPlusMinus < -5) return { label: 'Poor Avg', color: 'text-red-500' };
-        if (avgPlusMinus < -1) return { label: 'Slightly Poor Avg', color: 'text-amber-500' };
-        if (avgPlusMinus === 0) return { label: 'Avg', color: 'text-slate-400' };
-        if (avgPlusMinus <= 5) return { label: 'Slightly Above Avg', color: 'text-emerald-400' };
-        if (avgPlusMinus <= 10) return { label: 'Above Avg', color: 'text-emerald-500' };
-        if (avgPlusMinus <= 20) return { label: 'Elite', color: 'text-purple-400' };
-        return { label: 'Pro', color: 'text-amber-500' };
+    const getPerformanceLabel = (totalPlusMinus: number) => {
+        if (totalPlusMinus < -10) return { label: 'Very Poor Avg', color: 'text-red-600' };
+        if (totalPlusMinus >= -10 && totalPlusMinus < -5) return { label: 'Poor Avg', color: 'text-red-500' };
+        if (totalPlusMinus >= -5 && totalPlusMinus < -1) return { label: 'Slightly Poor Avg', color: 'text-amber-500' };
+        if (totalPlusMinus >= -1 && totalPlusMinus <= 1) return { label: 'Avg', color: 'text-slate-400' };
+        if (totalPlusMinus > 1 && totalPlusMinus <= 5) return { label: 'Slightly Above Avg', color: 'text-emerald-400' };
+        if (totalPlusMinus > 5 && totalPlusMinus <= 10) return { label: 'Above Avg', color: 'text-emerald-500' };
+        if (totalPlusMinus > 10 && totalPlusMinus <= 20) return { label: 'Elite', color: 'text-purple-400' };
+        if (totalPlusMinus > 20) return { label: 'Pro', color: 'text-amber-500' };
+        return { label: 'Avg', color: 'text-slate-400' };
     };
 
     return (
@@ -289,7 +290,7 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                                 totalPlusMinus += (m.kills - m.deaths);
                                             });
                                             const avgPlusMinus = totalMatches > 0 ? totalPlusMinus / totalMatches : 0;
-                                            const performance = getPerformanceLabel(avgPlusMinus);
+                                            const performance = getPerformanceLabel(totalPlusMinus);
 
                                             return (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
@@ -297,8 +298,8 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                                         <div className={`absolute top-0 right-0 w-32 h-32 ${performance.color.replace('text-', 'bg-')}/10 rounded-full blur-3xl -mr-16 -mt-16 transition-all group-hover:scale-110`} />
                                                         <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2 relative z-10">Historical Performance Rating</p>
                                                         <div className="flex items-end gap-3 relative z-10">
-                                                            <p className={`text-3xl font-black italic ${totalPlusMinus >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                                {totalPlusMinus > 0 ? '+' : ''}{totalPlusMinus}
+                                                            <p className={`text-3xl font-black italic ${avgPlusMinus >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                                {avgPlusMinus > 0 ? '+' : ''}{avgPlusMinus.toFixed(1)}
                                                             </p>
                                                             <div className="mb-1">
                                                                 <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-white/5 border border-white/10 ${performance.color}`}>
@@ -307,7 +308,7 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                                             </div>
                                                         </div>
                                                         <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-2 relative z-10">
-                                                            Avg +/– : <span className="text-slate-400">{avgPlusMinus.toFixed(1)}</span> per map
+                                                            Total +/– : <span className="text-slate-400">{totalPlusMinus > 0 ? '+' : ''}{totalPlusMinus}</span> across all matches
                                                         </p>
                                                     </div>
 
