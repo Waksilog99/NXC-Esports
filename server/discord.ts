@@ -35,40 +35,16 @@ export const initDiscord = () => {
     });
 };
 
-// Wait for the client to be ready (critical for serverless cold starts)
-export const ensureDiscordReady = async (timeoutMs = 5000) => {
-    if (client.isReady()) return true;
-
-    initDiscord();
-
-    return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            console.warn('[DISCORD] Timeout waiting for client ready state.');
-            resolve(false);
-        }, timeoutMs);
-
-        client.once('ready', () => {
-            clearTimeout(timeout);
-            resolve(true);
-        });
-    });
-};
-
 // Send message to configured channel using REST (stateless)
 export const sendToDiscord = async (message: string, imagePath?: string | null, targetChannelId?: string) => {
     const token = process.env.DISCORD_BOT_TOKEN;
-    const channelId = targetChannelId || process.env.DISCORD_SCRIM_CHANNEL_ID;
+    if (!token) return;
 
-    if (!token || !channelId) {
-        console.warn('[DISCORD] Missing token or channel ID. Deployment notice skipped.');
-        return;
-    }
+    const channelId = targetChannelId || process.env.DISCORD_SCRIM_CHANNEL_ID;
+    if (!channelId) return;
 
     rest.setToken(token);
     console.log(`[DISCORD REST] Sending notification to channel: ${channelId}`);
-
-    // Ensure client is ready for best-effort role resolution (async)
-    await ensureDiscordReady(3000).catch(() => console.warn('[DISCORD] best-effort readiness check timed out.'));
 
     try {
         // Resolve role mentions if client is ready (best effort)
