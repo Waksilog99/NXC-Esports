@@ -1479,8 +1479,7 @@ const TeamManagement: React.FC<{
                                         <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-2"}`}>Kills</div>
                                         <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-2"}`}>Deaths</div>
                                         <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-2"}`}>Assists</div>
-                                        <div className={`text-center ${isValorantFamily ? "col-span-1" : "col-span-1"} text-amber-500/60`}>+/-</div>
-                                        <div className={`text-center text-amber-500/60 "col-span-1"`}>ACS</div>
+                                        <div className={`text-center text-amber-500/60 col-span-2`}>ACS</div>
                                     </div>
                                     <div className="space-y-3">
                                         {mapResults[activeMapTab]?.results?.results?.map((stat, idx) => (
@@ -1585,12 +1584,7 @@ const TeamManagement: React.FC<{
                                                         setMapResults(prev => ({ ...prev, [activeMapTab]: { ...currentTab, results: { ...currentResults, results: updatedResultsArr } } }));
                                                     }} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 text-center font-black text-blue-400 focus:border-blue-500/50 outline-none transition-all px-0" />
                                                 </div>
-                                                <div className={isValorantFamily ? "col-span-1" : "col-span-1"}>
-                                                    <div className={`w-full bg-black/20 border border-white/5 rounded-xl py-2 text-center font-black transition-all ${(Number(stat.kills) - Number(stat.deaths)) > 0 ? 'text-emerald-500' : (Number(stat.kills) - Number(stat.deaths)) < 0 ? 'text-red-500' : 'text-slate-500'}`}>
-                                                        {(Number(stat.kills) - Number(stat.deaths)) > 0 ? `+${Number(stat.kills) - Number(stat.deaths)}` : Number(stat.kills) - Number(stat.deaths)}
-                                                    </div>
-                                                </div>
-                                                <div className={`col-span-1 relative flex items-center space-x-1 md:space-x-3`}>
+                                                <div className={`col-span-2 relative flex items-center space-x-1 md:space-x-3`}>
                                                     <input type="number" min="0" value={stat.acs || 0} onChange={e => {
                                                         const currentTab = mapResults[activeMapTab];
                                                         const currentResults = currentTab?.results;
@@ -1879,8 +1873,6 @@ const TeamManagement: React.FC<{
                                                         <th className="p-4 md:p-6 whitespace-nowrap">Operator identity</th>
                                                         {isValorantFamily && <th className="p-4 md:p-6 text-center whitespace-nowrap text-indigo-400">Agent</th>}
                                                         {isValorantFamily && <th className="p-4 md:p-6 text-center whitespace-nowrap text-fuchsia-400">Role</th>}
-                                                        <th className="p-4 md:p-6 text-center whitespace-nowrap">K / D / A</th>
-                                                        <th className="p-4 md:p-6 text-center whitespace-nowrap">+/-</th>
                                                         <th className="p-4 md:p-6 text-center whitespace-nowrap">KDA Ratio</th>
                                                         <th className="p-4 md:p-6 text-center text-amber-500 whitespace-nowrap">ACS</th>
                                                     </tr>
@@ -1932,11 +1924,6 @@ const TeamManagement: React.FC<{
                                                             <td className="p-4 md:p-6 text-center">
                                                                 <div className="text-lg md:text-xl font-black text-white italic tracking-tighter tabular-nums">
                                                                     {stat.kills}/{stat.deaths}/{stat.assists}
-                                                                </div>
-                                                            </td>
-                                                            <td className="p-4 md:p-6 text-center">
-                                                                <div className={`text-lg md:text-xl font-black italic tracking-tighter tabular-nums ${(stat.kills - stat.deaths) > 0 ? 'text-emerald-500' : (stat.kills - stat.deaths) < 0 ? 'text-red-500' : 'text-slate-500'}`}>
-                                                                    {(stat.kills - stat.deaths) > 0 ? `+${stat.kills - stat.deaths}` : stat.kills - stat.deaths}
                                                                 </div>
                                                             </td>
                                                             <td className="p-4 md:p-6 text-center">
