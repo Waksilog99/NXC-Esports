@@ -4987,7 +4987,7 @@ app.get('/api/cron/check-notifications', async (req, res) => {
         const scheduler = await import('./scheduler.js');
 
         console.log('[CRON] Initializing Discord bot...');
-        discord.initDiscord();
+        await discord.ensureDiscordReady();
 
         console.log('[CRON] Executing global notification check...');
         await scheduler.checkAllNotifications();

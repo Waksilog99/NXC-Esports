@@ -27,11 +27,30 @@ export const initDiscord = () => {
 
     rest.setToken(token);
 
-    if (client.ws.status === 0) return;
-    if (client.ws.status === 1 || client.ws.status === 2) return;
+    if (client.ws.status === 0) return; // Already connected
+    if (client.ws.status === 1 || client.ws.status === 2) return; // Connecting/Reconnecting
 
     client.login(token).catch(err => {
         console.error('[DISCORD] Client login failed:', err);
+    });
+};
+
+// Wait for the client to be ready (critical for serverless cold starts)
+export const ensureDiscordReady = async (timeoutMs = 5000) => {
+    if (client.isReady()) return true;
+
+    initDiscord();
+
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            console.warn('[DISCORD] Timeout waiting for client ready state.');
+            resolve(false);
+        }, timeoutMs);
+
+        client.once('ready', () => {
+            clearTimeout(timeout);
+            resolve(true);
+        });
     });
 };
 
@@ -47,6 +66,9 @@ export const sendToDiscord = async (message: string, imagePath?: string | null, 
 
     rest.setToken(token);
     console.log(`[DISCORD REST] Sending notification to channel: ${channelId}`);
+
+    // Ensure client is ready for best-effort role resolution (async)
+    await ensureDiscordReady(3000).catch(() => console.warn('[DISCORD] best-effort readiness check timed out.'));
 
     try {
         // Resolve role mentions if client is ready (best effort)
