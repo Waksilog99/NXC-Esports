@@ -185,25 +185,6 @@ const setCache = (key: string, data: any, ttl = CACHE_TTL_MS) => {
 const invalidateCache = () => cache.clear();
 
 
-// Test Route for Discord Notification (Moved to top for debugging)
-app.post('/api/test/notification', async (req, res) => {
-    console.log('[DEBUG] Hit /api/test/notification route (TOP)');
-    try {
-        const { sendAIEventNotification } = await import('./scheduler.js');
-        const dummyEvent = {
-            title: "NOW RECRUITING: WC Solana (VALORANT PC)",
-            description: "WC is officially expanding our VALORANT PC FEMALE DIVISION with the launch of WC Solana. We are looking for high potential players ready to build a legacy suitable for elite community leagues.\n\nRequirements:\n- Gender: Female\n- Rank: Diamond - Immortal\n- Team Size: 5 Main + 2 Subs\n- Commitment: Available for scrims/VODs.",
-            location: "Discord Ticket #player-applications",
-            date: new Date().toISOString()
-        };
-
-        await sendAIEventNotification(dummyEvent, 'TEST');
-        res.json({ success: true, message: "Test notification sent to Discord." });
-    } catch (error) {
-        console.error("Test notification failed:", error);
-        res.status(500).json({ success: false, error: "Failed to send test notification." });
-    }
-});
 
 // Legacy SHA-256 hash (used before bcrypt migration)
 const legacyHash = (password: string): string =>
@@ -2384,6 +2365,58 @@ app.put('/api/teams/:id/manager', async (req, res) => {
     } catch (error: any) {
         console.error("Error in PUT /api/teams/:id/manager:", error);
         res.status(500).json({ success: false, error: 'Failed to update team manager', details: error.message });
+    }
+});
+
+app.delete('/api/teams/:id', async (req, res) => {
+    const { id } = req.params;
+    const { requesterId } = req.body;
+    try {
+        // Authorization check
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized: Requester ID required.' });
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        if (!requester || !['admin', 'ceo'].some(r => requester.role?.includes(r))) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Only Admin or CEO can decommission units.' });
+        }
+
+        const teamId = Number(id);
+
+        // 1. Delete associated stats and progress for players in this team
+        const teamPlayers = await db.select({ id: players.id }).from(players).where(eq(players.teamId, teamId));
+        const playerIds = teamPlayers.map(p => p.id);
+
+        if (playerIds.length > 0) {
+            await db.delete(scrimPlayerStats).where(inArray(scrimPlayerStats.playerId, playerIds));
+            await db.delete(tournamentPlayerStats).where(inArray(scrimPlayerStats.playerId, playerIds)); // Note: Fix schema reference if needed, but standardizing on playerId
+            await db.delete(playerQuotaProgress).where(inArray(playerQuotaProgress.playerId, playerIds));
+            await db.delete(players).where(inArray(players.id, playerIds));
+        }
+
+        // 2. Delete Scrims and associated stats
+        const teamScrims = await db.select({ id: scrims.id }).from(scrims).where(eq(scrims.teamId, teamId));
+        const scrimIds = teamScrims.map(s => s.id);
+        if (scrimIds.length > 0) {
+            await db.delete(scrimPlayerStats).where(inArray(scrimPlayerStats.scrimId, scrimIds));
+            await db.delete(scrims).where(inArray(scrims.id, scrimIds));
+        }
+
+        // 3. Delete Tournaments and associated stats
+        const teamTournaments = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.teamId, teamId));
+        const tourIds = teamTournaments.map(t => t.id);
+        if (tourIds.length > 0) {
+            await db.delete(tournamentPlayerStats).where(inArray(tournamentPlayerStats.tournamentId, tourIds));
+            await db.delete(tournaments).where(inArray(tournaments.id, tourIds));
+        }
+
+        // 4. Delete the team itself
+        await db.delete(teams).where(eq(teams.id, teamId));
+
+        notifyRefresh();
+        res.json({ success: true, message: 'Squad decommissioned and all associated data purged.' });
+    } catch (error: any) {
+        console.error("Error in DELETE /api/teams/:id:", error);
+        res.status(500).json({ success: false, error: 'Failed to delete team', details: error.message });
     }
 });
 

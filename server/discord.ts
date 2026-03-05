@@ -14,6 +14,28 @@ export const initDiscord = () => {
     rest.setToken(token);
 };
 
+/**
+ * Maps team names (as stored in DB) to Discord Role IDs.
+ * USER: Populate this object with unique team names as keys and 
+ * their corresponding Discord Role IDs as values to enable pings.
+ */
+export const ROLE_MAPPINGS: Record<string, string> = {
+    // Example: 'Alpha Squad': 'ID_HERE',
+};
+
+/**
+ * Returns a Discord role mention string <@&ID> if a mapping exists,
+ * otherwise returns a plain string prefixed with @.
+ */
+export const getRoleMention = (teamName: string): string => {
+    const roleId = ROLE_MAPPINGS[teamName];
+    if (roleId) {
+        return `<@&${roleId}>`;
+    }
+    // Fallback if no specific ID is found
+    return `@${teamName}`;
+};
+
 // Send message to configured channel using REST (stateless)
 export const sendToDiscord = async (message: string, imagePath?: string | null, targetChannelId?: string) => {
     const token = process.env.DISCORD_BOT_TOKEN;

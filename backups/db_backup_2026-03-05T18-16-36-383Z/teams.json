@@ -1,0 +1,34 @@
+[
+  {
+    "id": 12,
+    "name": "AK Esports",
+    "managerId": 88,
+    "game": "Valorant Mobile",
+    "logo": null,
+    "description": "DRAGON SLAYER & BATTLEFIELD CONQUERER"
+  },
+  {
+    "id": 13,
+    "name": "OG Esports",
+    "managerId": 88,
+    "game": "Valorant Mobile",
+    "logo": null,
+    "description": "OLYMPIC BEAST & DESTROYER OF THE VOID"
+  },
+  {
+    "id": 15,
+    "name": "Dota 2 Omega",
+    "managerId": null,
+    "game": "Dota 2",
+    "logo": null,
+    "description": "The ancient guardians of our legacy."
+  },
+  {
+    "id": 16,
+    "name": "CS:GO Delta",
+    "managerId": null,
+    "game": "CS:GO",
+    "logo": null,
+    "description": "Precision and tactics defined."
+  }
+]

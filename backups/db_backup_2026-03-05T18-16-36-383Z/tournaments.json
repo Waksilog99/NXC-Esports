@@ -1,0 +1,112 @@
+[
+  {
+    "id": 31,
+    "teamId": 12,
+    "date": "2026-01-31T08:13:01.021Z",
+    "name": "Pacific Ascension",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Lotus\",\"score\":\"LOSS\",\"teamScore\":0,\"opponentScore\":13}]",
+    "maps": "[\"Lotus\"]"
+  },
+  {
+    "id": 32,
+    "teamId": 12,
+    "date": "2026-02-21T14:19:00.956Z",
+    "name": "Challengers League",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Bind\",\"score\":\"WIN\",\"teamScore\":13,\"opponentScore\":5}]",
+    "maps": "[\"Bind\"]"
+  },
+  {
+    "id": 33,
+    "teamId": 12,
+    "date": "2026-02-24T11:32:12.782Z",
+    "name": "Ignition Series",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Haven\",\"score\":\"WIN\",\"teamScore\":13,\"opponentScore\":3}]",
+    "maps": "[\"Haven\"]"
+  },
+  {
+    "id": 34,
+    "teamId": 12,
+    "date": "2026-03-04T22:00:32.152Z",
+    "name": "First Strike",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Pearl\",\"score\":\"LOSS\",\"teamScore\":11,\"opponentScore\":13}]",
+    "maps": "[\"Pearl\"]"
+  },
+  {
+    "id": 35,
+    "teamId": 12,
+    "date": "2026-02-22T07:40:20.575Z",
+    "name": "Masters Qualifier",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Icebox\",\"score\":\"LOSS\",\"teamScore\":4,\"opponentScore\":13}]",
+    "maps": "[\"Icebox\"]"
+  },
+  {
+    "id": 36,
+    "teamId": 12,
+    "date": "2026-02-08T13:33:36.788Z",
+    "name": "Champion Draft",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Haven\",\"score\":\"WIN\",\"teamScore\":13,\"opponentScore\":0}]",
+    "maps": "[\"Haven\"]"
+  },
+  {
+    "id": 37,
+    "teamId": 12,
+    "date": "2026-02-03T00:32:56.959Z",
+    "name": "Red Bull Home Ground",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Fracture\",\"score\":\"LOSS\",\"teamScore\":6,\"opponentScore\":13}]",
+    "maps": "[\"Fracture\"]"
+  },
+  {
+    "id": 38,
+    "teamId": 12,
+    "date": "2026-01-20T15:38:48.835Z",
+    "name": "VALORANT Regional",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Ascent\",\"score\":\"WIN\",\"teamScore\":13,\"opponentScore\":4}]",
+    "maps": "[\"Ascent\"]"
+  },
+  {
+    "id": 39,
+    "teamId": 12,
+    "date": "2026-02-18T18:40:58.083Z",
+    "name": "Esports Open",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Fracture\",\"score\":\"WIN\",\"teamScore\":13,\"opponentScore\":4}]",
+    "maps": "[\"Fracture\"]"
+  },
+  {
+    "id": 40,
+    "teamId": 12,
+    "date": "2026-02-21T01:02:00.381Z",
+    "name": "GosuGamer Cup",
+    "opponent": "TBA Opponent",
+    "format": "BO1",
+    "status": "completed",
+    "results": "[{\"map\":1,\"mapName\":\"Pearl\",\"score\":\"WIN\",\"teamScore\":13,\"opponentScore\":8}]",
+    "maps": "[\"Pearl\"]"
+  }
+]

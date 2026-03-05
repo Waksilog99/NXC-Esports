@@ -227,6 +227,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
         }
     };
 
+    const handleDeleteTeam = async (id: number, name: string) => {
+        if (!confirm(`CRITICAL: Are you sure you want to decommission the unit "${name}"? This will permanently delete all associated scrims, tournament results, and player stats for this squad. THIS ACTION CANNOT BE UNDONE.`)) return;
+
+        try {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requesterId: user?.id })
+            });
+            const result = await res.json();
+            if (result.success) {
+                setTeams(teams.filter(t => t.id !== id));
+                showNotification({
+                    message: `Unit "${name}" decommissioned and all data purged successfully.`,
+                    type: 'success'
+                });
+            } else {
+                showNotification({
+                    message: result.error || 'Failed to decommission unit',
+                    type: 'error'
+                });
+            }
+        } catch (e) {
+            console.error("Error deleting team:", e);
+            showNotification({
+                message: 'Error decommissioning unit',
+                type: 'error'
+            });
+        }
+    };
+
     const handleSeedData = async () => {
         if (!confirm('This will seed 3 managers and 6 test teams. Proceed?')) return;
         setSeeding(true);
@@ -573,8 +604,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                                             </div>
                                         </td>
                                         <td className="py-5 text-right pr-4">
-                                            <span className="w-2 h-2 inline-block bg-emerald-500 rounded-full animate-pulse mr-2" />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Active</span>
+                                            <div className="flex items-center justify-end space-x-3">
+                                                <div className="flex items-center">
+                                                    <span className="w-2 h-2 inline-block bg-emerald-500 rounded-full animate-pulse mr-2" />
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Active</span>
+                                                </div>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteTeam(t.id, t.name);
+                                                    }}
+                                                    className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    title="Decommission Unit"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { db } from './db.js';
 import { events, eventNotifications, scrims, teams, scrimNotifications, tournaments, tournamentNotifications } from './schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
-import { sendToDiscord } from './discord.js';
+import { sendToDiscord, getRoleMention } from './discord.js';
 
 // NOTIFICATION_INTERVALS removed - we use custom logic in check loop
 
@@ -187,10 +187,12 @@ export async function sendScrimReminder(scrim: any, timeText: string) {
         const countdownLine = isNew ? `**Date/Time:** ${new Date(scrim.date).toLocaleString()}\n` : `**Countdown:** Starting in **${timeText}**\n`;
 
         const discordMsg = `${header}\n\n` +
-            `**Squad Mention:** @${teamName}\n` +
+            `**Squad:** ${getRoleMention(teamName)}\n` +
             countdownLine +
             `**Opponent:** ${scrim.opponent}\n` +
-            `**Protocol:** ${scrim.format}\n\n` +
+            `**Protocol:** ${scrim.format}\n` +
+            (scrim.maps ? `**Theater:** ${scrim.maps}\n` : '') +
+            `\n` +
             (isNew ? `*Personnel: Sync your logs. Prepare for engagement.*` : `*All personnel report to stations immediately. Prepare for theater engagement.*`);
 
         console.log(`[AUDIT-LOG-DISCORD] TO: ${process.env.DISCORD_SCRIM_CHANNEL_ID} (${isNew ? 'NEW' : 'REMINDER'})\n${discordMsg}\n${'='.repeat(50)}`);
@@ -211,7 +213,7 @@ export async function sendTournamentReminder(tourney: any, timeText: string) {
         const countdownLine = isNew ? `**Date/Time:** ${new Date(tourney.date).toLocaleString()}\n` : `**Countdown:** Starting in **${timeText}**\n`;
 
         const discordMsg = `${header}\n\n` +
-            `**Unit Mention:** @${teamName}\n` +
+            `**Unit:** ${getRoleMention(teamName)}\n` +
             countdownLine +
             `**Tournament:** ${tourney.name}\n` +
             `**Protocol:** ${tourney.format}\n\n` +
