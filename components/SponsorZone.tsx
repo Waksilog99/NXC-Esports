@@ -1,5 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { renderChartli } from '../utils/chartli';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title, 
+  Tooltip, 
+  Legend
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 import { useUser } from '../services/authService';
 import { useNotification } from '../hooks/useNotification';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
@@ -489,15 +507,31 @@ const SponsorZone: React.FC = () => {
                                 <span className="text-purple-500 font-black">TOTAL: ₱{analyticsData.reduce((acc, d) => acc + d.revenue, 0).toFixed(2)}</span>
                             </div>
                             <div className="flex-grow flex items-center justify-center min-h-0">
-                                <div 
-                                    className="w-full h-full whitespace-pre"
-                                    dangerouslySetInnerHTML={{ 
-                                        __html: renderChartli(
-                                            analyticsData.map(d => [d.revenue]),
-                                            'bars',
-                                            { width: 40, labels: analyticsData.map(d => d.name) }
-                                        ) 
-                                    }} 
+                                <Bar 
+                                    data={{
+                                        labels: analyticsData.map(d => d.name),
+                                        datasets: [{
+                                            label: 'Revenue',
+                                            data: analyticsData.map(d => d.revenue),
+                                            backgroundColor: '#a855f7',
+                                            borderRadius: 4,
+                                        }]
+                                    }}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                                                callbacks: { label: (c) => `₱${c.parsed.y.toFixed(2)}` }
+                                            }
+                                        },
+                                        scales: {
+                                            x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } },
+                                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } }
+                                        }
+                                    }}
                                 />
                             </div>
                             <div className="mt-2 flex justify-between gap-1 shrink-0">
@@ -525,15 +559,31 @@ const SponsorZone: React.FC = () => {
                                 <span className="text-blue-500 font-black">VOL: {analyticsData.reduce((acc, d) => acc + d.sales, 0)} UNITS</span>
                             </div>
                             <div className="flex-grow flex items-center justify-center min-h-0">
-                                <div 
-                                    className="w-full h-full whitespace-pre"
-                                    dangerouslySetInnerHTML={{ 
-                                        __html: renderChartli(
-                                            analyticsData.map(d => [d.sales]),
-                                            'bars',
-                                            { width: 40, labels: analyticsData.map(d => d.name) }
-                                        ) 
-                                    }} 
+                                <Bar 
+                                    data={{
+                                        labels: analyticsData.map(d => d.name),
+                                        datasets: [{
+                                            label: 'Sales',
+                                            data: analyticsData.map(d => d.sales),
+                                            backgroundColor: '#3b82f6',
+                                            borderRadius: 4,
+                                        }]
+                                    }}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                                                callbacks: { label: (c) => `${c.parsed.y} UNITS` }
+                                            }
+                                        },
+                                        scales: {
+                                            x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } },
+                                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } }
+                                        }
+                                    }}
                                 />
                             </div>
                             <div className="mt-2 flex justify-between gap-1 shrink-0">

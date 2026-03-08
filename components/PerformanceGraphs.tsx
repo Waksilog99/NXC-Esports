@@ -1,6 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { renderChartli } from '../utils/chartli';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title, 
+  Tooltip, 
+  Legend
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 interface PlayerStat {
     name: string;
@@ -48,10 +66,6 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
         }
     };
 
-    const ROYALTY_PURPLE = "#4c1d95";
-    const ROYALTY_GOLD = "#fbbf24";
-    const DARK_BG = "#020617";
-
     return (
         <div className="space-y-12">
             {/* Header Section */}
@@ -86,28 +100,28 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
                 </div>
             ) : data.players.length > 0 ? (
                 <div className="space-y-12">
-                    {/* Maps Mastery Section - NEW */}
+                    {/* Maps Mastery Section */}
                     {data.mapStats && data.mapStats.length > 0 && (
-                        <div className="glass backdrop-blur-2xl p-10 rounded-[40px] border border-white/10 shadow-soft relative group">
-                            <h4 className="text-xs font-black text-amber-600 dark:text-amber-500/60 uppercase tracking-[0.3em] mb-8 text-center">Strategic Map Mastery</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        <div className="glass backdrop-blur-2xl p-6 md:p-10 rounded-[32px] md:rounded-[40px] border border-white/10 shadow-soft relative group">
+                            <h4 className="text-[10px] font-black text-amber-600 dark:text-amber-500/60 uppercase tracking-[0.3em] mb-8 text-center">Strategic Map Mastery</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
                                 {data.mapStats.map((map, idx) => (
                                     <div key={idx} className="relative group flex flex-col items-center">
-                                        <div className="relative w-32 h-32 mb-4">
+                                        <div className="relative w-20 h-20 md:w-32 md:h-32 mb-4">
                                             <svg className="w-full h-full transform -rotate-90">
-                                                <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100 dark:text-slate-800" />
+                                                <circle cx="50%" cy="50%" r="45%" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100 dark:text-slate-800" />
                                                 <circle
-                                                    cx="64" cy="64" r="58"
+                                                    cx="50%" cy="50%" r="45%"
                                                     stroke="url(#goldGradient)" strokeWidth="8" fill="transparent"
-                                                    strokeDasharray={364.4}
-                                                    strokeDashoffset={364.4 - (364.4 * map.winRate) / 100}
+                                                    strokeDasharray="283"
+                                                    strokeDashoffset={283 - (283 * map.winRate) / 100}
                                                     strokeLinecap="round"
                                                     className="transition-all duration-1000 ease-out"
                                                 />
                                             </svg>
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                                <span className="text-2xl font-black text-[var(--text-color)] dark:text-white">{map.winRate}%</span>
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">WIN RATE</span>
+                                                <span className="text-sm md:text-2xl font-black text-[var(--text-color)] dark:text-white">{map.winRate}%</span>
+                                                <span className="text-[7px] md:text-[10px] text-slate-500 uppercase font-bold tracking-tighter">WIN RATE</span>
                                             </div>
                                             <svg width="0" height="0">
                                                 <defs>
@@ -118,74 +132,100 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
                                                 </defs>
                                             </svg>
                                         </div>
-                                        <h5 className="font-black text-[var(--text-color)] dark:text-slate-300 text-sm">{map.name}</h5>
+                                        <h5 className="font-black text-[var(--text-color)] dark:text-slate-300 text-[10px] md:text-sm">{map.name}</h5>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 md:gap-12">
                         {/* KDA Chart */}
-                        <div className="glass backdrop-blur-2xl p-10 rounded-[40px] border border-white/10 shadow-soft relative group overflow-hidden">
+                        <div className="glass backdrop-blur-2xl p-6 md:p-10 rounded-[32px] md:rounded-[40px] border border-white/10 shadow-soft relative group overflow-hidden">
                             <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-100 transition-opacity">
                                 <span className="text-[8px] font-mono text-purple-400">TERM://INTEL_KDA</span>
                             </div>
                             <h4 className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-[0.5em] mb-8">Pulse Matrix (Avg KDA)</h4>
-                            <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-purple-500/10 overflow-x-auto whitespace-pre">
-                                <div className="text-purple-400/80 mb-4 animate-pulse">
-                                    {`$ chartli kda_data.txt -t bars -w 24`}
-                                </div>
-                                <div 
-                                className="w-full h-full whitespace-pre"
-                                dangerouslySetInnerHTML={{ 
-                                    __html: renderChartli(
-                                        data.players.map(p => [Number(p.kda)]),
-                                        'bars',
-                                        { width: 30, labels: data.players.map(p => p.name) }
-                                    ) 
-                                }} 
-                            />
-                                <div className="mt-6 grid grid-cols-2 gap-4">
-                                    {data.players.map((p, i) => (
-                                        <div key={i} className="flex items-center gap-3">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                                            <span className="text-slate-500 text-[9px] uppercase font-black tracking-widest">S{i+1}:</span>
-                                            <span className="text-purple-400 font-black">{p.name}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="h-[250px] w-full relative z-10">
+                                <Bar 
+                                    data={{
+                                        labels: data.players.map(p => p.name),
+                                        datasets: [{
+                                            label: 'Average KDA',
+                                            data: data.players.map(p => Number(p.kda)),
+                                            backgroundColor: '#8b5cf6',
+                                            borderRadius: 8,
+                                        }]
+                                    }}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        indexAxis: 'y',
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                                                cornerRadius: 8,
+                                                padding: 10,
+                                                titleFont: { weight: 'bold' }
+                                            }
+                                        },
+                                        scales: {
+                                            x: { 
+                                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                                ticks: { color: 'rgba(255, 255, 255, 0.3)', font: { size: 10 } }
+                                            },
+                                            y: { 
+                                                grid: { display: false },
+                                                ticks: { color: 'rgba(255, 255, 255, 0.5)', font: { size: 10, weight: 'bold' } }
+                                            }
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
 
                         {/* ACS Chart */}
-                        <div className="glass backdrop-blur-2xl p-10 rounded-[40px] border border-white/10 shadow-soft relative group overflow-hidden">
+                        <div className="glass backdrop-blur-2xl p-6 md:p-10 rounded-[32px] md:rounded-[40px] border border-white/10 shadow-soft relative group overflow-hidden">
                             <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-100 transition-opacity">
                                 <span className="text-[8px] font-mono text-amber-500">TERM://INTEL_ACS</span>
                             </div>
                             <h4 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.5em] mb-8">Neural Intensity (Average ACS)</h4>
-                            <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 overflow-x-auto whitespace-pre">
-                                <div className="text-amber-500/80 mb-4 animate-pulse">
-                                    {`$ chartli acs_data.txt -t columns -h 8`}
-                                </div>
-                                <div 
-                                className="w-full h-full whitespace-pre"
-                                dangerouslySetInnerHTML={{ 
-                                    __html: renderChartli(
-                                        data.players.map(p => [p.acs]),
-                                        'columns',
-                                        { height: 8 }
-                                    ) 
-                                }} 
-                            />
-                                <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4">
-                                    {data.players.map((p, i) => (
-                                        <div key={i} className="flex items-center gap-3">
-                                            <span className="text-slate-500 text-[9px] uppercase font-black tracking-widest">{i + 1}:</span>
-                                            <span className="text-amber-500 font-black">{p.name}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="h-[250px] w-full relative z-10">
+                                <Bar 
+                                    data={{
+                                        labels: data.players.map(p => p.name),
+                                        datasets: [{
+                                            label: 'Average ACS',
+                                            data: data.players.map(p => Number(p.acs)),
+                                            backgroundColor: '#fbbf24',
+                                            borderRadius: 8,
+                                        }]
+                                    }}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { display: false },
+                                            tooltip: {
+                                                backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                                                cornerRadius: 8,
+                                                padding: 10,
+                                                titleFont: { weight: 'bold' }
+                                            }
+                                        },
+                                        scales: {
+                                            x: { 
+                                                grid: { display: false },
+                                                ticks: { color: 'rgba(255, 255, 255, 0.5)', font: { size: 10, weight: 'bold' } }
+                                            },
+                                            y: { 
+                                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                                ticks: { color: 'rgba(255, 255, 255, 0.3)', font: { size: 10 } }
+                                            }
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>

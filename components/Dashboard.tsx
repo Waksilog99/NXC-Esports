@@ -1,10 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { renderChartli } from '../utils/chartli';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  PointElement, 
+  LineElement, 
+  Title, 
+  Tooltip, 
+  Legend, 
+  Filler,
+  ChartOptions as ChartJSOptions
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
 import { getTeamAnalysis } from '../services/geminiService';
 import { useUser } from '../services/authService';
 import { useNotification } from '../hooks/useNotification';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 import { animate, stagger } from 'animejs';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 const EMPTY_STATS = (label1: string, label2: string, label3: string, label4: string) => [
   { label: label1, value: '—', color: 'bg-amber-500' },
@@ -449,30 +472,71 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
                   <p className="text-[9px] text-slate-500 mt-2">Stats will appear once scrims are logged</p>
                 </div>
               ) : (
-                <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 flex-grow overflow-hidden flex flex-col">
-                  <div className="mb-4 text-amber-500/80 shrink-0">
-                    <span className="opacity-50">$ chartli performance.txt -t svg -m lines</span>
-                  </div>
-                  <div className="flex-grow flex items-center justify-center min-h-0">
-                    <div 
-                      className="w-full h-full"
-                      dangerouslySetInnerHTML={{ 
-                        __html: renderChartli(
-                          computedChartData.map(d => [d.winRate]),
-                          'svg',
-                          { mode: 'lines', width: 600, height: 200 }
-                        ) 
-                      }} 
-                    />
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 md:grid-cols-6 gap-2 shrink-0">
-                    {computedChartData.slice(-6).map((d, i) => (
-                      <div key={i} className="flex flex-col gap-0.5">
-                        <span className="text-[7px] text-slate-600 font-black uppercase">{d.date}</span>
-                        <span className="text-amber-500 font-bold">{d.winRate}%</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="bg-black/60 rounded-3xl p-6 md:p-8 border border-white/5 flex-grow overflow-hidden relative">
+                  <Line 
+                    data={{
+                      labels: computedChartData.map(d => d.date),
+                      datasets: [{
+                        label: 'Win Rate',
+                        data: computedChartData.map(d => d.winRate),
+                        borderColor: '#fbbf24',
+                        backgroundColor: (context) => {
+                          const ctx = context.chart.ctx;
+                          const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+                          gradient.addColorStop(0, 'rgba(251, 191, 36, 0.3)');
+                          gradient.addColorStop(1, 'rgba(251, 191, 36, 0)');
+                          return gradient;
+                        },
+                        borderWidth: 4,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#fbbf24',
+                        pointBorderColor: '#020617',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                          titleFont: { size: 10, weight: 'bold' },
+                          bodyFont: { size: 12, weight: 'bold' },
+                          padding: 12,
+                          cornerRadius: 12,
+                          borderColor: 'rgba(251, 191, 36, 0.2)',
+                          borderWidth: 1,
+                          displayColors: false,
+                          callbacks: {
+                            label: (context) => `${context.parsed.y}% WIN RATE`
+                          }
+                        }
+                      },
+                      scales: {
+                        x: {
+                          grid: { display: false },
+                          ticks: { 
+                            color: 'rgba(148, 163, 184, 0.5)',
+                            font: { size: 9, weight: 'bold' }
+                          }
+                        },
+                        y: {
+                          min: 0,
+                          max: 100,
+                          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                          ticks: { 
+                            color: 'rgba(148, 163, 184, 0.5)',
+                            font: { size: 9, weight: 'bold' },
+                            callback: (value) => `${value}%`
+                          }
+                        }
+                      }
+                    }}
+                  />
                 </div>
               )}
             </div>

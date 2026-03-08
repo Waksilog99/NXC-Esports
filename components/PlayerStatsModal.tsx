@@ -1,5 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { renderChartli } from '../utils/chartli';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  PointElement, 
+  LineElement, 
+  Title, 
+  Tooltip, 
+  Legend, 
+  Filler 
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 import Modal from './Modal';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 
@@ -670,15 +692,40 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                             <span>$ chartli trajectory_data.txt -t svg -m lines</span>
                                         </div>
                                         <div className="flex-grow flex items-center justify-center min-h-0">
-                                            <div 
-                                                className="w-full h-full"
-                                                dangerouslySetInnerHTML={{ 
-                                                    __html: renderChartli(
-                                                        getDetailData().map(d => [d.kd]),
-                                                        'svg',
-                                                        { mode: 'lines', width: 600, height: 200 }
-                                                    ) 
-                                                }} 
+                                            <Line 
+                                                data={{
+                                                    labels: getDetailData().map(d => new Date(d.date).toLocaleDateString()),
+                                                    datasets: [{
+                                                        label: 'KDA',
+                                                        data: getDetailData().map(d => d.kd),
+                                                        borderColor: '#fbbf24',
+                                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                                        borderWidth: 2,
+                                                        tension: 0.4,
+                                                        fill: true,
+                                                        pointRadius: 4,
+                                                        pointHoverRadius: 6,
+                                                        pointBackgroundColor: '#fbbf24',
+                                                    }]
+                                                }}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    plugins: {
+                                                        legend: { display: false },
+                                                        tooltip: {
+                                                            backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                                                            callbacks: { label: (c) => `${c.parsed.y.toFixed(2)} KDA` }
+                                                        }
+                                                    },
+                                                    scales: {
+                                                        x: { display: false },
+                                                        y: {
+                                                            grid: { color: 'rgba(255,255,255,0.05)' },
+                                                            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } }
+                                                        }
+                                                    }
+                                                }}
                                             />
                                         </div>
                                         <div className="mt-4 flex flex-wrap gap-4 shrink-0 overflow-x-auto no-scrollbar">

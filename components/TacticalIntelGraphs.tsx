@@ -1,5 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { renderChartli } from '../utils/chartli';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title, 
+  Tooltip, 
+  Legend
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 import { animate, stagger } from 'animejs';
 import { calculateKDA, getKDAColor, parseMatchResult } from '../utils/tactical';
 import PlayerStatsModal from './PlayerStatsModal';
@@ -325,21 +343,33 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerC
             {mapData.length > 0 && (
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden">
                     <SectionLabel label="Theater Win Rate (Neural Output)" />
-                    <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 overflow-x-auto whitespace-pre text-amber-500/80">
-                        <div className="mb-4 text-slate-500">$ chartli maps_intel.txt -t columns -h 6</div>
-                        {renderChartli(
-                            mapData.map(m => [m.winRate]),
-                            'columns',
-                            { height: 6, min: 0, max: 100 }
-                        )}
-                        <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4">
-                            {mapData.map((m, i) => (
-                                <div key={i} className="flex items-center gap-3">
-                                    <span className="text-slate-500 text-[9px] uppercase font-black tracking-widest">{i + 1}:</span>
-                                    <span className="text-amber-500 font-black">{m.name} ({m.winRate}%)</span>
-                                </div>
-                            ))}
-                        </div>
+                    <div className="h-[200px] w-full relative z-10">
+                        <Bar 
+                            data={{
+                                labels: mapData.map(m => m.name),
+                                datasets: [{
+                                    label: 'Win Rate',
+                                    data: mapData.map(m => m.winRate),
+                                    backgroundColor: '#fbbf24',
+                                    borderRadius: 4,
+                                }]
+                            }}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                                        callbacks: { label: (c) => `${c.parsed.y}% WIN RATE` }
+                                    }
+                                },
+                                scales: {
+                                    x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } } },
+                                    y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } }
+                                }
+                            }}
+                        />
                     </div>
                 </div>
             )}
@@ -418,18 +448,30 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
                 </div>
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 flex flex-col justify-center overflow-hidden">
                     <SectionLabel label="Format Matrix" />
-                    <div className="bg-black/40 rounded-2xl p-6 font-mono text-[9px] leading-tight border border-white/5 whitespace-pre text-emerald-400">
+                    <div className="h-[120px] w-full">
                         {formatData.length > 0 ? (
-                            <>
-                                <div className="mb-2 text-slate-600 opacity-50"># neural_scan --format</div>
-                                {renderChartli(
-                                    formatData.map(f => [f.value]),
-                                    'bars',
-                                    { width: 12, labels: formatData.map(f => f.name) }
-                                )}
-                            </>
+                            <Bar 
+                                data={{
+                                    labels: formatData.map(f => f.name),
+                                    datasets: [{
+                                        data: formatData.map(f => f.value),
+                                        backgroundColor: '#10b981',
+                                        borderRadius: 4,
+                                    }]
+                                }}
+                                options={{
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    indexAxis: 'y',
+                                    plugins: { legend: { display: false } },
+                                    scales: {
+                                        x: { grid: { display: false }, ticks: { display: false } },
+                                        y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 8 } } }
+                                    }
+                                }}
+                            />
                         ) : (
-                            <p className="text-slate-600 font-bold">NO DATA</p>
+                            <div className="h-full flex items-center justify-center text-slate-600 text-[10px] font-black uppercase tracking-widest">NO DATA</div>
                         )}
                     </div>
                 </div>
@@ -439,13 +481,28 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
             {opponentData.length > 0 && (
                 <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden">
                     <SectionLabel label="Hostile Engagement Frequency" color="text-purple-400/60" />
-                    <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-purple-500/10 overflow-x-auto whitespace-pre text-purple-400">
-                        <div className="mb-4 text-slate-600">$ chartli targets.txt -t bars -w 28</div>
-                        {renderChartli(
-                            opponentData.map(o => [o.count]),
-                            'bars',
-                            { width: 28, labels: opponentData.map(o => o.name) }
-                        )}
+                    <div className="h-[200px] w-full">
+                        <Bar 
+                            data={{
+                                labels: opponentData.map(o => o.name),
+                                datasets: [{
+                                    label: 'Matches',
+                                    data: opponentData.map(o => o.count),
+                                    backgroundColor: '#8b5cf6',
+                                    borderRadius: 4,
+                                }]
+                            }}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                indexAxis: 'y',
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } },
+                                    y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } } }
+                                }
+                            }}
+                        />
                     </div>
                 </div>
             )}
