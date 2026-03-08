@@ -136,13 +136,16 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
                                 <div className="text-purple-400/80 mb-4 animate-pulse">
                                     {`$ chartli kda_data.txt -t bars -w 24`}
                                 </div>
-                                <div className="text-purple-300">
-                                    {renderChartli(
+                                <div 
+                                className="w-full h-full whitespace-pre"
+                                dangerouslySetInnerHTML={{ 
+                                    __html: renderChartli(
                                         data.players.map(p => [Number(p.kda)]),
                                         'bars',
-                                        { width: 24 }
-                                    )}
-                                </div>
+                                        { width: 30, labels: data.players.map(p => p.name) }
+                                    ) 
+                                }} 
+                            />
                                 <div className="mt-6 grid grid-cols-2 gap-4">
                                     {data.players.map((p, i) => (
                                         <div key={i} className="flex items-center gap-3">
@@ -165,13 +168,16 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
                                 <div className="text-amber-500/80 mb-4 animate-pulse">
                                     {`$ chartli acs_data.txt -t columns -h 8`}
                                 </div>
-                                <div className="text-amber-400">
-                                    {renderChartli(
-                                        data.players.map(p => [Number(p.acs)]),
+                                <div 
+                                className="w-full h-full whitespace-pre"
+                                dangerouslySetInnerHTML={{ 
+                                    __html: renderChartli(
+                                        data.players.map(p => [p.acs]),
                                         'columns',
                                         { height: 8 }
-                                    )}
-                                </div>
+                                    ) 
+                                }} 
+                            />
                                 <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4">
                                     {data.players.map((p, i) => (
                                         <div key={i} className="flex items-center gap-3">

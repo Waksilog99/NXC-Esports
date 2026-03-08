@@ -1,8 +1,3 @@
-/**
- * Core rendering logic ported from the chartli package.
- * Allows using chartli-style terminal and SVG charts programmatically in React.
- */
-
 export type ChartType = 'svg' | 'ascii' | 'unicode' | 'braille' | 'spark' | 'bars' | 'columns' | 'heatmap';
 
 export interface ChartOptions {
@@ -10,6 +5,9 @@ export interface ChartOptions {
     height?: number;
     mode?: 'circles' | 'lines';
     titles?: string[];
+    min?: number;
+    max?: number;
+    labels?: string[];
 }
 
 const COLORS = [
@@ -36,15 +34,16 @@ function parseData(input: string): number[][] {
     return dataLines.map((line) => line.trim().split(/\s+/).map(Number));
 }
 
-function normalizeData(rawRows: number[][]) {
+function normalizeData(rawRows: number[][], options?: ChartOptions) {
     if (rawRows.length === 0) return { data: [], min: [], max: [] };
     const numCols = rawRows[0]?.length ?? 0;
     const columns = Array.from(
         { length: numCols },
         (_, colIdx) => rawRows.map((row) => row[colIdx] ?? 0)
     );
-    const minVals = columns.map((col) => Math.min(...col));
-    const maxVals = columns.map((col) => Math.max(...col));
+    
+    const minVals = columns.map((col, i) => options?.min !== undefined ? options.min : Math.min(...col));
+    const maxVals = columns.map((col, i) => options?.max !== undefined ? options.max : Math.max(...col));
     const deltas = columns.map((_, i) => (maxVals[i] ?? 0) - (minVals[i] ?? 0));
 
     const normalizedCols = columns.map((col, i) => {
@@ -75,7 +74,7 @@ function renderCircles(args: { colIdx: number; data: number[][]; color: string; 
     const { colIdx, data, color, chartWidth, height, xMargin, yMargin } = args;
     return data.map((_, rowIdx) => {
         const y = data[rowIdx]?.[colIdx] ?? 0;
-        const p = point({ x: rowIdx / Math.max(data.length - 1, 1), y, chartWidth, height, xMargin, yMargin });
+        const p = point({ x: data.length > 1 ? rowIdx / (data.length - 1) : 0.5, y, chartWidth, height, xMargin, yMargin });
         const [cx, cy] = p.split(",");
         return `  <circle cx='${cx}' cy='${cy}' r='2' fill='${color}' />`;
     }).join("\n");
@@ -85,7 +84,7 @@ function renderLine(args: { colIdx: number; data: number[][]; color: string; cha
     const { colIdx, data, color, chartWidth, height, xMargin, yMargin } = args;
     const points = data.map((_, rowIdx) => {
         const y = data[rowIdx]?.[colIdx] ?? 0;
-        return point({ x: rowIdx / Math.max(data.length - 1, 1), y, chartWidth, height, xMargin, yMargin });
+        return point({ x: data.length > 1 ? rowIdx / (data.length - 1) : 0.5, y, chartWidth, height, xMargin, yMargin });
     }).join(" ");
     return `  <polyline stroke='${color}' stroke-width='2' fill='none' points='${points}' stroke-linecap='round' stroke-linejoin='round' />`;
 }
@@ -118,53 +117,47 @@ export function renderSvg(normalized: any, options?: ChartOptions): string {
 export function renderBars(normalized: any, options?: ChartOptions): string {
     const width = options?.width ?? 28;
     const { data } = normalized;
-    const numCols = data[0]?.length ?? 0;
-    const lastRow = data[data.length - 1] ?? [];
-    if (numCols === 0) return "";
-    
     const BAR_CHARS = ["\u2588", "\u2593", "\u2592", "\u2591", "\u25A0", "\u25A1"];
     
-    return Array.from({ length: numCols }, (_, colIdx) => {
-        const value = Math.max(0, Math.min(1, lastRow[colIdx] ?? 0));
+    // Iterate over all rows (history)
+    return data.map((row: number[], rowIdx: number) => {
+        const value = Math.max(0, Math.min(1, row[0] ?? 0));
         const units = Math.round(value * width);
-        const char = BAR_CHARS[colIdx % BAR_CHARS.length] ?? "\u2588";
-        const bar = char.repeat(units).padEnd(width, " ");
-        return `S${colIdx + 1} |${bar}| ${value.toFixed(2)}`;
+        const bar = "\u2588".repeat(units).padEnd(width, "\u2591");
+        const label = options?.labels?.[rowIdx] ?? `R${rowIdx + 1}`;
+        return `${label.padEnd(8)} |${bar}| ${value.toFixed(2)}`;
     }).join("\n");
 }
 
 export function renderColumns(normalized: any, options?: ChartOptions): string {
     const height = options?.height ?? 8;
     const { data } = normalized;
-    const numCols = data[0]?.length ?? 0;
-    const lastRow = data[data.length - 1] ?? [];
-    if (numCols === 0) return "";
+    if (data.length === 0) return "";
     
     const COLUMN_CHARS = ["\u2588", "\u2593", "\u2592", "\u2591", "\u25A0", "\u25A1"];
     const lines = [];
     
     for (let level = height; level >= 1; level--) {
-        let row = "";
-        for (let colIdx = 0; colIdx < numCols; colIdx++) {
-            const value = Math.max(0, Math.min(1, lastRow[colIdx] ?? 0));
-            const filled = Math.round(value * height) >= level;
-            row += `${filled ? COLUMN_CHARS[colIdx % COLUMN_CHARS.length] ?? "\u2588" : " "} `;
+        let line = "";
+        for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
+            const val = data[rowIdx]?.[0] ?? 0;
+            const filled = Math.round(val * height) >= level;
+            line += filled ? "\u2588 " : "  ";
         }
-        lines.push(row.trimEnd());
+        lines.push(line.trimEnd());
     }
-    lines.push("\u2500".repeat(Math.max(1, numCols * 2 - 1)));
+    lines.push("\u2500".repeat(Math.max(1, data.length * 2 - 1)));
     return lines.join("\n");
 }
 
 export function renderChartli(input: string | number[][], type: ChartType, options?: ChartOptions): string {
     const rows = typeof input === 'string' ? parseData(input) : input;
-    const normalized = normalizeData(rows);
+    const normalized = normalizeData(rows, options);
     
     switch (type) {
         case 'svg': return renderSvg(normalized, options);
         case 'bars': return renderBars(normalized, options);
         case 'columns': return renderColumns(normalized, options);
-        // Add others as needed
         default: return renderBars(normalized, options);
     }
 }

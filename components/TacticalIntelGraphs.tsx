@@ -330,7 +330,7 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerC
                         {renderChartli(
                             mapData.map(m => [m.winRate]),
                             'columns',
-                            { height: 6 }
+                            { height: 6, min: 0, max: 100 }
                         )}
                         <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4">
                             {mapData.map((m, i) => (
@@ -392,7 +392,6 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
         .slice(0, 8);
 
     const formatData = Object.entries(formatCount).map(([name, value]) => ({ name, value }));
-    const FORMAT_COLORS = [GOLD, PURPLE, EMERALD, '#60a5fa', '#f472b6'];
 
     if (tournaments.length === 0) {
         return (
@@ -426,20 +425,12 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
                                 {renderChartli(
                                     formatData.map(f => [f.value]),
                                     'bars',
-                                    { width: 12 }
+                                    { width: 12, labels: formatData.map(f => f.name) }
                                 )}
                             </>
                         ) : (
                             <p className="text-slate-600 font-bold">NO DATA</p>
                         )}
-                    </div>
-                    <div className="mt-4 flex flex-col gap-2">
-                        {formatData.map((f, i) => (
-                            <div key={f.name} className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                <span>{f.name}</span>
-                                <span className="text-emerald-400">{f.value} OPS</span>
-                            </div>
-                        ))}
                     </div>
                 </div>
             </div>
@@ -453,16 +444,8 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
                         {renderChartli(
                             opponentData.map(o => [o.count]),
                             'bars',
-                            { width: 28 }
+                            { width: 28, labels: opponentData.map(o => o.name) }
                         )}
-                        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-                            {opponentData.map((o, i) => (
-                                <div key={i} className="flex flex-col gap-1">
-                                    <span className="text-[8px] text-slate-600 font-black tracking-widest uppercase">Target S{i+1}:</span>
-                                    <span className="text-[11px] text-white font-black truncate">{o.name}</span>
-                                </div>
-                            ))}
-                        </div>
                     </div>
                 </div>
             )}

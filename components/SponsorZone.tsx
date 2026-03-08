@@ -490,12 +490,12 @@ const SponsorZone: React.FC = () => {
                             </div>
                             <div className="flex-grow flex items-center justify-center min-h-0">
                                 <div 
-                                    className="w-full h-full"
+                                    className="w-full h-full whitespace-pre"
                                     dangerouslySetInnerHTML={{ 
                                         __html: renderChartli(
                                             analyticsData.map(d => [d.revenue]),
-                                            'svg',
-                                            { mode: 'lines', width: 400, height: 120 }
+                                            'bars',
+                                            { width: 40, labels: analyticsData.map(d => d.name) }
                                         ) 
                                     }} 
                                 />
@@ -531,7 +531,7 @@ const SponsorZone: React.FC = () => {
                                         __html: renderChartli(
                                             analyticsData.map(d => [d.sales]),
                                             'bars',
-                                            { width: 30 }
+                                            { width: 40, labels: analyticsData.map(d => d.name) }
                                         ) 
                                     }} 
                                 />
