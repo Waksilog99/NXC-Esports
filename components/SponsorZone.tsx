@@ -502,8 +502,7 @@ const SponsorZone: React.FC = () => {
                     </h3>
                     <div className="h-[200px] w-full flex flex-col">
                         <div className="bg-black/60 rounded-[24px] p-6 font-mono text-[10px] leading-relaxed border border-purple-500/10 flex-grow overflow-hidden flex flex-col">
-                            <div className="mb-2 text-slate-500 shrink-0 flex justify-between">
-                                <span>$ chartli revenue.log -t svg -m lines</span>
+                            <div className="mb-2 text-slate-500 shrink-0 flex justify-end">
                                 <span className="text-purple-500 font-black">TOTAL: ₱{analyticsData.reduce((acc, d) => acc + d.revenue, 0).toFixed(2)}</span>
                             </div>
                             <div className="flex-grow flex items-center justify-center min-h-0">
@@ -554,8 +553,7 @@ const SponsorZone: React.FC = () => {
                     </h3>
                     <div className="h-[200px] w-full flex flex-col">
                         <div className="bg-black/60 rounded-[24px] p-6 font-mono text-[10px] leading-relaxed border border-blue-500/10 flex-grow overflow-hidden flex flex-col">
-                            <div className="mb-2 text-slate-500 shrink-0 flex justify-between">
-                                <span>$ chartli requests.log -t svg -m bars</span>
+                            <div className="mb-2 text-slate-500 shrink-0 flex justify-end">
                                 <span className="text-blue-500 font-black">VOL: {analyticsData.reduce((acc, d) => acc + d.sales, 0)} UNITS</span>
                             </div>
                             <div className="flex-grow flex items-center justify-center min-h-0">

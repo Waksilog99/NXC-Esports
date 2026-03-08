@@ -341,9 +341,9 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerC
 
             {/* Map Win Rate Bars */}
             {mapData.length > 0 && (
-                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden">
-                    <SectionLabel label="Theater Win Rate (Neural Output)" />
-                    <div className="h-[200px] w-full relative z-10">
+                <div className="bg-black/40 rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden shadow-2xl backdrop-blur-3xl">
+                    <SectionLabel label="Theater Dominance (Win Rate %)" />
+                    <div className="h-[240px] w-full relative z-10">
                         <Bar 
                             data={{
                                 labels: mapData.map(m => m.name),
@@ -352,12 +352,15 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerC
                                     data: mapData.map(m => m.winRate),
                                     backgroundColor: (context) => {
                                         const ctx = context.chart.ctx;
-                                        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-                                        gradient.addColorStop(0, '#f59e0b');
-                                        gradient.addColorStop(1, '#a855f7');
+                                        const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+                                        gradient.addColorStop(0, '#a855f7');
+                                        gradient.addColorStop(1, 'rgba(168, 85, 247, 0)');
                                         return gradient;
                                     },
-                                    borderRadius: 4,
+                                    borderColor: '#f59e0b',
+                                    borderWidth: 2,
+                                    borderRadius: 12,
+                                    hoverBackgroundColor: '#f59e0b',
                                 }]
                             }}
                             options={{
@@ -367,16 +370,36 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerC
                                     legend: { display: false },
                                     tooltip: {
                                         backgroundColor: 'rgba(2, 6, 23, 0.95)',
-                                        borderColor: 'rgba(245, 158, 11, 0.3)',
+                                        borderColor: 'rgba(245, 158, 11, 0.4)',
                                         borderWidth: 1.5,
-                                        cornerRadius: 12,
-                                        padding: 12,
-                                        callbacks: { label: (c) => `${c.parsed.y}% WIN RATE` }
+                                        cornerRadius: 16,
+                                        padding: 14,
+                                        titleFont: { size: 10, weight: 'bold' },
+                                        bodyFont: { size: 12, weight: 'bold' },
+                                        displayColors: false,
+                                        callbacks: { label: (c) => `${c.parsed.y}% SUCCESS RATE` }
                                     }
                                 },
                                 scales: {
-                                    x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9, weight: 'bold' } } },
-                                    y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } }
+                                    x: { 
+                                        grid: { display: false }, 
+                                        ticks: { 
+                                            color: 'rgba(255,255,255,0.6)', 
+                                            font: { size: 10, weight: 'bold' },
+                                            padding: 10
+                                        } 
+                                    },
+                                    y: { 
+                                        min: 0, 
+                                        max: 100, 
+                                        grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false }, 
+                                        ticks: { 
+                                            color: 'rgba(255,255,255,0.4)', 
+                                            font: { size: 10 },
+                                            padding: 10,
+                                            callback: (v) => `${v}%`
+                                        } 
+                                    }
                                 }
                             }}
                         />
@@ -467,12 +490,14 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
                                         data: formatData.map(f => f.value),
                                         backgroundColor: (context) => {
                                             const ctx = context.chart.ctx;
-                                            const gradient = ctx.createLinearGradient(0, 0, 600, 0);
-                                            gradient.addColorStop(0, '#a855f7');
-                                            gradient.addColorStop(1, '#f59e0b');
+                                            const gradient = ctx.createLinearGradient(0, 0, 300, 0);
+                                            gradient.addColorStop(0, '#10b981');
+                                            gradient.addColorStop(1, 'rgba(16, 185, 129, 0)');
                                             return gradient;
                                         },
-                                        borderRadius: 4,
+                                        borderColor: '#10b981',
+                                        borderWidth: 1,
+                                        borderRadius: 6,
                                     }]
                                 }}
                                 options={{
@@ -483,15 +508,15 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
                                         legend: { display: false },
                                         tooltip: {
                                             backgroundColor: 'rgba(2, 6, 23, 0.95)',
-                                            borderColor: 'rgba(168, 85, 247, 0.3)',
+                                            borderColor: 'rgba(16, 185, 129, 0.4)',
                                             borderWidth: 1.5,
-                                            cornerRadius: 12,
-                                            padding: 12
+                                            cornerRadius: 8,
+                                            padding: 10
                                         }
                                     },
                                     scales: {
                                         x: { grid: { display: false }, ticks: { display: false } },
-                                        y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 8, weight: 'bold' } } }
+                                        y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.7)', font: { size: 9, weight: 'bold' } } }
                                     }
                                 }}
                             />
@@ -504,27 +529,52 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
 
             {/* Opponent Frequency */}
             {opponentData.length > 0 && (
-                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden">
-                    <SectionLabel label="Hostile Engagement Frequency" color="text-purple-400/60" />
-                    <div className="h-[200px] w-full">
+                <div className="bg-black/40 rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden shadow-2xl backdrop-blur-3xl">
+                    <SectionLabel label="Hostile Engagement Frequency" color="text-amber-500/80" />
+                    <div className="h-[280px] w-full">
                         <Bar 
                             data={{
                                 labels: opponentData.map(o => o.name),
                                 datasets: [{
-                                    label: 'Matches',
+                                    label: 'Engagements',
                                     data: opponentData.map(o => o.count),
-                                    backgroundColor: '#8b5cf6',
-                                    borderRadius: 4,
+                                    backgroundColor: (context) => {
+                                        const ctx = context.chart.ctx;
+                                        const gradient = ctx.createLinearGradient(0, 0, 400, 0);
+                                        gradient.addColorStop(0, '#f59e0b');
+                                        gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+                                        return gradient;
+                                    },
+                                    borderColor: '#f59e0b',
+                                    borderWidth: 1,
+                                    borderRadius: 6,
                                 }]
                             }}
                             options={{
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 indexAxis: 'y',
-                                plugins: { legend: { display: false } },
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(2, 6, 23, 0.95)',
+                                        borderColor: 'rgba(245, 158, 11, 0.4)',
+                                        borderWidth: 1.5,
+                                        cornerRadius: 12,
+                                        padding: 14,
+                                        displayColors: false,
+                                        callbacks: { label: (c) => `${c.parsed.x} DEPLOYMENTS VS ${c.label}` }
+                                    }
+                                },
                                 scales: {
-                                    x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } },
-                                    y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } } }
+                                    x: { 
+                                        grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false }, 
+                                        ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } 
+                                    },
+                                    y: { 
+                                        grid: { display: false }, 
+                                        ticks: { color: 'rgba(255,255,255,0.7)', font: { size: 10, weight: 'bold' } } 
+                                    }
                                 }
                             }}
                         />

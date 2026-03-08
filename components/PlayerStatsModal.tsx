@@ -688,9 +688,6 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                 </div>
                                 <div className="h-[300px] w-full flex flex-col">
                                     <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 flex-grow overflow-hidden flex flex-col">
-                                        <div className="mb-4 text-slate-500 shrink-0">
-                                            <span>$ chartli trajectory_data.txt -t svg -m lines</span>
-                                        </div>
                                         <div className="flex-grow flex items-center justify-center min-h-0 bg-black/40 rounded-3xl p-4 md:p-6 border border-white/5">
                                             <Line 
                                                 data={{
