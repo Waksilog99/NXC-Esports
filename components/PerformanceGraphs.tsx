@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadialBarChart, RadialBar, Cell } from 'recharts';
+import { renderChartli } from '../utils/chartli';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 
 interface PlayerStat {
@@ -127,68 +127,59 @@ const PerformanceGraphs: React.FC<PerformanceGraphsProps> = ({ teamId: initialTe
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
                         {/* KDA Chart */}
-                        <div className="glass backdrop-blur-2xl p-10 rounded-[40px] border border-white/10 shadow-soft relative group">
+                        <div className="glass backdrop-blur-2xl p-10 rounded-[40px] border border-white/10 shadow-soft relative group overflow-hidden">
                             <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-100 transition-opacity">
-                                <div className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
+                                <span className="text-[8px] font-mono text-purple-400">TERM://INTEL_KDA</span>
                             </div>
-                            <h4 className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-[0.5em] mb-12">Assault Efficiency (Avg KDA)</h4>
-                            <div className="h-[350px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.players}>
-                                        <CartesianGrid strokeDasharray="10 10" stroke="#4c1d9522" vertical={false} />
-                                        <XAxis dataKey="name" stroke="#6366f1" fontSize={10} fontWeight="900" tickLine={false} axisLine={false} dy={10} />
-                                        <YAxis stroke="#6366f1" fontSize={10} fontWeight="900" tickLine={false} axisLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '24px', fontSize: '12px', padding: '15px' }}
-                                            itemStyle={{ color: '#a78bfa', fontWeight: 'bold' }}
-                                            cursor={{ fill: 'rgba(76, 29, 149, 0.15)' }}
-                                        />
-                                        <Bar dataKey="kda" radius={[8, 8, 0, 0]} barSize={24}>
-                                            {data.players.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={`url(#purpleGradient)`} />
-                                            ))}
-                                        </Bar>
-                                        <defs>
-                                            <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={1} />
-                                                <stop offset="100%" stopColor="#4c1d95" stopOpacity={0.8} />
-                                            </linearGradient>
-                                        </defs>
-                                    </BarChart>
-                                </ResponsiveContainer>
+                            <h4 className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-[0.5em] mb-8">Pulse Matrix (Avg KDA)</h4>
+                            <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-purple-500/10 overflow-x-auto whitespace-pre">
+                                <div className="text-purple-400/80 mb-4 animate-pulse">
+                                    {`$ chartli kda_data.txt -t bars -w 24`}
+                                </div>
+                                <div className="text-purple-300">
+                                    {renderChartli(
+                                        data.players.map(p => [Number(p.kda)]),
+                                        'bars',
+                                        { width: 24 }
+                                    )}
+                                </div>
+                                <div className="mt-6 grid grid-cols-2 gap-4">
+                                    {data.players.map((p, i) => (
+                                        <div key={i} className="flex items-center gap-3">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                            <span className="text-slate-500 text-[9px] uppercase font-black tracking-widest">S{i+1}:</span>
+                                            <span className="text-purple-400 font-black">{p.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
                         {/* ACS Chart */}
-                        <div className="bg-white dark:bg-slate-900/40 backdrop-blur-2xl p-10 rounded-[40px] border border-slate-200 dark:border-amber-500/10 shadow-soft relative group">
+                        <div className="glass backdrop-blur-2xl p-10 rounded-[40px] border border-white/10 shadow-soft relative group overflow-hidden">
                             <div className="absolute top-0 right-0 p-6 opacity-20 group-hover:opacity-100 transition-opacity">
-                                <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                                <span className="text-[8px] font-mono text-amber-500">TERM://INTEL_ACS</span>
                             </div>
-                            <h4 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.5em] mb-12">Average Combat Score (Intensity)</h4>
-                            <div className="h-[350px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.players}>
-                                        <CartesianGrid strokeDasharray="10 10" stroke="#fbbf2411" vertical={false} />
-                                        <XAxis dataKey="name" stroke="#fbbf24" fontSize={10} fontWeight="900" tickLine={false} axisLine={false} dy={10} />
-                                        <YAxis stroke="#fbbf24" fontSize={10} fontWeight="900" tickLine={false} axisLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '24px', fontSize: '12px', padding: '15px' }}
-                                            itemStyle={{ color: '#fbbf24', fontWeight: 'bold' }}
-                                            cursor={{ fill: 'rgba(251, 191, 36, 0.05)' }}
-                                        />
-                                        <Bar dataKey="acs" radius={[8, 8, 0, 0]} barSize={24}>
-                                            {data.players.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={`url(#goldBarGradient)`} />
-                                            ))}
-                                        </Bar>
-                                        <defs>
-                                            <linearGradient id="goldBarGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#fbbf24" stopOpacity={1} />
-                                                <stop offset="100%" stopColor="#d97706" stopOpacity={0.8} />
-                                            </linearGradient>
-                                        </defs>
-                                    </BarChart>
-                                </ResponsiveContainer>
+                            <h4 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-[0.5em] mb-8">Neural Intensity (Average ACS)</h4>
+                            <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 overflow-x-auto whitespace-pre">
+                                <div className="text-amber-500/80 mb-4 animate-pulse">
+                                    {`$ chartli acs_data.txt -t columns -h 8`}
+                                </div>
+                                <div className="text-amber-400">
+                                    {renderChartli(
+                                        data.players.map(p => [Number(p.acs)]),
+                                        'columns',
+                                        { height: 8 }
+                                    )}
+                                </div>
+                                <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4">
+                                    {data.players.map((p, i) => (
+                                        <div key={i} className="flex items-center gap-3">
+                                            <span className="text-slate-500 text-[9px] uppercase font-black tracking-widest">{i + 1}:</span>
+                                            <span className="text-amber-500 font-black">{p.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>

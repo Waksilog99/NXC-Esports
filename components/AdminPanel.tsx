@@ -57,6 +57,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
     const [loading, setLoading] = useState(false);
     const [pushingTelemetry, setPushingTelemetry] = useState(false);
     const [selectedSquadForModal, setSelectedSquadForModal] = useState<any | null>(null);
+    const [selectedUserForPasswordReset, setSelectedUserForPasswordReset] = useState<User | null>(null);
+    const [resetPasswordValue, setResetPasswordValue] = useState('');
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
 
     const fetchAllData = async () => {
         setLoading(true);
@@ -255,6 +258,41 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                 message: 'Error decommissioning unit',
                 type: 'error'
             });
+        }
+    };
+
+    const handleAdminResetPassword = async () => {
+        if (!selectedUserForPasswordReset || !resetPasswordValue) return;
+        setIsResettingPassword(true);
+        try {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/auth/admin-reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetUserId: selectedUserForPasswordReset.id,
+                    newPassword: resetPasswordValue,
+                    requesterId: user?.id
+                })
+            });
+            const result = await res.json();
+            if (result.success) {
+                showNotification({
+                    message: `Credentials updated for ${selectedUserForPasswordReset.name}`,
+                    type: 'success'
+                });
+                setSelectedUserForPasswordReset(null);
+                setResetPasswordValue('');
+            } else {
+                showNotification({
+                    message: result.error || 'Failed to reset password',
+                    type: 'error'
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            showNotification({ message: 'Error resetting password', type: 'error' });
+        } finally {
+            setIsResettingPassword(false);
         }
     };
 
@@ -474,7 +512,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                 </div>
 
                 <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[700px]">
                         <thead className="sticky top-0 bg-slate-50/90 dark:bg-[#0d0d14]/90 backdrop-blur-md z-10">
                             <tr className="border-b border-black/5 dark:border-white/5 text-slate-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em]">
                                 <th className="pb-6 pt-2 px-4 whitespace-nowrap">Operative</th>
@@ -519,6 +557,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                                         >
                                             Inquire
                                         </button>
+                                        <button
+                                            onClick={() => setSelectedUserForPasswordReset(u)}
+                                            className="px-3 md:px-4 py-1.5 md:py-2 bg-red-500/10 text-red-600 dark:text-red-500 hover:bg-red-500 hover:text-black text-[8px] md:text-[9px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/20 ml-2"
+                                        >
+                                            Reset Pw
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -561,7 +605,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                 </div>
 
                 <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[700px]">
                         <thead className="sticky top-0 bg-slate-50/90 dark:bg-[#0d0d14]/90 backdrop-blur-md z-10">
                             <tr className="border-b border-black/5 dark:border-white/5 text-slate-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em]">
                                 <th className="pb-6 pt-2 px-4 whitespace-nowrap">Squad Name</th>
@@ -1259,6 +1303,69 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onViewProfile }) => {
                         </div>
                     </div>
                 </div>}
+            </Modal>
+            {/* Password Reset Modal */}
+            <Modal
+                isOpen={!!selectedUserForPasswordReset}
+                onClose={() => {
+                    setSelectedUserForPasswordReset(null);
+                    setResetPasswordValue('');
+                }}
+                zIndex={110}
+                backdropClassName="bg-black/80 backdrop-blur-xl animate-in fade-in duration-300"
+            >
+                {selectedUserForPasswordReset && (
+                    <div className="relative w-full max-w-lg glass rounded-[40px] shadow-2xl overflow-hidden p-10 animate-in zoom-in-95 fade-in duration-300">
+                        <div className="flex justify-between items-start mb-10">
+                            <div>
+                                <h3 className="text-2xl font-black text-[var(--text-color)] italic uppercase tracking-tighter">Credential Override</h3>
+                                <p className="text-[10px] text-red-500 font-black uppercase tracking-[0.4em] mt-2">Target Operative: {selectedUserForPasswordReset.name}</p>
+                            </div>
+                            <div className="p-3 bg-red-500/10 rounded-2xl border border-red-500/20">
+                                <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m0-6V9m4.938 4h1.062a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2h1.062M9 11V9a3 3 0 016 0v2" /></svg>
+                            </div>
+                        </div>
+
+                        <div className="space-y-8">
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1 italic">New Access Cipher (Password)</label>
+                                <input
+                                    type="password"
+                                    placeholder="Enter new cipher..."
+                                    value={resetPasswordValue}
+                                    onChange={(e) => setResetPasswordValue(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white font-black text-xl tracking-tight focus:outline-none focus:border-red-500/50 transition-all shadow-inner"
+                                />
+                            </div>
+
+                            <div className="pt-6 border-t border-white/5 space-y-4">
+                                <div className="p-4 bg-red-500/5 rounded-2xl border border-red-500/10 flex items-start space-x-3">
+                                    <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    <p className="text-[9px] text-red-500/80 font-bold uppercase tracking-widest leading-relaxed">Warning: This bypasses standard identity protocols. Reset only upon validated operative request.</p>
+                                </div>
+
+                                <div className="flex space-x-4">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedUserForPasswordReset(null);
+                                            setResetPasswordValue('');
+                                        }}
+                                        className="flex-grow px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all border border-white/10"
+                                    >
+                                        Abort
+                                    </button>
+                                    <button
+                                        onClick={handleAdminResetPassword}
+                                        disabled={isResettingPassword || !resetPasswordValue}
+                                        className="flex-[2] px-8 py-4 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all shadow-xl shadow-red-500/20 active:scale-95 border-t border-white/20"
+                                    >
+                                        {isResettingPassword ? 'Encrypting...' : 'Override Cipher'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div >
     );

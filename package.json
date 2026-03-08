@@ -20,6 +20,7 @@
     "@types/pdfkit": "^0.17.5",
     "animejs": "^4.3.6",
     "bcryptjs": "^3.0.3",
+    "chartli": "^0.0.5",
     "cors": "^2.8.6",
     "discord.js": "^14.25.1",
     "dotenv": "^17.3.1",
@@ -35,7 +36,6 @@
     "postgres": "^3.4.8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "recharts": "^3.7.0",
     "sileo": "^0.1.5",
     "tailwindcss": "^4.2.1",
     "tesseract.js": "^7.0.0"

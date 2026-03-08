@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { renderChartli } from '../utils/chartli';
 import { useUser } from '../services/authService';
 import { useNotification } from '../hooks/useNotification';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
@@ -482,24 +482,33 @@ const SponsorZone: React.FC = () => {
                         <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                         Supply Revenue (Last 7 Days)
                     </h3>
-                    <div className="h-[200px] w-full" style={{ minWidth: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                            <AreaChart data={analyticsData}>
-                                <defs>
-                                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
-                                    itemStyle={{ color: '#a855f7', fontWeight: 'bold' }}
+                    <div className="h-[200px] w-full flex flex-col">
+                        <div className="bg-black/60 rounded-[24px] p-6 font-mono text-[10px] leading-relaxed border border-purple-500/10 flex-grow overflow-hidden flex flex-col">
+                            <div className="mb-2 text-slate-500 shrink-0 flex justify-between">
+                                <span>$ chartli revenue.log -t svg -m lines</span>
+                                <span className="text-purple-500 font-black">TOTAL: ₱{analyticsData.reduce((acc, d) => acc + d.revenue, 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex-grow flex items-center justify-center min-h-0">
+                                <div 
+                                    className="w-full h-full"
+                                    dangerouslySetInnerHTML={{ 
+                                        __html: renderChartli(
+                                            analyticsData.map(d => [d.revenue]),
+                                            'svg',
+                                            { mode: 'lines', width: 400, height: 120 }
+                                        ) 
+                                    }} 
                                 />
-                                <Area type="monotone" dataKey="revenue" stroke="#a855f7" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                            </div>
+                            <div className="mt-2 flex justify-between gap-1 shrink-0">
+                                {analyticsData.map((d, i) => (
+                                    <div key={i} className="flex flex-col items-center">
+                                        <span className="text-[7px] text-slate-600 font-bold uppercase">{d.name}</span>
+                                        <span className="text-purple-400 font-bold">₱{Math.round(d.revenue)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -509,18 +518,33 @@ const SponsorZone: React.FC = () => {
                         <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                         Asset Requests (Last 7 Days)
                     </h3>
-                    <div className="h-[200px] w-full" style={{ minWidth: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                            <BarChart data={analyticsData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
-                                    itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
+                    <div className="h-[200px] w-full flex flex-col">
+                        <div className="bg-black/60 rounded-[24px] p-6 font-mono text-[10px] leading-relaxed border border-blue-500/10 flex-grow overflow-hidden flex flex-col">
+                            <div className="mb-2 text-slate-500 shrink-0 flex justify-between">
+                                <span>$ chartli requests.log -t svg -m bars</span>
+                                <span className="text-blue-500 font-black">VOL: {analyticsData.reduce((acc, d) => acc + d.sales, 0)} UNITS</span>
+                            </div>
+                            <div className="flex-grow flex items-center justify-center min-h-0">
+                                <div 
+                                    className="w-full h-full whitespace-pre"
+                                    dangerouslySetInnerHTML={{ 
+                                        __html: renderChartli(
+                                            analyticsData.map(d => [d.sales]),
+                                            'bars',
+                                            { width: 30 }
+                                        ) 
+                                    }} 
                                 />
-                                <Bar dataKey="sales" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                            </div>
+                            <div className="mt-2 flex justify-between gap-1 shrink-0">
+                                {analyticsData.map((d, i) => (
+                                    <div key={i} className="flex flex-col items-center">
+                                        <span className="text-[7px] text-slate-600 font-bold uppercase">{d.name}</span>
+                                        <span className="text-blue-400 font-bold">{d.sales}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

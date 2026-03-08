@@ -57,14 +57,14 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-8">
                 <div>
-                    <h1 className="text-5xl font-black text-white tracking-tighter uppercase italic">System Core Configurations</h1>
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-tight">System Core Configurations</h1>
                     <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.4em] mt-3 ml-1">Terminal ID://SECURE-WC-OPS-001</p>
                 </div>
             </div>
 
             <div className="grid gap-12 relative z-10">
                 {/* Visual Interface */}
-                <section className="bg-[#020617]/40 backdrop-blur-3xl rounded-[40px] border border-white/5 shadow-2xl p-10 relative overflow-hidden group">
+                <section className="bg-[#020617]/40 backdrop-blur-3xl rounded-[32px] md:rounded-[40px] border border-white/5 shadow-2xl p-6 md:p-10 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-[50px] rounded-full group-hover:bg-purple-500/10 transition-colors" />
                     <h3 className="text-xl font-black text-white mb-10 flex items-center uppercase tracking-tight">
                         <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 mr-4 border border-amber-500/20 shadow-[0_0_15px_rgba(251,191,36,0.1)]">
@@ -72,7 +72,7 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
                         </div>
                         Visual Interface Overrides
                     </h3>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 bg-white/[0.02] p-8 rounded-3xl border border-white/5 shadow-inner">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 bg-white/[0.02] p-5 md:p-8 rounded-3xl border border-white/5 shadow-inner">
                         <div className="space-y-1">
                             <p className="text-lg font-black text-white italic tracking-tight uppercase">Luminance Calibration</p>
                             <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Toggle between Light and Dark command modes.</p>
@@ -89,7 +89,7 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
                 </section>
 
                 {/* Security Protocol */}
-                <section className="bg-[#020617]/40 backdrop-blur-3xl rounded-[40px] border border-white/5 shadow-2xl p-10 relative overflow-hidden group">
+                <section className="bg-[#020617]/40 backdrop-blur-3xl rounded-[32px] md:rounded-[40px] border border-white/5 shadow-2xl p-6 md:p-10 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[50px] rounded-full group-hover:bg-blue-500/10 transition-colors" />
                     <h3 className="text-xl font-black text-white mb-10 flex items-center uppercase tracking-tight">
                         <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 mr-4 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
@@ -98,7 +98,7 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
                         Authentication Matrix
                     </h3>
 
-                    <div className="space-y-8 max-w-2xl bg-white/[0.02] p-8 rounded-3xl border border-white/5 shadow-inner">
+                    <div className="space-y-8 max-w-2xl bg-white/[0.02] p-6 md:p-8 rounded-3xl border border-white/5 shadow-inner">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Primary Cipher</label>
@@ -140,7 +140,7 @@ const Settings: React.FC<{ onBack: () => void, userRole?: string }> = ({ onBack,
                 </section>
 
                 {/* Danger Zone */}
-                <section className="bg-red-500/5 backdrop-blur-3xl rounded-[40px] border border-red-500/20 shadow-2xl p-10 relative overflow-hidden group">
+                <section className="bg-red-500/5 backdrop-blur-3xl rounded-[32px] md:rounded-[40px] border border-red-500/20 shadow-2xl p-6 md:p-10 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 blur-[50px] rounded-full group-hover:bg-red-500/20 transition-colors" />
                     <h3 className="text-xl font-black text-red-500 mb-4 flex items-center uppercase tracking-tight">
                         <div className="p-2.5 rounded-xl bg-red-500/10 text-red-500 mr-4 border border-red-500/20">

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { renderChartli } from '../utils/chartli';
 import { getTeamAnalysis } from '../services/geminiService';
 import { useUser } from '../services/authService';
 import { useNotification } from '../hooks/useNotification';
@@ -443,40 +442,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onProfileClick, userId, userRole 
               </div>
             </div>
 
-            <div className="h-[320px] min-h-[320px] w-full relative z-10">
+            <div className="h-[320px] min-h-[320px] w-full relative z-10 flex flex-col">
               {computedChartData.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center opacity-20">
                   <p className="text-[10px] font-black uppercase tracking-[0.5em] text-amber-500">No Data Available</p>
                   <p className="text-[9px] text-slate-500 mt-2">Stats will appear once scrims are logged</p>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={computedChartData}>
-                    <defs>
-                      <linearGradient id="colorWinRoyalty" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="colorWinsRoyalty" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4c1d95" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#4c1d95" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="10 10" stroke="#ffffff08" vertical={false} />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10, fontWeight: '900' }} dy={15} />
-                    <YAxis hide />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#020617', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '24px', color: '#fff', padding: '20px' }}
-                      itemStyle={{ fontSize: '11px', fontWeight: '900', color: '#fbbf24', textTransform: 'uppercase' }}
-                      formatter={(value: any, name: string) => [
-                        name === 'winRate' ? `${value}%` : value,
-                        name === 'winRate' ? 'Win Rate' : 'Wins'
-                      ]}
+                <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 flex-grow overflow-hidden flex flex-col">
+                  <div className="mb-4 text-amber-500/80 shrink-0">
+                    <span className="opacity-50">$ chartli performance.txt -t svg -m lines</span>
+                  </div>
+                  <div className="flex-grow flex items-center justify-center min-h-0">
+                    <div 
+                      className="w-full h-full"
+                      dangerouslySetInnerHTML={{ 
+                        __html: renderChartli(
+                          computedChartData.map(d => [d.winRate]),
+                          'svg',
+                          { mode: 'lines', width: 600, height: 200 }
+                        ) 
+                      }} 
                     />
-                    <Area type="monotone" dataKey="winRate" stroke="#fbbf24" strokeWidth={4} fillOpacity={1} fill="url(#colorWinRoyalty)" name="winRate" />
-                    <Area type="monotone" dataKey="wins" stroke="#4c1d95" strokeWidth={4} fillOpacity={1} fill="url(#colorWinsRoyalty)" name="wins" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 md:grid-cols-6 gap-2 shrink-0">
+                    {computedChartData.slice(-6).map((d, i) => (
+                      <div key={i} className="flex flex-col gap-0.5">
+                        <span className="text-[7px] text-slate-600 font-black uppercase">{d.date}</span>
+                        <span className="text-amber-500 font-bold">{d.winRate}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { renderChartli } from '../utils/chartli';
 import Modal from './Modal';
 import { GET_API_BASE_URL } from '../utils/apiUtils';
 
@@ -664,30 +664,34 @@ const PlayerStatsModal: React.FC<PlayerStatsModalProps> = ({
                                     <div className="w-1.5 h-8 bg-amber-500 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.5)] animate-pulse" />
                                     <h4 className="text-xs md:text-sm font-black uppercase tracking-[0.4em] italic">Historical Performance Trajectory</h4>
                                 </div>
-                                <div className="h-[300px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={getDetailData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                            <defs>
-                                                <linearGradient id="colorKdDetail" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.4} />
-                                                    <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
-                                                </linearGradient>
-                                            </defs>
-                                            <XAxis dataKey="date" stroke="#475569" fontSize={10} tickFormatter={(str) => {
-                                                const d = new Date(str);
-                                                return `${d.getMonth() + 1}/${d.getDate()}`;
-                                            }} />
-                                            <YAxis stroke="#475569" fontSize={10} />
-                                            <Tooltip
-                                                contentStyle={{ backgroundColor: '#020617', borderColor: '#fbbf2433', borderRadius: '16px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em' }}
-                                                itemStyle={{ color: '#fbbf24' }}
-                                                labelStyle={{ color: '#64748b', marginBottom: '4px' }}
-                                                labelFormatter={(label) => `Timestamp: ${label}`}
-                                                formatter={(value, name) => [value, 'KDA Ratio']}
+                                <div className="h-[300px] w-full flex flex-col">
+                                    <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 flex-grow overflow-hidden flex flex-col">
+                                        <div className="mb-4 text-slate-500 shrink-0">
+                                            <span>$ chartli trajectory_data.txt -t svg -m lines</span>
+                                        </div>
+                                        <div className="flex-grow flex items-center justify-center min-h-0">
+                                            <div 
+                                                className="w-full h-full"
+                                                dangerouslySetInnerHTML={{ 
+                                                    __html: renderChartli(
+                                                        getDetailData().map(d => [d.kd]),
+                                                        'svg',
+                                                        { mode: 'lines', width: 600, height: 200 }
+                                                    ) 
+                                                }} 
                                             />
-                                            <Area type="monotone" dataKey="kd" stroke="#fbbf24" strokeWidth={4} fillOpacity={1} fill="url(#colorKdDetail)" activeDot={{ r: 8, strokeWidth: 0, fill: '#fbbf24' }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
+                                        </div>
+                                        <div className="mt-4 flex flex-wrap gap-4 shrink-0 overflow-x-auto no-scrollbar">
+                                            {getDetailData().slice(-8).map((d, i) => (
+                                                <div key={i} className="flex flex-col gap-0.5">
+                                                    <span className="text-[7px] text-slate-600 font-black uppercase">
+                                                        {new Date(d.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' })}
+                                                    </span>
+                                                    <span className="text-amber-500 font-bold">{d.kd.toFixed(2)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

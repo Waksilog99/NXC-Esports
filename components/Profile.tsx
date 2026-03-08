@@ -308,15 +308,15 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
         <div className="animate-in fade-in zoom-in duration-700 pb-32">
             <button
                 onClick={onBack}
-                className="mb-12 flex items-center space-x-3 text-slate-500 hover:text-amber-500 transition-all group px-4 py-2 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 shadow-lg active:scale-95"
+                className="mb-6 md:mb-12 flex items-center space-x-3 text-slate-500 hover:text-amber-500 transition-all group px-4 py-2 bg-white/5 rounded-2xl border border-white/5 hover:border-amber-500/20 shadow-lg active:scale-95"
             >
                 <svg className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">{backTitle}</span>
             </button>
 
-            <div className="bg-[#020617]/40 backdrop-blur-3xl rounded-[48px] border border-white/5 shadow-2xl overflow-hidden relative group">
+            <div className="bg-[#020617]/40 backdrop-blur-3xl rounded-[32px] md:rounded-[48px] border border-white/5 shadow-2xl overflow-hidden relative group">
                 {/* Profile Header / Cover */}
-                <div className="relative h-80 bg-gradient-to-br from-purple-900/40 via-[#020617] to-amber-900/20 flex flex-col items-center justify-center text-center p-12 transition-all duration-1000">
+                <div className="relative min-h-[400px] md:h-80 bg-gradient-to-br from-purple-900/40 via-[#020617] to-amber-900/20 flex flex-col items-center justify-center text-center p-6 md:p-12 transition-all duration-1000">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
 
@@ -339,23 +339,23 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                                 <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                             </div>
                         </div>
-                        <h1 className="text-5xl font-black text-white tracking-tighter mb-4 italic uppercase">{profile.fullname}</h1>
-                        <div className="flex flex-col items-center space-y-6">
-                            <div className="flex items-center space-x-8">
-                                <div className="flex flex-col items-center px-8 py-3 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md shadow-2xl">
+                        <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter mb-4 italic uppercase">{profile.fullname}</h1>
+                        <div className="flex flex-col items-center space-y-4 md:space-y-6">
+                            <div className="flex flex-col md:flex-row items-center gap-4 md:space-x-8">
+                                <div className="flex flex-col items-center px-6 md:px-8 py-3 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md shadow-2xl">
                                     <span className="text-[8px] text-amber-500/60 font-black uppercase tracking-[0.4em] mb-1">Operative Rank</span>
-                                    <span className="text-2xl font-black text-amber-400 italic tracking-tighter uppercase">
+                                    <span className="text-xl md:text-2xl font-black text-amber-400 italic tracking-tighter uppercase">
                                         {getRankBadge(profile.level, profile.role)}
                                     </span>
                                 </div>
-                                <div className="flex flex-col items-start">
+                                <div className="flex flex-col items-center md:items-start text-center md:text-left">
                                     <span className="text-amber-500 font-black uppercase text-[10px] tracking-[0.5em] mb-1 px-4 py-1.5 bg-amber-500/10 rounded-full border border-amber-500/20">{profile.role}</span>
-                                    <span className="text-slate-500 font-black text-[9px] uppercase tracking-[0.3em] ml-4">ID://{profile.id || 'WC-PRO'}</span>
+                                    <span className="text-slate-500 font-black text-[9px] uppercase tracking-[0.3em] md:ml-4 mt-2 md:mt-0">ID://{profile.id || 'WC-PRO'}</span>
                                 </div>
                             </div>
 
                             {/* XP Progress Bar */}
-                            <div className="w-80 space-y-2">
+                            <div className="w-full max-w-[280px] md:w-80 space-y-2">
                                 <div className="flex justify-between items-end px-2">
                                     <span className="text-[8px] text-slate-500 font-black uppercase tracking-[0.3em]">Synapse Progress</span>
                                     <span className="text-[10px] text-amber-500 font-black tracking-tighter">{(profile.xp || 0) % 100} / 100 XP</span>
@@ -380,8 +380,8 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                     )}
                 </div>
 
-                <div className="p-12 space-y-20 relative z-10">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+                <div className="p-6 md:p-12 space-y-12 md:space-y-20 relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-20">
                         <section className="space-y-10">
                             <div className="flex items-center space-x-4 border-l-4 border-amber-500 pl-6 h-8">
                                 <h3 className="text-xl font-black text-white uppercase tracking-tighter">Personnel Authentication</h3>
@@ -436,7 +436,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                         </section>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
                         <section className="space-y-8">
                             <div className="flex items-center space-x-4 border-l-4 border-cyan-500 pl-6 h-8">
                                 <h3 className="text-xl font-black text-white uppercase tracking-tighter h-full">Temporal Epoch</h3>
@@ -543,7 +543,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                     </section>
                 </div>
 
-                <div className="p-12 border-t border-white/5 flex justify-end gap-6 bg-white/[0.01]">
+                <div className="p-6 md:p-12 border-t border-white/5 flex flex-col md:flex-row justify-end gap-4 md:gap-6 bg-white/[0.01]">
                     {isEditing ? (
                         <>
                             <button onClick={() => setIsEditing(false)} className="px-8 py-3 text-slate-500 hover:text-white font-black uppercase tracking-[0.3em] text-[10px] transition-all active:scale-95">De-Authorize Changes</button>

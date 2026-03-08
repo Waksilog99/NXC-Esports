@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-    PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-    BarChart, Bar, XAxis, YAxis, CartesianGrid
-} from 'recharts';
+import { renderChartli } from '../utils/chartli';
 import { animate, stagger } from 'animejs';
 import { calculateKDA, getKDAColor, parseMatchResult } from '../utils/tactical';
 import PlayerStatsModal from './PlayerStatsModal';
@@ -151,18 +148,6 @@ const SectionLabel: React.FC<{ label: string; color?: string }> = ({ label, colo
     <p className={`text-[9px] font-black uppercase tracking-[0.35em] mb-4 ${color}`}>{label}</p>
 );
 
-// Custom recharts tooltip
-const RoyalTooltip: React.FC<any> = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    return (
-        <div className="bg-[#020617] border border-amber-500/20 rounded-2xl px-5 py-3 shadow-2xl">
-            <p className="text-[9px] font-black uppercase tracking-widest text-amber-500/60 mb-1">{label}</p>
-            {payload.map((p: any, i: number) => (
-                <p key={i} className="text-sm font-black" style={{ color: p.color }}>{p.value}</p>
-            ))}
-        </div>
-    );
-};
 
 // ─── PLAYER STATS TABLE ───────────────────────────────────────────────────────
 const PlayerStatsTable: React.FC<{ stats: PlayerStat[], title: string, onPlayerClick: (stat: PlayerStat) => void }> = ({ stats, title, onPlayerClick }) => (
@@ -338,24 +323,23 @@ const ScrimIntel: React.FC<{ scrims: any[], playerStats: PlayerStat[], onPlayerC
 
             {/* Map Win Rate Bars */}
             {mapData.length > 0 && (
-                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0">
-                    <SectionLabel label="Theater Win Rate (%)" />
-                    <div className="h-[250px] min-h-[250px] w-full"> {/* Stable height wrapper */}
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={mapData} barSize={28}>
-                                <defs>
-                                    <linearGradient id="scrimMapGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={GOLD} stopOpacity={1} />
-                                        <stop offset="100%" stopColor={PURPLE} stopOpacity={0.8} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="8 8" stroke="#ffffff06" vertical={false} />
-                                <XAxis dataKey="name" stroke={GOLD + '66'} fontSize={10} fontWeight="900" tickLine={false} axisLine={false} dy={8} />
-                                <YAxis domain={[0, 100]} stroke={GOLD + '44'} fontSize={9} fontWeight="900" tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
-                                <Tooltip content={<RoyalTooltip />} />
-                                <Bar dataKey="winRate" radius={[8, 8, 0, 0]} fill="url(#scrimMapGrad)" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden">
+                    <SectionLabel label="Theater Win Rate (Neural Output)" />
+                    <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-amber-500/10 overflow-x-auto whitespace-pre text-amber-500/80">
+                        <div className="mb-4 text-slate-500">$ chartli maps_intel.txt -t columns -h 6</div>
+                        {renderChartli(
+                            mapData.map(m => [m.winRate]),
+                            'columns',
+                            { height: 6 }
+                        )}
+                        <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4">
+                            {mapData.map((m, i) => (
+                                <div key={i} className="flex items-center gap-3">
+                                    <span className="text-slate-500 text-[9px] uppercase font-black tracking-widest">{i + 1}:</span>
+                                    <span className="text-amber-500 font-black">{m.name} ({m.winRate}%)</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
@@ -433,31 +417,28 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
                     <FormStrip form={recentForm} />
                     <StatusPills pending={pending} completed={completed.length} cancelled={cancelled} />
                 </div>
-                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 flex flex-col justify-center">
-                    <SectionLabel label="Format Breakdown" />
-                    {formatData.length > 0 ? (
-                        <div className="h-[180px] min-h-[180px] w-full mt-4"> {/* Stable height wrapper */}
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie data={formatData} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                                        innerRadius={35} outerRadius={58} paddingAngle={4}>
-                                        {formatData.map((_, i) => (
-                                            <Cell key={i} fill={FORMAT_COLORS[i % FORMAT_COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip content={<RoyalTooltip />} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    ) : (
-                        <p className="text-[10px] text-slate-600 font-bold">No format data</p>
-                    )}
-                    <div className="flex flex-wrap gap-2 mt-3">
+                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 flex flex-col justify-center overflow-hidden">
+                    <SectionLabel label="Format Matrix" />
+                    <div className="bg-black/40 rounded-2xl p-6 font-mono text-[9px] leading-tight border border-white/5 whitespace-pre text-emerald-400">
+                        {formatData.length > 0 ? (
+                            <>
+                                <div className="mb-2 text-slate-600 opacity-50"># neural_scan --format</div>
+                                {renderChartli(
+                                    formatData.map(f => [f.value]),
+                                    'bars',
+                                    { width: 12 }
+                                )}
+                            </>
+                        ) : (
+                            <p className="text-slate-600 font-bold">NO DATA</p>
+                        )}
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2">
                         {formatData.map((f, i) => (
-                            <span key={f.name} className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-slate-400">
-                                <span className="w-2 h-2 rounded-full" style={{ background: FORMAT_COLORS[i % FORMAT_COLORS.length] }} />
-                                {f.name} ({f.value})
-                            </span>
+                            <div key={f.name} className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                <span>{f.name}</span>
+                                <span className="text-emerald-400">{f.value} OPS</span>
+                            </div>
                         ))}
                     </div>
                 </div>
@@ -465,24 +446,23 @@ const TournamentIntel: React.FC<{ tournaments: any[], playerStats: PlayerStat[],
 
             {/* Opponent Frequency */}
             {opponentData.length > 0 && (
-                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0">
-                    <SectionLabel label="Opponent Frequency" color="text-purple-400/60" />
-                    <div className="h-[250px] min-h-[250px] w-full"> {/* Stable height wrapper */}
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={opponentData} barSize={28}>
-                                <defs>
-                                    <linearGradient id="tourneyBarGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={PURPLE} stopOpacity={1} />
-                                        <stop offset="100%" stopColor="#4c1d95" stopOpacity={0.7} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="8 8" stroke="#ffffff06" vertical={false} />
-                                <XAxis dataKey="name" stroke={PURPLE + '99'} fontSize={9} fontWeight="900" tickLine={false} axisLine={false} dy={8} />
-                                <YAxis stroke={PURPLE + '66'} fontSize={9} fontWeight="900" tickLine={false} axisLine={false} allowDecimals={false} />
-                                <Tooltip content={<RoyalTooltip />} />
-                                <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="url(#tourneyBarGrad)" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-8 tactical-chart-container opacity-0 overflow-hidden">
+                    <SectionLabel label="Hostile Engagement Frequency" color="text-purple-400/60" />
+                    <div className="bg-black/60 rounded-3xl p-8 font-mono text-[10px] leading-relaxed border border-purple-500/10 overflow-x-auto whitespace-pre text-purple-400">
+                        <div className="mb-4 text-slate-600">$ chartli targets.txt -t bars -w 28</div>
+                        {renderChartli(
+                            opponentData.map(o => [o.count]),
+                            'bars',
+                            { width: 28 }
+                        )}
+                        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+                            {opponentData.map((o, i) => (
+                                <div key={i} className="flex flex-col gap-1">
+                                    <span className="text-[8px] text-slate-600 font-black tracking-widest uppercase">Target S{i+1}:</span>
+                                    <span className="text-[11px] text-white font-black truncate">{o.name}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}

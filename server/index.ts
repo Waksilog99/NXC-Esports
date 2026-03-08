@@ -683,6 +683,38 @@ app.post('/api/auth/change-password', async (req, res) => {
     }
 });
 
+app.post('/api/auth/admin-reset-password', async (req, res) => {
+    const { targetUserId, newPassword, requesterId } = req.body;
+    if (!targetUserId || !newPassword || !requesterId) {
+        return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    try {
+        // Auth guard: only admins/CEO can reset others' passwords
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Access Denied: Insufficient clearance.' });
+        }
+
+        const hashedPassword = await hashPassword(newPassword);
+        const updated = await db.update(users).set({ password: hashedPassword }).where(eq(users.id, Number(targetUserId))).returning();
+        
+        if (updated.length === 0) {
+            return res.status(404).json({ success: false, error: 'Target user not found' });
+        }
+
+        console.log(`[AUTH] Admin ${requesterId} reset password for user ${targetUserId}`);
+        notifyRefresh();
+        res.json({ success: true, message: 'Operative credentials reset successful.' });
+    } catch (error: any) {
+        console.error("Error in POST /api/auth/admin-reset-password:", error);
+        res.status(500).json({ success: false, error: 'Failed to reset password', details: IS_PROD ? undefined : error.message });
+    }
+});
+
 app.delete('/api/users/:id', async (req, res) => {
     const { id } = req.params;
     const userId = Number(id);
