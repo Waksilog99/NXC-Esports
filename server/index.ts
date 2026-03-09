@@ -283,60 +283,6 @@ app.get('/ping', (req, res) => {
     res.json({ status: 'ok', server: 'Identity Service' });
 });
 
-app.get('/api/diag', async (req, res) => {
-    try {
-        console.log('[AUTH TRACE] Running /api/diag...');
-        const dbInfo = await db.execute(sql`SELECT current_database(), current_user, inet_server_addr(), version()`);
-        const userCountRes = await db.select({ count: sql`count(*)` }).from(users);
-
-        res.json({
-            success: true,
-            dbInfo: dbInfo[0],
-            userCount: userCountRes[0].count,
-            env: {
-                NODE_ENV: process.env.NODE_ENV,
-                DATABASE_URL_SET: !!process.env.DATABASE_URL,
-                DATABASE_URL_PORT: process.env.DATABASE_URL?.split(':')[3]?.split('/')[0] || 'unknown'
-            }
-        });
-    } catch (err: any) {
-        console.error('[DIAG ERROR]', err);
-        res.status(500).json({
-            success: false,
-            error: err.message,
-            stack: err.stack,
-            hint: "Check if the database user has permissions for these queries."
-        });
-    }
-});
-
-// SUPER-DEBUG: List usernames to see if they exist
-app.get('/api/auth/debug-check', async (req, res) => {
-    try {
-        const adminUsers = await db.select({ 
-            username: users.username, 
-            email: users.email, 
-            role: users.role 
-        }).from(users).where(or(
-            ilike(users.role, '%admin%'),
-            ilike(users.role, '%ceo%'),
-            ilike(users.username, '%admin%')
-        ));
-        
-        const totalCount = await db.select({ count: sql`count(*)` }).from(users);
-
-        res.json({
-            totalUsers: totalCount[0].count,
-            foundAdmins: adminUsers.length,
-            admins: adminUsers,
-            dbHost: process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'not-set',
-            bodyType: typeof req.body
-        });
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 app.get('/api/health', async (req, res) => {
     let dbStatus = 'NOT CHECKED';
     let dbError = null;
@@ -3300,7 +3246,7 @@ export async function generateAndSendWeeklyReport() {
         const CHART_WIDTH = 420;
 
         const pdfFileName = `WC_Royal_Edict_${Date.now()}.pdf`;
-        const pdfPath = resolve(process.cwd(), pdfFileName);
+        const pdfPath = IS_PROD ? resolve('/tmp', pdfFileName) : resolve(process.cwd(), pdfFileName);
         const { default: PDFDocument } = await import('pdfkit');
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
         const writeStream = fs.createWriteStream(pdfPath);
@@ -5166,8 +5112,9 @@ if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
         initScheduler();
     });
 } else {
-    console.log('[DEBUG] Running in Vercel Serverless environment.');
+    console.log('[DEBUG] Running in Serverless environment (Netlify).');
     // In serverless, we still need to init Discord so sendToDiscord works when called via routes/cron
+    // Note: initScheduler() (node-cron) is NOT called here as it is not supported in serverless.
     initDiscord();
 }
 
