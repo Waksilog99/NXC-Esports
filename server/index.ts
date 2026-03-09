@@ -17,7 +17,7 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 import { users, achievements, events, sponsors, teams, players, scrims, scrimPlayerStats, tournaments, tournamentPlayerStats, tournamentNotifications, weeklyReports, rosterQuotas, playerQuotaProgress, products, orders, siteSettings, playbookStrategies, notifications } from './schema.js';
-import { eq, inArray, and, or, sql, desc, notIlike, isNull, isNotNull } from 'drizzle-orm';
+import { eq, inArray, and, or, sql, desc, notIlike, ilike, isNull, isNotNull } from 'drizzle-orm';
 import crypto from 'crypto';
 import fs from 'fs';
 import { finished } from 'stream/promises';
@@ -313,15 +313,22 @@ app.get('/api/diag', async (req, res) => {
 // SUPER-DEBUG: List usernames to see if they exist
 app.get('/api/auth/debug-check', async (req, res) => {
     try {
-        const allUsers = await db.select({ 
+        const adminUsers = await db.select({ 
             username: users.username, 
             email: users.email, 
             role: users.role 
-        }).from(users).limit(10);
+        }).from(users).where(or(
+            ilike(users.role, '%admin%'),
+            ilike(users.role, '%ceo%'),
+            ilike(users.username, '%admin%')
+        ));
         
+        const totalCount = await db.select({ count: sql`count(*)` }).from(users);
+
         res.json({
-            count: allUsers.length,
-            users: allUsers,
+            totalUsers: totalCount[0].count,
+            foundAdmins: adminUsers.length,
+            admins: adminUsers,
             dbHost: process.env.DATABASE_URL?.split('@')[1]?.split(':')[0] || 'not-set',
             bodyType: typeof req.body
         });
