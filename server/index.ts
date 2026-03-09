@@ -64,6 +64,7 @@ const ALLOWED_ORIGINS = [
     'http://localhost:4173',
     'http://localhost',      // Android Capacitor
     'capacitor://localhost', // iOS Capacitor
+    'https://wakscorporation.netlify.app',
     ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
 ];
 app.use(cors({
@@ -74,8 +75,8 @@ app.use(cors({
         // Check whitelist
         if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
 
-        // Allow all Vercel subdomains
-        if (origin.endsWith('.vercel.app')) return callback(null, true);
+        // Allow all Vercel/Netlify subdomains
+        if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app')) return callback(null, true);
 
         callback(new Error(`CORS: origin '${origin}' not allowed`));
     },
