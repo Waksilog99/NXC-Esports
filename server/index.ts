@@ -432,8 +432,10 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('[AUTH TRACE] 1. Request received for /api/auth/login');
     const { username, password } = req.body;
     const sUsername = sanitize(username);
+    // Support login by email OR username
+    const isEmail = sUsername.includes('@');
     try {
-        console.log(`[AUTH TRACE] 2. Login attempt for: ${sUsername}`);
+        console.log(`[AUTH TRACE] 2. Login attempt for: ${sUsername} (by ${isEmail ? 'email' : 'username'})`);
 
         // Single query: fetch user + player data together (avoids a 2nd DB round-trip after password check)
         const userRows = await db.select({
@@ -456,7 +458,7 @@ app.post('/api/auth/login', async (req, res) => {
         })
             .from(users)
             .leftJoin(players, eq(users.id, players.userId))
-            .where(eq(users.username, sUsername))
+            .where(isEmail ? eq(users.email, sUsername.toLowerCase()) : eq(users.username, sUsername))
             .limit(1);
 
         console.log(`[AUTH TRACE] 3. DB Lookup finished. Rows: ${userRows.length}`);
