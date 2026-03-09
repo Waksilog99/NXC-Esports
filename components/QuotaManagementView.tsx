@@ -272,6 +272,31 @@ const QuotaManagementView: React.FC<{
         }
     };
 
+    const handleApplyReduced = async () => {
+        if (!window.confirm("ARE YOU SURE? This will immediately propagate reduced quota targets to ALL operatives for the current week. This action is irreversible.")) return;
+        
+        try {
+            const res = await fetch(`${GET_API_BASE_URL()}/api/teams/${teamId}/quotas/apply-reduced`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    weekStart: selectedWeek,
+                    requesterId: userId
+                })
+            });
+            const result = await res.json();
+            if (result.success) {
+                showNotification({ message: 'Reduced quota protocol active for all units.', type: 'success' });
+                fetchData();
+            } else {
+                showNotification({ message: result.error || 'Protocol failed to deploy.', type: 'error' });
+            }
+        } catch (error) {
+            console.error("Error applying reduced quota:", error);
+            showNotification({ message: 'Network error during protocol deployment.', type: 'error' });
+        }
+    };
+
     const handleSetCustomQuota = async (playerId: number, aim: number, grind: number) => {
         try {
             const res = await fetch(`${GET_API_BASE_URL()}/api/players/${playerId}/quota/custom`, {
@@ -292,6 +317,8 @@ const QuotaManagementView: React.FC<{
                 fetchData();
             } else {
                 showNotification({ message: result.error || 'Override failed to deploy.', type: 'error' });
+                // We DON'T close the modal here so the user can see the error AND fix the value if needed.
+                // However, they can still "Abort" (Close) manually.
             }
         } catch (error) {
             console.error("Error setting custom quota:", error);
@@ -449,19 +476,7 @@ const QuotaManagementView: React.FC<{
                             </div>
                         </div>
 
-                        <div className="flex space-x-4 mt-10">
-                            {isEditingReduced && (
-                                <button
-                                    onClick={() => {
-                                        setIsEditingReduced(false);
-                                        setEditReducedAim(baseQuota?.reducedAimKills || 0);
-                                        setEditReducedGrind(baseQuota?.reducedGrindRG || 0);
-                                    }}
-                                    className="px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all active:scale-95 border border-white/10"
-                                >
-                                    Cancel
-                                </button>
-                            )}
+                        <div className="flex flex-col space-y-4 mt-10">
                             <button
                                 onClick={() => {
                                     if (isEditingReduced) {
@@ -472,10 +487,32 @@ const QuotaManagementView: React.FC<{
                                     }
                                 }}
                                 disabled={isSavingBase}
-                                className={`px-8 py-4 flex-grow ${isEditingReduced ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'} disabled:bg-slate-800 text-white font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 border-t border-white/20`}
+                                className={`px-8 py-4 w-full ${isEditingReduced ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'} disabled:bg-slate-800 text-white font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 border-t border-white/20`}
                             >
                                 {isSavingBase ? 'Updating...' : (isEditingReduced ? 'Commit Protocol' : 'Modify Reduced Weekly')}
                             </button>
+                            
+                            {!isEditingReduced && (
+                                <button
+                                    onClick={handleApplyReduced}
+                                    className="px-8 py-4 w-full bg-white/5 hover:bg-red-500/20 text-red-500 font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all border border-red-500/20 active:scale-95"
+                                >
+                                    Apply Reduced Quota to Current Week
+                                </button>
+                            )}
+
+                            {isEditingReduced && (
+                                <button
+                                    onClick={() => {
+                                        setIsEditingReduced(false);
+                                        setEditReducedAim(baseQuota?.reducedAimKills || 0);
+                                        setEditReducedGrind(baseQuota?.reducedGrindRG || 0);
+                                    }}
+                                    className="px-8 py-4 w-full bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] rounded-2xl transition-all active:scale-95 border border-white/10"
+                                >
+                                    Cancel
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -2936,6 +2936,47 @@ app.post('/api/teams/:id/settings/quota', async (req, res) => {
     }
 });
 
+// Apply Reduced Quota to all players for current week
+app.post('/api/teams/:id/quotas/apply-reduced', async (req, res) => {
+    try {
+        const teamId = Number(req.params.id);
+        const { weekStart, requesterId } = req.body;
+
+        if (!requesterId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+        
+        const requesterRows = await db.select().from(users).where(eq(users.id, Number(requesterId)));
+        const requester = requesterRows[0];
+        const isAdmin = requester?.role?.includes('admin') || requester?.role?.includes('ceo');
+        const isManager = requester?.role?.includes('manager') || requester?.role?.includes('coach');
+
+        if (!isAdmin && !isManager) return res.status(403).json({ success: false, error: 'Access Denied' });
+
+        const baseQuotaRows = await db.select().from(rosterQuotas).where(eq(rosterQuotas.teamId, teamId));
+        const baseQuota = baseQuotaRows[0];
+        if (!baseQuota) return res.status(404).json({ success: false, error: 'No quota settings found for this team' });
+
+        // Update all players for this week
+        await db.update(playerQuotaProgress)
+            .set({
+                assignedBaseAim: baseQuota.reducedAimKills || 0,
+                assignedBaseGrind: baseQuota.reducedGrindRG || 0,
+                updatedAt: new Date()
+            })
+            .where(and(
+                eq(playerQuotaProgress.weekStart, weekStart),
+                inArray(playerQuotaProgress.playerId, 
+                    db.select({ id: players.id }).from(players).where(eq(players.teamId, teamId))
+                )
+            ));
+
+        notifyRefresh();
+        res.json({ success: true, message: 'Reduced quota applied to all units for the current cycle.' });
+    } catch (error: any) {
+        console.error("Apply Reduced Quota Error:", error);
+        res.status(500).json({ success: false, error: "Failed to apply reduced quota" });
+    }
+});
+
 // Update Player Progress
 app.post('/api/players/:id/quota/update', async (req, res) => {
     try {
