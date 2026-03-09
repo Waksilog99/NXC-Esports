@@ -461,7 +461,10 @@ app.post('/api/auth/login', async (req, res) => {
         })
             .from(users)
             .leftJoin(players, eq(users.id, players.userId))
-            .where(isEmail ? eq(users.email, sUsername.toLowerCase()) : eq(users.username, sUsername))
+            .where(isEmail 
+                ? eq(sql`lower(${users.email})`, sUsername.toLowerCase()) 
+                : eq(sql`lower(${users.username})`, sUsername.toLowerCase())
+            )
             .limit(1);
 
         console.log(`[AUTH TRACE] 3. DB Lookup finished. Rows: ${userRows.length}`);
@@ -469,7 +472,15 @@ app.post('/api/auth/login', async (req, res) => {
 
         if (!userRow) {
             console.log(`[AUTH TRACE] 4a. User not found: ${sUsername}`);
-            return res.status(401).json({ success: false, error: 'Authentication failure: User signature not matched in archives.' });
+            return res.status(401).json({ 
+                success: false, 
+                error: 'Authentication failure: User signature not matched in archives.',
+                diag: {
+                    inputLen: sUsername.length,
+                    isEmail,
+                    timestamp: new Date().toISOString()
+                }
+            });
         }
 
         console.log('[AUTH TRACE] 4b. Verifying password...');
