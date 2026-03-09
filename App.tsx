@@ -261,19 +261,19 @@ const App: React.FC = () => {
                   <Hero isActive={currentView === 'home'} userEmail={user?.email} />
                 </div>
 
-                {currentView === 'home' && (
+                <div className={currentView === 'home' ? 'contents' : 'hidden'}>
                   <section id="dashboard" className="scroll-mt-32">
                     <Dashboard onProfileClick={() => handleNavigate('profile')} userId={dbUserId} userRole={userRole} />
                   </section>
-                )}
+                </div>
 
-                {currentView === 'admin' && (
-                  !isAuthorized('admin') ? <AccessDenied /> : (
+                <div className={currentView === 'admin' ? 'contents' : 'hidden'}>
+                  {!isAuthorized('admin') ? (currentView === 'admin' ? <AccessDenied /> : null) : (
                     <section id="admin-panel" className="scroll-mt-32 animate-in fade-in slide-in-from-bottom-8 duration-700">
                       <AdminPanel onViewProfile={(id) => handleNavigate('profile', id)} />
                     </section>
-                  )
-                )}
+                  )}
+                </div>
 
                 {currentView === 'manager' && (
                   !isAuthorized('manager') ? <AccessDenied /> : (

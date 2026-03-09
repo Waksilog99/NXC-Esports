@@ -23,9 +23,12 @@ import fs from 'fs';
 import { finished } from 'stream/promises';
 
 // Forward declaration for Cron/Scheduler
-let checkAllNotifications: () => Promise<void>;
-let initDiscord: () => void;
-let initScheduler: (onWeeklyReportTrigger?: () => Promise<any>) => void;
+import { checkAllNotifications as schedulerCheck, initScheduler as startScheduler } from './scheduler.js';
+import { initDiscord as startDiscord } from './discord.js';
+
+let checkAllNotifications = schedulerCheck;
+let initDiscord = startDiscord;
+let initScheduler = startScheduler;
 
 const GAME_CATEGORY = {
     'Valorant': 'VALORANT',
@@ -5032,6 +5035,28 @@ app.put('/api/orders/:id/status', async (req, res) => {
     }
 });
 
+// --- CRON / AUTOMATION ENDPOINT ---
+app.get('/api/cron/check-notifications', async (req, res) => {
+    // Basic security: Check for a secret key or Vercel header
+    const cronSecret = process.env.CRON_SECRET;
+    const providedSecret = req.query.secret || req.headers['x-cron-secret'];
+    const isVercelCron = req.headers['x-vercel-cron'] === '1';
+
+    if (cronSecret && providedSecret !== cronSecret && !isVercelCron) {
+        console.warn('[CRON] Unauthorized access attempt detected.');
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    console.log('[CRON] Triggering automated notification sweep...');
+    try {
+        await checkAllNotifications();
+        res.json({ success: true, message: 'Notification sweep completed successfully.' });
+    } catch (err: any) {
+        console.error('[CRON ERROR] Sweep failed:', err);
+        res.status(500).json({ success: false, error: 'Sweep failed', details: err.message });
+    }
+});
+
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error(`[INTERNAL_ERROR] ${req.method} ${req.url}:`, err.stack || err);
@@ -5050,9 +5075,14 @@ export default app;
 if (process.env.NODE_ENV !== 'production' || process.env.VITE_DEV_SERVER) {
     app.listen(PORT, '0.0.0.0', async () => {
         console.log(`Server running on http://0.0.0.0:${PORT}`);
+        // Initialize services in local dev
+        initDiscord();
+        initScheduler();
     });
 } else {
     console.log('[DEBUG] Running in Vercel Serverless environment.');
+    // In serverless, we still need to init Discord so sendToDiscord works when called via routes/cron
+    initDiscord();
 }
 
 

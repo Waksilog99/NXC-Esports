@@ -62,21 +62,30 @@ export const useRealtimeSync = () => {
             };
         };
 
-        // Reconnect when the tab becomes visible again (e.g. after device sleep)
+        // Reconnect/Disconnect based on tab visibility to conserve background resources
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
                 const readyState = eventSourceRef.current?.readyState;
-                // CLOSED = 2; reconnect if the connection dropped while tab was hidden
+                // Reconnect if closed or never started
                 if (readyState === undefined || readyState === EventSource.CLOSED) {
                     console.log('[Realtime] Tab regained focus — reconnecting SSE...');
                     retryCountRef.current = 0;
                     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
                     connect();
                 }
+            } else if (document.visibilityState === 'hidden') {
+                // Pause connection when not looking at the tab
+                console.log('[Realtime] Tab backgrounded — pausing SSE to conserve resources.');
+                if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                eventSourceRef.current?.close();
+                eventSourceRef.current = null;
             }
         };
 
-        connect();
+        // Only connect immediately if the tab is actually visible
+        if (document.visibilityState === 'visible') {
+            connect();
+        }
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {

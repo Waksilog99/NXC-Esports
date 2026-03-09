@@ -373,7 +373,7 @@ const Profile: React.FC<ProfileProps> = ({ onBack, targetUserId, userRole, backT
                     {!isEditing && canEdit && (
                         <button
                             onClick={() => setIsEditing(true)}
-                            className="absolute top-8 right-8 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl text-[10px] font-black text-amber-500 uppercase tracking-widest border border-white/10 transition-all backdrop-blur-xl shadow-2xl active:scale-95"
+                            className="absolute top-4 right-4 md:top-8 md:right-8 px-4 py-2 md:px-6 md:py-3 bg-white/5 hover:bg-white/10 rounded-2xl text-[9px] md:text-[10px] font-black text-amber-500 uppercase tracking-widest border border-white/10 transition-all backdrop-blur-xl shadow-2xl active:scale-95 z-20"
                         >
                             Update Profile
                         </button>
